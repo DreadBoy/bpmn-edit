@@ -3,17 +3,23 @@
 // are added in later steps.
 //
 // WebSocket protocol (JSON text frames, each with a `type`):
-//   server -> client  { type: 'init', xml, version, name, path } on connect
+//   server -> client  { type: 'init', xml, version, name, path, clientId }
+//                                                               on connect; clientId ('c1', 'c2', …) is
+//                                                               unique for the server's lifetime
 //   client -> server  { type: 'update', xml, baseVersion }      full XML after an edit
-//   server -> client  { type: 'ack', version }                  update accepted
+//   server -> client  { type: 'ack', version }                  update accepted (the sender gets no
+//                                                               remote-update for its own edit)
 //   server -> client  { type: 'error', code, message }          code: 'bad-message' | 'invalid-xml' |
 //                                                               'write-failed' (pushed) | 'internal'
 //   server -> client  { type: 'flush' }                         shutting down: send pending edits now
 //   client -> server  { type: 'flushed' }                       nothing pending any more
 //   server -> client  { type: 'remote-update', xml, version, origin }
 //                                                               the document was replaced by someone
-//                                                               else; origin 'disk' = changed on disk
-//                                                               (other clients' edits will use it too)
+//                                                               else: origin 'disk' = changed on disk
+//                                                               (sent to every client), otherwise the
+//                                                               clientId of the editing client (sent to
+//                                                               every other client). Last write wins,
+//                                                               in arrival order; versions only grow.
 //   server -> client  { type: 'file-status', state, message? }  state of the file on disk: 'ok' |
 //                                                               'missing' | 'invalid'; pushed on change
 //                                                               and after 'init' when not 'ok'
@@ -130,13 +136,17 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
   const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
   /** Per-client callbacks waiting for a 'flushed' reply (see drainClients). */
   const flushWaiters = new Map();
+  /** Server-assigned id of each connection ('c1', 'c2', …), never reused while the server runs. */
+  const clientIds = new WeakMap();
+  let lastClientNumber = 0;
 
   function send(ws, message) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));
   }
 
-  function broadcast(message) {
-    for (const ws of wss.clients) send(ws, message);
+  /** Sends `message` to every connected client except `except` (if given). */
+  function broadcast(message, except = null) {
+    for (const ws of wss.clients) if (ws !== except) send(ws, message);
   }
 
   function sendError(ws, code, message) {
@@ -196,8 +206,11 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
       }
     });
     ws.on('close', () => flushWaiters.get(ws)?.());
+    lastClientNumber += 1;
+    const clientId = `c${lastClientNumber}`;
+    clientIds.set(ws, clientId);
     const { xml, version } = session.getState();
-    send(ws, { type: 'init', xml, version, name: fileName, path: filePath });
+    send(ws, { type: 'init', xml, version, name: fileName, path: filePath, clientId });
     const diskStatus = session.diskStatus;
     if (diskStatus.state !== 'ok') send(ws, { type: 'file-status', ...diskStatus });
   });
@@ -222,9 +235,15 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     broadcast({ type: 'error', code: 'write-failed', message: err.message });
   }
 
+  /**
+   * Pushes an accepted change to the clients that do not have it yet: a change on disk to everyone,
+   * a client's edit to everyone else (the sender only gets its 'ack').
+   */
   function onChange({ xml, version, origin }) {
-    // Clients' own edits are not broadcast yet (live sync between clients comes later).
-    if (origin === 'disk') broadcast({ type: 'remote-update', xml, version, origin });
+    if (origin === 'disk') return broadcast({ type: 'remote-update', xml, version, origin });
+    const sender = clientIds.has(origin) ? origin : null;
+    const originId = sender ? clientIds.get(sender) : String(origin ?? 'host');
+    return broadcast({ type: 'remote-update', xml, version, origin: originId }, sender);
   }
 
   function onDiskStatus(status) {

@@ -5,32 +5,8 @@ import { readFile } from 'node:fs/promises';
 import { looksLikeBpmn, TEMP_FILE_RE } from '../../src/file.js';
 import { collectPageErrors, startCli } from './helpers/cli.js';
 import {
-  center, clickEmptyCanvas, expectNoTempFiles, git, openEditor, setupRepo, shape, status, typeLabel,
+  center, clickEmptyCanvas, dragNewTask, expectNoTempFiles, git, openEditor, setupRepo, shape, status, typeLabel,
 } from './helpers/editor.js';
-
-/** Drags the Task tool from the palette onto the canvas below "Cancel order"; returns the new task's id. */
-async function dragNewTask(page) {
-  const tool = page.locator('.djs-palette .entry.bpmn-icon-task');
-  const from = await center(tool);
-  const cancel = await shape(page, 'Task_CancelOrder').boundingBox();
-  const to = { x: cancel.x + cancel.width / 2, y: cancel.y + cancel.height + 130 };
-
-  const tasksBefore = await newTaskIds(page);
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x + 40, from.y + 40, { steps: 5 });
-  await page.mouse.move(to.x, to.y, { steps: 15 });
-  await page.mouse.up();
-
-  await expect.poll(() => newTaskIds(page)).toHaveLength(tasksBefore.length + 1);
-  const ids = await newTaskIds(page);
-  return ids.find((id) => !tasksBefore.includes(id));
-}
-
-function newTaskIds(page) {
-  return page.locator('.djs-element.djs-shape[data-element-id^="Activity_"]')
-    .evaluateAll((els) => els.map((el) => el.getAttribute('data-element-id')));
-}
 
 test.describe('S2: edits are saved to disk', () => {
   let fixture;

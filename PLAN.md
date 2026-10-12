@@ -77,7 +77,7 @@ cannot tell host and collaborator apart:
   - **E2E:** with the page open, modify the file on disk (as an IDE would); the browser shows the change without
     reload; no write-back loop (file mtime stable afterwards).
 
-- [ ] **S4. Live sync between several browser windows**
+- [x] **S4. Live sync between several browser windows**
   - Carry-over from S3: broadcast client-origin changes via `remote-update` (today only disk-origin). Reuse the
     client's `deferredUpdate` + "local activity" check (unacked edits, label editor, drag). Must also fix: a tab
     whose first render failed stays blank when another tab repairs the file. Switch Playwright to real Chrome

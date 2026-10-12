@@ -4,7 +4,10 @@ import { readFile, rename, stat, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { isCompleteBpmn } from '../../src/file.js';
 import { collectPageErrors, startCli } from './helpers/cli.js';
-import { clickEmptyCanvas, expectNoTempFiles, git, openEditor, setupRepo, shape, status, typeLabel } from './helpers/editor.js';
+import {
+  clickEmptyCanvas, dragBy, expectNoTempFiles, expectViewboxUnchanged, git, label, openEditor, selectedIds, setupRepo,
+  shape, status, typeLabel, viewbox,
+} from './helpers/editor.js';
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 
@@ -12,10 +15,6 @@ const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const VISIBLE_MS = 1500;
 /** How long to watch the file for a write-back after an external change. */
 const STABLE_MS = 2000;
-
-function label(page, id) {
-  return shape(page, id).locator('text');
-}
 
 function notice(page) {
   return page.locator('#notice');
@@ -31,33 +30,6 @@ function withName(xml, from, to) {
 /** y of Task_CancelOrder's shape in the file (260 in the fixture). */
 function cancelOrderY(xml) {
   return Number(/id="Task_CancelOrder_di"[^>]*>\s*<dc:Bounds x="\d+" y="(\d+)"/.exec(xml)?.[1]);
-}
-
-/** Drags a shape down by `dy` screen pixels like a user. */
-async function dragBy(page, id, dy) {
-  const box = await shape(page, id).boundingBox();
-  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-  await page.mouse.move(from.x, from.y);
-  await page.mouse.down();
-  await page.mouse.move(from.x, from.y + dy / 2, { steps: 5 });
-  await page.mouse.move(from.x, from.y + dy, { steps: 5 });
-  await page.mouse.up();
-}
-
-function viewbox(page) {
-  return page.evaluate(() => {
-    const { x, y, width, height, scale } = window.bpmnModeler.get('canvas').viewbox();
-    return { x, y, width, height, scale };
-  });
-}
-
-function selectedIds(page) {
-  return page.evaluate(() => window.bpmnModeler.get('selection').get().map((e) => e.id));
-}
-
-function expectViewboxUnchanged(actual, expected) {
-  for (const key of ['x', 'y', 'width', 'height']) expect(Math.abs(actual[key] - expected[key]), key).toBeLessThanOrEqual(1);
-  expect(Math.abs(actual.scale - expected.scale), 'scale').toBeLessThanOrEqual(0.01);
 }
 
 /** Writes `xml` like an editor saving in place; returns the file's stat afterwards. */

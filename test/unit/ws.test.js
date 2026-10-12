@@ -106,7 +106,9 @@ describe('WebSocket sync', () => {
     assert.equal(body.version, ack.version);
 
     const c2 = connect(server.port);
-    assert.deepEqual(await c2.next('init'), { type: 'init', xml: variant(1), version: ack.version, name: 'order.bpmn', path: file });
+    const init2 = await c2.next('init');
+    assert.match(init2.clientId, /^c\d+$/);
+    assert.deepEqual(init2, { type: 'init', xml: variant(1), version: ack.version, name: 'order.bpmn', path: file, clientId: init2.clientId });
     c.ws.close();
     c2.ws.close();
   });
@@ -188,6 +190,79 @@ describe('WebSocket sync', () => {
     await server.drainClients(100);
     assert.ok(Date.now() - started < 1000);
     c.ws.close();
+  });
+});
+
+describe('live sync between clients', () => {
+  let dir;
+  let store;
+  let server;
+
+  before(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-ws-'));
+    const file = join(dir, 'order.bpmn');
+    await copyFile(FIXTURE, file);
+    store = createFileStore(file, { debounceMs: 60_000 });
+    server = createServer({ filePath: file, session: new Session({ xml: await store.read(), store }), port: 0 });
+    await server.listen();
+  });
+  after(async () => {
+    await server.close();
+    await store.flush();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  /** Connects `n` clients and waits for their init messages. */
+  async function connectAll(n) {
+    const clients = Array.from({ length: n }, () => connect(server.port));
+    for (const c of clients) c.init = await c.next('init');
+    return clients;
+  }
+
+  /** Resolves with the next message of `type`, or null if none arrives within `ms`. */
+  function nextWithin(client, type, ms = 200) {
+    return Promise.race([client.next(type), new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+  }
+
+  it('gives every connection a distinct clientId in init', async () => {
+    const clients = await connectAll(3);
+    const ids = clients.map((c) => c.init.clientId);
+    for (const id of ids) assert.match(id, /^c\d+$/);
+    assert.equal(new Set(ids).size, 3);
+    const later = connect(server.port);
+    assert.ok(!ids.includes((await later.next('init')).clientId), 'not reused');
+    for (const c of [...clients, later]) c.ws.close();
+  });
+
+  it("broadcasts an update to the other clients with the sender's clientId; the sender only gets ack", async () => {
+    const [a, b, c] = await connectAll(3);
+    const { version } = server.session.getState();
+    a.send({ type: 'update', xml: variant('live'), baseVersion: version });
+    assert.deepEqual(await a.next('ack'), { type: 'ack', version: version + 1 });
+    const expected = { type: 'remote-update', xml: variant('live'), version: version + 1, origin: a.init.clientId };
+    assert.deepEqual(await b.next('remote-update'), expected);
+    assert.deepEqual(await c.next('remote-update'), expected);
+
+    // B answers with an edit of its own: A and C get it, attributed to B.
+    b.send({ type: 'update', xml: variant('from b'), baseVersion: version + 1 });
+    assert.equal((await b.next('ack')).version, version + 2);
+    assert.equal((await a.next('remote-update')).origin, b.init.clientId);
+    assert.equal((await c.next('remote-update')).origin, b.init.clientId);
+
+    assert.equal(await nextWithin(a, 'remote-update'), null, 'no echo of its own edit');
+    assert.equal(await nextWithin(b, 'remote-update'), null, 'no echo of its own edit');
+    for (const client of [a, b, c]) client.ws.close();
+  });
+
+  it('identical content is acknowledged without a broadcast', async () => {
+    const [a, b] = await connectAll(2);
+    const { xml, version } = server.session.getState();
+    a.send({ type: 'update', xml, baseVersion: version });
+    assert.deepEqual(await a.next('ack'), { type: 'ack', version });
+    assert.equal(await nextWithin(b, 'remote-update'), null);
+    assert.equal(server.session.getState().version, version);
+    a.ws.close();
+    b.ws.close();
   });
 });
 

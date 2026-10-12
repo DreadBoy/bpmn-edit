@@ -1,5 +1,11 @@
 // Editor shell: renders the host's file with the vendored bpmn-js modeler (global `BpmnJS`) and keeps
 // it in sync with the host over a WebSocket (see src/server.js for the protocol).
+//
+// Every window sends its whole document after an edit; the host keeps the last one it receives and
+// passes it on to the other windows. A document from someone else that arrives while this window has
+// an edit in progress (label editor open, drag, edit not sent yet) is held back; when the edit is done
+// it is shown and this window's unsent edits are re-applied on top of it (see rebaseLocalEdits), so
+// both edits survive.
 
 /** Edits are sent this long after the last change (coalesces drags, typing, etc.). */
 const SEND_DELAY_MS = 300;
@@ -21,8 +27,21 @@ const errorEl = document.getElementById('error');
 const noticeEl = document.getElementById('notice');
 
 const modeler = new window.BpmnJS({ container: '#canvas' });
+const canvas = modeler.get('canvas');
+const commandStack = modeler.get('commandStack');
+const directEditing = modeler.get('directEditing');
+const dragging = modeler.get('dragging');
+const elementRegistry = modeler.get('elementRegistry');
+const selection = modeler.get('selection');
+
+let clientId = null;      // assigned by the host in 'init'
+
 // Exposed for tests and debugging.
 window.bpmnModeler = modeler;
+window.localBpmn = Object.freeze({
+  /** This window's id in the session (from the host), or null before 'init'. */
+  get clientId() { return clientId; },
+});
 
 let socket = null;
 let connected = false;
@@ -31,6 +50,7 @@ let version = null;       // version of the document this client last received o
 let importing = false;
 let rendered = false;
 let sendTimer = null;     // pending debounced send
+let sendHeld = false;     // the debounced send came due while another window's edit was held back
 let sendChain = Promise.resolve(); // serialises saveXML + send so updates go out in edit order
 let sending = 0;          // sends in progress (serialising the XML)
 let unacked = 0;          // updates sent but not yet acknowledged
@@ -39,6 +59,8 @@ let lastError = null;     // { code, message } from the server, cleared by the n
 let fileStatus = { state: 'ok' }; // state of the file on disk, pushed by the host ('file-status')
 let reloadedTimer = null; // "Reloaded from disk" notice is showing while set
 let deferredUpdate = null; // latest remote-update held back while this window had local edits
+let localOps = [];        // this window's edits since the last send or import, as ops (see OP_CAPTURE)
+let localOpsBroken = null; // why localOps cannot reproduce those edits (e.g. undo), or null
 let queue = Promise.resolve(); // incoming messages and deferred work, strictly in order
 
 function showError(message) {
@@ -63,13 +85,13 @@ function renderStatus() {
   let state;
   if (!connected) state = everConnected ? 'disconnected' : 'connecting';
   else if (lastError) state = 'error';
-  else if (sendTimer || sending || unacked) state = 'saving';
+  else if (sendTimer || sendHeld || sending || unacked) state = 'saving';
   else state = 'saved';
 
   statusEl.dataset.state = state;
   statusEl.textContent = STATUS_TEXT[state];
   if (state === 'error') statusEl.title = lastError.message;
-  else if (state === 'disconnected' && (unsent || sendTimer || unacked)) {
+  else if (state === 'disconnected' && (unsent || sendTimer || sendHeld || unacked)) {
     statusEl.title = 'Connection to local-bpmn lost; recent changes were not saved';
   } else statusEl.removeAttribute('title');
 }
@@ -81,6 +103,11 @@ const NOTICES = {
   deferred: {
     text: 'Disk changed; reloads after your edit',
     title: 'If your edit is saved first, it replaces the change made on disk',
+  },
+  // Same kind (a held-back update), different wording when it comes from another window.
+  deferredRemote: {
+    text: 'Someone else edited; shown after your edit',
+    title: 'Both edits are kept',
   },
 };
 
@@ -97,7 +124,7 @@ function renderNotice() {
     noticeEl.removeAttribute('title');
     return;
   }
-  const notice = NOTICES[kind];
+  const notice = kind === 'deferred' && deferredUpdate.origin !== 'disk' ? NOTICES.deferredRemote : NOTICES[kind];
   noticeEl.dataset.kind = kind;
   noticeEl.textContent = notice.text;
   const title = kind === 'invalid' ? fileStatus.message : notice.title;
@@ -129,10 +156,12 @@ function sendMessage(message) {
 function sendNow() {
   clearTimeout(sendTimer);
   sendTimer = null;
+  sendHeld = false;
   sending += 1;
   renderStatus();
   sendChain = sendChain.then(async () => {
     try {
+      resetLocalOps(); // everything up to here goes out with this XML
       const { xml } = await modeler.saveXML({ format: true });
       if (sendMessage({ type: 'update', xml, baseVersion: version })) unacked += 1;
       else unsent = true;
@@ -149,15 +178,30 @@ function sendNow() {
 
 function scheduleSend() {
   clearTimeout(sendTimer);
-  sendTimer = setTimeout(sendNow, SEND_DELAY_MS);
+  sendTimer = setTimeout(onSendDue, SEND_DELAY_MS);
   renderStatus();
+}
+
+/**
+ * The debounced send is due. If another window's edit is held back, sending this window's document
+ * now would overwrite it: hold the send until the edits are merged (settleLocalActivity).
+ */
+function onSendDue() {
+  sendTimer = null;
+  if (deferredUpdate && deferredUpdate.origin !== 'disk') {
+    sendHeld = true;
+    renderStatus();
+    settleLocalActivity();
+    return;
+  }
+  sendNow();
 }
 
 /** The host is shutting down: commit an open label edit, send pending edits, then confirm. */
 async function flushForShutdown() {
-  const directEditing = modeler.get('directEditing');
   if (directEditing.isActive()) directEditing.complete();
-  if (sendTimer) await sendNow();
+  await settleNow();
+  if (sendTimer || sendHeld) await sendNow();
   else await sendChain;
   sendMessage({ type: 'flushed' });
 }
@@ -170,33 +214,48 @@ async function importDiagram(xml) {
   } finally {
     importing = false;
   }
+  resetLocalOps(); // importing cleared the command stack
   hideError(); // a diagram is showing (again): earlier render errors are over
   if (!rendered) {
-    modeler.get('canvas').zoom('fit-viewport', 'auto');
+    canvas.zoom('fit-viewport', 'auto');
     rendered = true;
   }
 }
 
-/**
- * True while this client has edits the host has not acknowledged yet, or the user is in the middle
- * of one (typing a label, dragging).
- */
-function hasLocalChanges() {
-  return Boolean(sendTimer || sending || unacked || modeler.get('directEditing').isActive()
-    || modeler.get('dragging').context());
+/** Raises the known version; an ack or update never moves it backwards. */
+function advanceVersion(newVersion) {
+  version = version === null ? newVersion : Math.max(version, newVersion);
+}
+
+/** True while the user is in the middle of an edit (typing a label, dragging). */
+function interactionActive() {
+  return directEditing.isActive() || Boolean(dragging.context());
 }
 
 /**
- * Shows a document replaced by someone else (e.g. the file changed on disk) without disturbing the
- * user: keeps zoom/scroll and the selection. While this window has local edits in progress the
- * update is held back (see settleLocalActivity).
+ * True while this client has edits the host has not acknowledged yet, or the user is in the middle
+ * of one.
+ */
+function hasLocalChanges() {
+  return Boolean(sendTimer || sendHeld || sending || unacked || interactionActive());
+}
+
+/** Who made a change, for log messages. */
+function describeOrigin(origin) {
+  return origin === 'disk' ? 'a change made on disk' : `an edit from another window (${origin})`;
+}
+
+/**
+ * Shows a document replaced by someone else (the file changed on disk, or another window's edit)
+ * without disturbing the user: keeps zoom/scroll and the selection. While this window has local
+ * edits in progress the update is held back (see settleLocalActivity).
  */
 async function applyRemoteUpdate(message) {
   if (!rendered) {
     // Nothing showing yet (the first document could not be rendered): just try this one.
     try {
       await importDiagram(message.xml);
-      version = message.version;
+      advanceVersion(message.version);
     } catch (err) {
       showError(`Could not render the changed document: ${err.message}`);
       reportImportFailure(message, err);
@@ -205,16 +264,22 @@ async function applyRemoteUpdate(message) {
   }
   if (hasLocalChanges()) {
     if (!deferredUpdate) {
-      console.warn(`local-bpmn: the document changed (${message.origin}) while this window has edits in progress; `
-        + 'it will be shown once they are done unless they are saved first');
+      console.warn(`local-bpmn: ${describeOrigin(message.origin)} arrived while this window has edits in progress; `
+        + 'it will be shown once they are done');
     }
     if (!deferredUpdate || message.version > deferredUpdate.version) deferredUpdate = message;
     renderNotice();
+    settleLocalActivity(); // e.g. only the debounced send is pending: merge right away
     return;
   }
-  const canvas = modeler.get('canvas');
-  const selection = modeler.get('selection');
-  const elementRegistry = modeler.get('elementRegistry');
+  await showRemoteDocument(message);
+}
+
+/**
+ * Imports a document from someone else, keeping zoom/scroll and the selection. On failure the
+ * previous document is shown again. Resolves to whether the new document is showing.
+ */
+async function showRemoteDocument(message) {
   const { x, y, width, height } = canvas.viewbox();
   const selectedIds = selection.get().map((element) => element.id);
   const { xml: previousXml } = await modeler.saveXML({ format: true });
@@ -234,13 +299,14 @@ async function applyRemoteUpdate(message) {
     // anything else has no such indicator, so show the error.
     if (message.origin === 'disk') reportImportFailure(message, err);
     else showError(`Could not show the changed document: ${err.message}`);
-    return;
+    return false;
   }
   canvas.viewbox({ x, y, width, height });
   const stillThere = selectedIds.map((id) => elementRegistry.get(id)).filter(Boolean);
   if (stillThere.length) selection.select(stillThere);
-  version = message.version;
+  advanceVersion(message.version);
   if (message.origin === 'disk') showReloadedNotice();
+  return true;
 }
 
 /** Tells the host that a document from disk could not be shown, so it can report the file as invalid. */
@@ -249,20 +315,232 @@ function reportImportFailure(message, err) {
 }
 
 /**
- * Called whenever local activity may have ended (label editor closed, send finished, ack received).
- * A held-back remote update is shown now, unless a local edit was accepted by the host after it
- * (higher version): then the local edit won and the held-back update is dropped.
+ * Called whenever local activity may have ended (label editor closed, drag over, send finished, ack
+ * received, debounced send due). Handles a held-back remote update in the message order.
  */
 function settleLocalActivity() {
   if (!deferredUpdate) return;
-  enqueue(async () => {
-    if (!deferredUpdate || hasLocalChanges()) return;
-    const message = deferredUpdate;
-    deferredUpdate = null;
-    if (version === null || message.version > version) await applyRemoteUpdate(message);
-    else console.warn('local-bpmn: an edit from this window replaced a change made on disk');
-    renderNotice();
-  });
+  enqueue(settleNow);
+}
+
+/**
+ * Once the user is done (no label editor, no drag) and nothing is on its way to the host, a
+ * held-back remote update is:
+ * - dropped if a local edit was accepted by the host after it (higher version): last write wins;
+ * - shown, with this window's unsent edits re-applied on top, if there are any (another window's
+ *   edit) — for a change on disk the unsent edit is sent first instead and wins (as before);
+ * - otherwise simply shown.
+ */
+async function settleNow() {
+  if (!deferredUpdate || interactionActive() || sending || unacked) return;
+  const message = deferredUpdate;
+  const unsentEdits = Boolean(sendTimer || sendHeld);
+  if (unsentEdits && message.origin === 'disk') return; // sent when due, then dropped (see above)
+  deferredUpdate = null;
+  if (version !== null && message.version <= version) {
+    console.warn(`local-bpmn: an edit from this window replaced ${describeOrigin(message.origin)}`);
+    if (sendHeld) sendNow();
+  } else if (unsentEdits) {
+    await rebaseLocalEdits(message);
+  } else {
+    await showRemoteDocument(message);
+  }
+  renderNotice();
+}
+
+// --- Re-applying unsent local edits on top of another window's document -------------------------
+//
+// Each user action is one root command on the bpmn-js command stack (nested commands are side
+// effects of it). Right after a root command has run, it is recorded as id-based ops: enough to
+// repeat the action with `modeling` on another version of the document. The list is reset whenever
+// the document is sent or imported, so it always describes the edits the host has not seen.
+
+/** Thrown when an op cannot be recorded or re-applied; the caller falls back to last write wins. */
+class RebaseError extends Error {}
+
+/** Plain copy of a point or bounds (commands keep references to live objects). */
+function plainBounds({ x, y, width, height }) {
+  return width === undefined ? { x, y } : { x, y, width, height };
+}
+
+/** Op for a connection created by a command (kept with its id and type, re-laid out on re-apply). */
+function connectionOp(connection) {
+  return {
+    kind: 'connect',
+    id: connection.id,
+    type: connection.businessObject.$type,
+    sourceId: connection.source.id,
+    targetId: connection.target.id,
+  };
+}
+
+/** Ops that re-create `element` (a shape, or a connection) as it is right after its creation. */
+function createdElementOps(element) {
+  if (element.labelTarget) return []; // external labels are re-created with their element
+  if (element.waypoints) return [connectionOp(element)];
+  const bo = element.businessObject;
+  if (bo.$instanceOf('bpmn:Participant') || bo.$instanceOf('bpmn:Lane')) {
+    throw new RebaseError(`creating a ${bo.$type} is not supported`);
+  }
+  const eventDefinitions = bo.eventDefinitions || [];
+  if (eventDefinitions.length > 1) throw new RebaseError('multiple event definitions are not supported');
+  const parent = element.host || element.parent;
+  return [{
+    kind: 'create',
+    id: element.id,
+    type: bo.$type,
+    name: bo.name,
+    eventDefinitionType: eventDefinitions[0]?.$type,
+    isExpanded: element.di?.isExpanded || undefined,
+    bounds: plainBounds(element),
+    parentId: parent.id,
+    attach: Boolean(element.host),
+  }];
+}
+
+/** Root command -> function(context) returning the ops that repeat it. Anything else: unsupported. */
+const OP_CAPTURE = {
+  'element.updateLabel': ({ element, newLabel, newBounds }) => [{
+    kind: 'label', id: element.id, text: newLabel ?? null, bounds: newBounds ? plainBounds(newBounds) : undefined,
+  }],
+  'elements.move': ({ shapes, delta, newParent, newHost, hints = {} }) => [{
+    kind: 'move',
+    ids: shapes.map((shape) => shape.id),
+    delta: plainBounds(delta),
+    targetId: (hints.attach === true ? newHost : newParent)?.id ?? null,
+    attach: hints.attach,
+  }],
+  'shape.move': ({ shape, delta, newParent }) => [{
+    kind: 'move', ids: [shape.id], delta: plainBounds(delta), targetId: newParent?.id ?? null,
+  }],
+  'elements.create': ({ elements }) => elements.flatMap(createdElementOps),
+  'shape.create': ({ shape }) => createdElementOps(shape),
+  'shape.append': ({ source, shape }) => {
+    const connection = [...shape.incoming, ...shape.outgoing]
+      .find((c) => c.source === source || c.target === source);
+    return [...createdElementOps(shape), ...(connection ? [connectionOp(connection)] : [])];
+  },
+  'connection.create': ({ connection }) => [connectionOp(connection)],
+  'elements.delete': ({ elements }) => [{ kind: 'delete', ids: elements.map((element) => element.id) }],
+  'shape.delete': ({ shape }) => [{ kind: 'delete', ids: [shape.id] }],
+  'connection.delete': ({ connection }) => [{ kind: 'delete', ids: [connection.id] }],
+};
+
+function resetLocalOps() {
+  localOps = [];
+  localOpsBroken = null;
+}
+
+/** True while the outermost (root) command of a user action is running. */
+function isRootCommand() {
+  // diagram-js 15 (vendored with bpmn-js 18) keeps the running commands, outermost first, in this
+  // private field; execute() and the internal execution each push the command, so while only the
+  // root runs, every entry is the root's action. If the field is ever missing, nothing is recorded
+  // and merging falls back to last write wins (see recordCommand).
+  const actions = commandStack._currentExecution?.actions;
+  return Boolean(actions?.length) && actions.every((action) => action === actions[0]);
+}
+
+/** Records a finished root command as ops (see OP_CAPTURE). */
+function recordCommand({ command, context }) {
+  if (importing || localOpsBroken) return;
+  if (!isRootCommand()) {
+    if (!commandStack._currentExecution?.actions) localOpsBroken = 'command stack internals changed';
+    return;
+  }
+  const capture = OP_CAPTURE[command];
+  if (!capture) {
+    localOpsBroken = `unsupported command ${command}`;
+    return;
+  }
+  try {
+    localOps.push(...capture(context));
+  } catch (err) {
+    localOpsBroken = `${command}: ${err.message}`;
+  }
+}
+
+/** Repeats `ops` with `modeling` on the document now showing; throws RebaseError if one cannot apply. */
+function applyOps(ops) {
+  const modeling = modeler.get('modeling');
+  const bpmnFactory = modeler.get('bpmnFactory');
+  const elementFactory = modeler.get('elementFactory');
+  const get = (id) => {
+    const element = elementRegistry.get(id);
+    if (!element) throw new RebaseError(`element ${id} is gone`);
+    return element;
+  };
+  const absent = (id) => {
+    if (elementRegistry.get(id)) throw new RebaseError(`element ${id} exists already`);
+  };
+  for (const op of ops) {
+    switch (op.kind) {
+      case 'label':
+        modeling.updateLabel(get(op.id), op.text, op.bounds);
+        break;
+      case 'move':
+        modeling.moveElements(op.ids.map(get), op.delta, op.targetId ? get(op.targetId) : undefined,
+          op.attach === undefined ? {} : { attach: op.attach });
+        break;
+      case 'create': {
+        absent(op.id);
+        const businessObject = bpmnFactory.create(op.type, op.name === undefined ? { id: op.id } : { id: op.id, name: op.name });
+        const shape = elementFactory.createShape({
+          type: op.type, businessObject, eventDefinitionType: op.eventDefinitionType, isExpanded: op.isExpanded,
+        });
+        modeling.createShape(shape, op.bounds, get(op.parentId), op.attach ? { attach: true } : {});
+        break;
+      }
+      case 'connect': {
+        absent(op.id);
+        const businessObject = bpmnFactory.create(op.type, { id: op.id });
+        if (!modeling.connect(get(op.sourceId), get(op.targetId), { type: op.type, businessObject })) {
+          throw new RebaseError(`could not connect ${op.sourceId} to ${op.targetId}`);
+        }
+        break;
+      }
+      case 'delete': {
+        // Already gone (deleted elsewhere too) is fine: the result is the same.
+        const elements = op.ids.map((id) => elementRegistry.get(id)).filter(Boolean);
+        if (elements.length) modeling.removeElements(elements);
+        break;
+      }
+      default:
+        throw new RebaseError(`unknown op ${op.kind}`);
+    }
+  }
+}
+
+/**
+ * Shows another window's document (`message`) and re-applies this window's unsent edits on top of
+ * it; the re-applied commands are then sent as usual. If that is not possible (an unsupported
+ * command, undo/redo, an element the other edit removed), this window's document is sent as it is
+ * and replaces the other edit (last write wins), with a warning.
+ */
+async function rebaseLocalEdits(message) {
+  clearTimeout(sendTimer);
+  sendTimer = null;
+  sendHeld = false;
+  const lastWriteWins = (reason) => {
+    console.warn(`local-bpmn: could not merge this window's edits with ${describeOrigin(message.origin)} `
+      + `(${reason}); this window's version replaces it`);
+    return sendNow();
+  };
+  if (localOpsBroken) return lastWriteWins(localOpsBroken);
+
+  const ops = localOps;
+  const { xml: localXml } = await modeler.saveXML({ format: true });
+  if (!(await showRemoteDocument(message))) return lastWriteWins('the other document could not be shown');
+  try {
+    applyOps(ops); // the commands schedule the send of the merged document
+  } catch (err) {
+    if (!(err instanceof RebaseError)) console.error(err); // still recover below
+    const view = canvas.viewbox();
+    await importDiagram(localXml);
+    canvas.viewbox(view);
+    return lastWriteWins(err.message);
+  }
+  return undefined;
 }
 
 async function handleMessage(message) {
@@ -273,6 +551,7 @@ async function handleMessage(message) {
         fileNameEl.title = message.path || message.name;
         document.title = `${message.name} — local-bpmn`;
       }
+      clientId = message.clientId ?? null;
       try {
         await importDiagram(message.xml);
         version = message.version;
@@ -283,7 +562,7 @@ async function handleMessage(message) {
       break;
     case 'ack':
       unacked = Math.max(0, unacked - 1);
-      version = message.version;
+      advanceVersion(message.version);
       lastError = null;
       settleLocalActivity();
       break;
@@ -340,8 +619,11 @@ function connect() {
 
 modeler.on('commandStack.changed', (event) => {
   if (importing || event.trigger === 'clear') return;
+  // Undo/redo is not recorded as ops: a merge with another window's edit falls back to last write wins.
+  if (event.trigger === 'undo' || event.trigger === 'redo') localOpsBroken ??= event.trigger;
   scheduleSend();
 });
+modeler.on('commandStack.postExecuted', recordCommand);
 
 // Closing the label editor or ending a drag (committed or cancelled) may release a held-back
 // remote update.
