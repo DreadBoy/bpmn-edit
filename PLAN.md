@@ -18,6 +18,13 @@ Unit / integration tests are welcome as a means to an end, but **they never coun
 Each step's E2E scenario is kept as an automated Playwright test in `test/e2e/` so later steps re-run all
 earlier scenarios (regression).
 
+## Scope of platforms (v1)
+
+- **OS: macOS only.** Windows/Linux are out of scope for v1 (don't add Mac-only hacks gratuitously, but don't
+  spend effort on other OSes).
+- **Browser: Chrome only.** E2E runs Playwright against Google Chrome (`channel: 'chrome'`); Firefox/WebKit come
+  in S10 as an automatic matrix.
+
 ## Ground rules
 
 - Node ≥ 20, ESM (`"type": "module"`), no native deps.
@@ -107,6 +114,12 @@ cannot tell host and collaborator apart:
   - **E2E:** `npm pack`; install the tarball into a fresh temp dir; `npx local-bpmn flows/order.bpmn` from a fresh
     git repo opens the browser editor (use `--no-open` + Playwright), edit → on disk, Share → public link works.
     Full `test/e2e` suite green.
+
+- [ ] **S10. Browser matrix: Firefox + WebKit** (after S9; v1 support stays Chrome-only)
+  - Add Firefox and WebKit as Playwright `projects` so **every** E2E spec automatically runs in all three
+    browsers (no per-test opt-in). Fix or explicitly `test.skip` (with reason) anything browser-specific.
+  - **E2E:** `npm run test:e2e` runs the whole suite × 3 browsers; Chrome must be green; Firefox/WebKit results
+    reported, failures triaged into fix-now vs documented known issues.
 
 ## Parallelisation
 
