@@ -114,6 +114,9 @@ cannot tell host and collaborator apart:
     fallback. Detect it and fall back.
 
 - [ ] **S8. Session ended / stop sharing / reconnect**
+  - From Q3 (v1 requirement): through the tunnel an idle WebSocket is cut after exactly ~125 s (close 1006).
+    Server must send a keepalive (e.g. ping every 30 s) and the client must auto-reconnect + re-sync.
+    **E2E:** a socket idle > 125 s through a *real* tunnel stays connected (or recovers transparently).
   - Stop sharing → collaborators disconnected, old link 404. Host Ctrl-C → collaborators get "Session ended"
     overlay. Transient drop → "Reconnecting…" banner with backoff and re-sync.
   - **E2E:** collaborator window via the public link; Stop sharing → overlay, reload of old link fails;
@@ -178,6 +181,11 @@ implement the decision if it changes anything. These steps are as mandatory as t
     implement if the noise exceeds a handful of lines. Record in `docs/decisions.md`.
 
 - [ ] **Q3. Persistent session links across restarts** (after S8)
+  - **Measured** (branch `worktree-agent-a32e37182302fa0cd`, `docs/q3-tunnel-measurements.md`, verified):
+    startup ~7 s to first 200; HTTP stable 31 min; new hostname every share; old URL → 530/1033 immediately;
+    named tunnels need a Cloudflare account + own domain. **Recommendation: out of scope for v1**; README must say
+    each share/restart gives a new link. Remaining: merge branch, record decision in `docs/decisions.md`,
+    README note (S9).
   - Experiment: what happens to a shared link when the host restarts the CLI or re-shares (quick tunnel gives a new
     hostname each time); how long quick tunnels take to come up and how stable they are over ~30 min.
   - Decide: confirm "out of scope for v1" (document the behaviour in README) or add a step for named tunnels.
