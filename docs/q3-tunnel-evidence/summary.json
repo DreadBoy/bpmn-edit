@@ -1,0 +1,521 @@
+{
+  "startedAt": "2026-10-12T23:09:17.917Z",
+  "mode": "cloudflare",
+  "options": {
+    "out": "<out-dir>",
+    "home": "<cloudflared-home>",
+    "local": false,
+    "single": false,
+    "duration-min": "31",
+    "interval-s": "20",
+    "probe-old-s": "120",
+    "probe-old2-s": "60",
+    "gap-s": "150",
+    "port": "3917"
+  },
+  "node": "v22.22.2",
+  "tunnel1": {
+    "n": 1,
+    "at": {
+      "startCalled": 1791846558031,
+      "cached": 1791846558033,
+      "spawn": 1791846558034,
+      "url": 1791846563111,
+      "dns": 1791846564182,
+      "ready": 1791846564420,
+      "systemDns": 1791846564437,
+      "firstHttp200": 1791846564513
+    },
+    "url": "https://follow-staff-royal-telescope.trycloudflare.com",
+    "systemDnsAddress": "104.16.230.132",
+    "iso": {
+      "startCalled": "2026-10-12T23:09:18.031Z",
+      "cached": "2026-10-12T23:09:18.033Z",
+      "spawn": "2026-10-12T23:09:18.034Z",
+      "url": "2026-10-12T23:09:23.111Z",
+      "dns": "2026-10-12T23:09:24.182Z",
+      "ready": "2026-10-12T23:09:24.420Z",
+      "systemDns": "2026-10-12T23:09:24.437Z",
+      "firstHttp200": "2026-10-12T23:09:24.513Z"
+    },
+    "ms": {
+      "spawnToUrlPrinted": 5077,
+      "spawnToAuthoritativeDns": 6148,
+      "spawnToReady": 6386,
+      "spawnToSystemDns": 6403,
+      "spawnToFirstHttp200": 6479,
+      "startCallToFirstHttp200": 6482
+    }
+  },
+  "stability": {
+    "windowStart": "2026-10-12T23:09:25.677Z",
+    "windowEnd": "2026-10-12T23:40:25.856Z",
+    "windowMinutes": 31,
+    "samples": 93,
+    "non200": 0,
+    "non200Samples": [],
+    "latencyMs": {
+      "n": 93,
+      "min": 33,
+      "median": 79,
+      "p95": 101,
+      "max": 233
+    },
+    "latencyAllMs": {
+      "n": 93,
+      "min": 33,
+      "median": 79,
+      "p95": 101,
+      "max": 233
+    },
+    "pageNotConnected": 86,
+    "ws": {
+      "opens": 15,
+      "drops": 14,
+      "reconnects": 14,
+      "closes": [
+        {
+          "t": "2026-10-12T23:11:30.759Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125083
+        },
+        {
+          "t": "2026-10-12T23:13:37.885Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125123
+        },
+        {
+          "t": "2026-10-12T23:15:44.975Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125085
+        },
+        {
+          "t": "2026-10-12T23:17:52.069Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125091
+        },
+        {
+          "t": "2026-10-12T23:19:59.159Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125089
+        },
+        {
+          "t": "2026-10-12T23:22:06.276Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125115
+        },
+        {
+          "t": "2026-10-12T23:24:13.359Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125081
+        },
+        {
+          "t": "2026-10-12T23:26:20.449Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125086
+        },
+        {
+          "t": "2026-10-12T23:28:27.540Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125089
+        },
+        {
+          "t": "2026-10-12T23:30:34.627Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125085
+        },
+        {
+          "t": "2026-10-12T23:32:41.717Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125089
+        },
+        {
+          "t": "2026-10-12T23:34:48.799Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125079
+        },
+        {
+          "t": "2026-10-12T23:36:55.880Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125080
+        },
+        {
+          "t": "2026-10-12T23:39:03.010Z",
+          "code": 1006,
+          "byUs": false,
+          "openForMs": 125124
+        },
+        {
+          "t": "2026-10-12T23:40:26.661Z",
+          "code": 1000,
+          "byUs": true,
+          "openForMs": 81648
+        }
+      ],
+      "messageTypes": [
+        "init",
+        "flush"
+      ],
+      "pingsFromServer": 0,
+      "errors": 0
+    },
+    "browserStart": {
+      "ok": true,
+      "loadMs": 589,
+      "fileName": "order.bpmn",
+      "saveStatus": "Saved",
+      "svgCount": 3,
+      "shapes": 13,
+      "connections": 6,
+      "labelsFound": [
+        "Order received",
+        "Check stock",
+        "In stock?",
+        "Ship order",
+        "Cancel order",
+        "Order shipped",
+        "Order cancelled"
+      ],
+      "pageErrors": [],
+      "screenshot": "browser-start.png"
+    },
+    "browserEnd": {
+      "ok": true,
+      "loadMs": 684,
+      "fileName": "order.bpmn",
+      "saveStatus": "Saved",
+      "svgCount": 3,
+      "shapes": 13,
+      "connections": 6,
+      "labelsFound": [
+        "Order received",
+        "Check stock",
+        "In stock?",
+        "Ship order",
+        "Cancel order",
+        "Order shipped",
+        "Order cancelled"
+      ],
+      "pageErrors": [],
+      "screenshot": "browser-end.png"
+    },
+    "browserKeptOpenEnd": {
+      "saveStatus": "Disconnected",
+      "state": "disconnected",
+      "shapes": 13
+    },
+    "browserKeptOpenAfterStop": {
+      "saveStatus": "Disconnected",
+      "state": "disconnected",
+      "shapes": 13
+    }
+  },
+  "oldUrl1": [
+    {
+      "sinceStopMs": 1600,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.231.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 11680,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.230.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 21759,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.230.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 31833,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.231.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 41905,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.230.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 51981,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.231.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 62061,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.230.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 72128,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.230.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 82213,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.231.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 92323,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.231.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 102393,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.230.132"
+        }
+      }
+    },
+    {
+      "sinceStopMs": 112621,
+      "status": 530,
+      "cfError": "1033",
+      "dns": {
+        "system": "104.16.231.132",
+        "authoritative": {
+          "state": "found",
+          "address": "104.16.231.132"
+        }
+      }
+    }
+  ],
+  "tunnel2": {
+    "n": 2,
+    "at": {
+      "startCalled": 1791848576745,
+      "cached": 1791848576747,
+      "spawn": 1791848576748,
+      "url": 1791848581737,
+      "dns": 1791848583296,
+      "ready": 1791848583513,
+      "systemDns": 1791848583527,
+      "firstHttp200": 1791848583597
+    },
+    "url": "https://entire-most-invalid-differ.trycloudflare.com",
+    "systemDnsAddress": "104.16.230.132",
+    "iso": {
+      "startCalled": "2026-10-12T23:42:56.745Z",
+      "cached": "2026-10-12T23:42:56.747Z",
+      "spawn": "2026-10-12T23:42:56.748Z",
+      "url": "2026-10-12T23:43:01.737Z",
+      "dns": "2026-10-12T23:43:03.296Z",
+      "ready": "2026-10-12T23:43:03.513Z",
+      "systemDns": "2026-10-12T23:43:03.527Z",
+      "firstHttp200": "2026-10-12T23:43:03.597Z"
+    },
+    "ms": {
+      "spawnToUrlPrinted": 4989,
+      "spawnToAuthoritativeDns": 6548,
+      "spawnToReady": 6765,
+      "spawnToSystemDns": 6779,
+      "spawnToFirstHttp200": 6849,
+      "startCallToFirstHttp200": 6852
+    }
+  },
+  "restart": {
+    "hostname1": "follow-staff-royal-telescope.trycloudflare.com",
+    "hostname2": "entire-most-invalid-differ.trycloudflare.com",
+    "sameHost": false,
+    "tunnel2Load": {
+      "ok": true,
+      "loadMs": 512,
+      "fileName": "order.bpmn",
+      "saveStatus": "Saved",
+      "svgCount": 3,
+      "shapes": 13,
+      "connections": 6,
+      "labelsFound": [
+        "Order received",
+        "Check stock",
+        "In stock?",
+        "Ship order",
+        "Cancel order",
+        "Order shipped",
+        "Order cancelled"
+      ],
+      "pageErrors": [],
+      "screenshot": "browser-tunnel2.png"
+    },
+    "oldPageAfterRestart": {
+      "saveStatus": "Disconnected",
+      "state": "disconnected",
+      "shapes": 13
+    },
+    "oldUrl1WhileTunnel2Up": {
+      "status": 530,
+      "ms": 58,
+      "bytes": 7728,
+      "server": "cloudflare",
+      "cfRay": "a499f6f37b31a398-LJU",
+      "cfError": "1033",
+      "hasCanvas": false,
+      "bodyHead": "<!doctype html> <!--[if lt IE 7]> <html class=\"no-js ie6 oldie\" lang=\"en-US\"> <![endif]--> <!--[if IE 7]> <html class=\"no-js ie7 oldie\" lang=\"en-US\"> <![endif]--> <!--[if IE 8]> <html class=\"no-js ie8"
+    },
+    "oldUrl2": [
+      {
+        "sinceStopMs": 55,
+        "status": 530,
+        "cfError": "1033",
+        "dns": {
+          "system": "104.16.230.132",
+          "authoritative": {
+            "state": "found",
+            "address": "104.16.230.132"
+          }
+        }
+      },
+      {
+        "sinceStopMs": 10142,
+        "status": 530,
+        "cfError": "1033",
+        "dns": {
+          "system": "104.16.230.132",
+          "authoritative": {
+            "state": "found",
+            "address": "104.16.231.132"
+          }
+        }
+      },
+      {
+        "sinceStopMs": 20220,
+        "status": 530,
+        "cfError": "1033",
+        "dns": {
+          "system": "104.16.230.132",
+          "authoritative": {
+            "state": "found",
+            "address": "104.16.230.132"
+          }
+        }
+      },
+      {
+        "sinceStopMs": 30309,
+        "status": 530,
+        "cfError": "1033",
+        "dns": {
+          "system": "104.16.230.132",
+          "authoritative": {
+            "state": "found",
+            "address": "104.16.230.132"
+          }
+        }
+      },
+      {
+        "sinceStopMs": 40390,
+        "status": 530,
+        "cfError": "1033",
+        "dns": {
+          "system": "104.16.230.132",
+          "authoritative": {
+            "state": "found",
+            "address": "104.16.230.132"
+          }
+        }
+      },
+      {
+        "sinceStopMs": 50463,
+        "status": 530,
+        "cfError": "1033",
+        "dns": {
+          "system": "104.16.230.132",
+          "authoritative": {
+            "state": "found",
+            "address": "104.16.231.132"
+          }
+        }
+      }
+    ]
+  },
+  "tunnelsOpened": 2,
+  "finishedAt": "2026-10-12T23:43:54.714Z"
+}
