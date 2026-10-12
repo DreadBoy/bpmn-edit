@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, copyFile, mkdtemp, readdir, readFile, rm, stat, symlink, lstat } from 'node:fs/promises';
+import { chmod, copyFile, mkdtemp, readdir, readFile, rename, rm, stat, symlink, lstat, unlink, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -187,5 +187,174 @@ describe('createFileStore', () => {
   it('temp file names match TEMP_FILE_RE', () => {
     assert.ok(TEMP_FILE_RE.test(`.order.bpmn.${process.pid}.0a1b2c3d4e5f.tmp`));
     assert.ok(!TEMP_FILE_RE.test('order.bpmn'));
+  });
+});
+
+describe('createFileStore watching', () => {
+  let dir;
+  let file;
+  let logs;
+  let store;
+  let events;
+  const log = (m) => logs.push(m);
+  const EVENTS = ['external-change', 'external-missing', 'external-invalid', 'disk-ok', 'written'];
+
+  /** Resolves with the next `type` event (fails after `timeoutMs`). */
+  function next(type, timeoutMs = 3000) {
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        store.off(type, onEvent);
+        reject(new Error(`no ${type} event within ${timeoutMs} ms (saw ${events.map((e) => e.type)})`));
+      }, timeoutMs);
+      function onEvent(payload) {
+        clearTimeout(timer);
+        resolve(payload);
+      }
+      store.once(type, onEvent);
+    });
+  }
+
+  async function start(options = {}) {
+    store = createFileStore(file, { debounceMs: 0, log, ...options });
+    for (const type of EVENTS) store.on(type, (payload) => events.push({ type, payload }));
+    await store.read();
+    await store.watch();
+  }
+
+  beforeEach(async () => {
+    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-watch-'));
+    file = join(dir, 'order.bpmn');
+    await copyFile(FIXTURE, file);
+    logs = [];
+    events = [];
+    store = null;
+  });
+  afterEach(async () => {
+    await store?.unwatch();
+    await rm(dir, { recursive: true, force: true });
+  });
+
+  it('reports an in-place external write as external-change and records it as on disk', async () => {
+    await start();
+    const changed = next('external-change');
+    await writeFile(file, variant(1));
+    assert.deepEqual(await changed, { xml: variant(1) });
+    assert.equal(store.diskXml, variant(1));
+    assert.equal(store.diskState, 'ok');
+  });
+
+  it('reports an atomic save (temp file renamed over the target) once', async () => {
+    await start();
+    const changed = next('external-change');
+    const tmp = join(dir, '.order.bpmn.swp-like');
+    await writeFile(tmp, variant(2));
+    await rename(tmp, file);
+    assert.deepEqual(await changed, { xml: variant(2) });
+    await delay(400);
+    assert.deepEqual(events.map((e) => e.type), ['external-change']);
+  });
+
+  it('does not report its own writes', async () => {
+    await start();
+    store.write(variant(1));
+    await store.flush();
+    store.write(variant(2));
+    await store.flush();
+    await delay(500);
+    assert.deepEqual(events.map((e) => e.type), ['written', 'written']);
+    assert.equal(await readFile(file, 'utf8'), variant(2));
+  });
+
+  it('reports a change back to content it wrote earlier', async () => {
+    await start();
+    store.write(variant(1));
+    await store.flush();
+    await delay(300);
+    let changed = next('external-change');
+    await writeFile(file, variant(2));
+    await changed;
+    changed = next('external-change');
+    await writeFile(file, variant(1)); // e.g. undo in an IDE
+    assert.deepEqual(await changed, { xml: variant(1) });
+  });
+
+  it('reports truncated content as external-invalid and does not write anything', async () => {
+    await start();
+    const truncated = original.slice(0, Math.floor(original.length * 0.6));
+    const invalid = next('external-invalid');
+    await writeFile(file, truncated);
+    const { message } = await invalid;
+    assert.match(message, /incomplete/);
+    assert.equal(store.diskState, 'invalid');
+    await delay(400);
+    assert.equal(await readFile(file, 'utf8'), truncated);
+    assert.ok(!events.some((e) => e.type === 'external-change' || e.type === 'written'));
+
+    const ok = next('disk-ok');
+    const changed = next('external-change');
+    await writeFile(file, variant(3));
+    await ok;
+    assert.deepEqual(await changed, { xml: variant(3) });
+    assert.equal(store.diskState, 'ok');
+  });
+
+  it('reports a deleted file once, does not recreate it, and recreates it on the next write', async () => {
+    await start();
+    const missing = next('external-missing');
+    await unlink(file);
+    await missing;
+    assert.equal(store.diskState, 'missing');
+    await delay(400);
+    await assert.rejects(stat(file), { code: 'ENOENT' });
+    assert.deepEqual(events.map((e) => e.type), ['external-missing']);
+
+    const ok = next('disk-ok');
+    store.write(original); // same content as before the delete: must still be written
+    await store.flush();
+    await ok;
+    assert.equal(await readFile(file, 'utf8'), original);
+    await delay(400);
+    assert.deepEqual(events.map((e) => e.type), ['external-missing', 'written', 'disk-ok']);
+  });
+
+  it('a file recreated externally with valid content is an external change', async () => {
+    await start();
+    const missing = next('external-missing');
+    await unlink(file);
+    await missing;
+    const changed = next('external-change');
+    await writeFile(file, original);
+    assert.deepEqual(await changed, { xml: original });
+    assert.equal(store.diskState, 'ok');
+  });
+
+  it('drops a pending write when an external change arrives after it', async () => {
+    await start({ debounceMs: 60_000 });
+    store.write(variant(1));
+    assert.ok(store.pending);
+    const changed = next('external-change');
+    await writeFile(file, variant(2));
+    await changed;
+    assert.equal(store.pending, false);
+    await store.flush();
+    assert.equal(await readFile(file, 'utf8'), variant(2), 'the external change was not overwritten');
+    assert.equal(logs.length, 1);
+    assert.match(logs[0], /^local-bpmn: warning: .* changed on disk; a pending save from the editor was discarded/);
+  });
+
+  it('ignores other files in the directory, including its own temp file names', async () => {
+    await start();
+    await writeFile(join(dir, 'other.bpmn'), original);
+    await writeFile(join(dir, `.order.bpmn.${process.pid}.0a1b2c3d4e5f.tmp`), 'partial');
+    await delay(500);
+    assert.deepEqual(events, []);
+  });
+
+  it('unwatch() stops reporting', async () => {
+    await start();
+    await store.unwatch();
+    await writeFile(file, variant(1));
+    await delay(400);
+    assert.deepEqual(events, []);
   });
 });

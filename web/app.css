@@ -36,6 +36,28 @@ body {
   white-space: nowrap;
 }
 
+#notice {
+  margin-left: auto;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  min-width: 0;
+  background: #ddf4ff;
+  color: #0550ae;
+}
+
+#notice[hidden] { display: none; }
+#notice[data-kind="missing"],
+#notice[data-kind="invalid"] {
+  background: #fff8c5;
+  color: #7d4e00;
+}
+
+#notice:not([hidden]) + #save-status { margin-left: 0; }
+
 #save-status {
   margin-left: auto;
   display: inline-flex;

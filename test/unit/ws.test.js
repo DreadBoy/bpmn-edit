@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { copyFile, mkdtemp, readdir, readFile, rm } from 'node:fs/promises';
+import { copyFile, mkdtemp, readdir, readFile, rm, stat, unlink, writeFile } from 'node:fs/promises';
 import net from 'node:net';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -205,6 +205,51 @@ describe('server close', () => {
       await c.closed;
       await assert.rejects(fetch(`http://127.0.0.1:${server.port}/api/file`));
     } finally {
+      await rm(dir, { recursive: true, force: true });
+    }
+  });
+});
+
+describe('changes on disk', () => {
+  it('pushes remote-update and file-status to clients, and file-status to new clients', async () => {
+    const dir = await mkdtemp(join(tmpdir(), 'local-bpmn-ws-'));
+    const file = join(dir, 'order.bpmn');
+    await copyFile(FIXTURE, file);
+    const server = createServer({ filePath: file, port: 0 }); // creates and watches its own store
+    await server.listen();
+    try {
+      const c = connect(server.port);
+      assert.equal((await c.next('init')).version, 1);
+
+      await writeFile(file, variant(1));
+      assert.deepEqual(await c.next('remote-update'), { type: 'remote-update', xml: variant(1), version: 2, origin: 'disk' });
+
+      await unlink(file);
+      assert.deepEqual(await c.next('file-status'), { type: 'file-status', state: 'missing' });
+      const late = connect(server.port);
+      assert.equal((await late.next()).type, 'init');
+      assert.deepEqual(await late.next(), { type: 'file-status', state: 'missing' });
+
+      // An edit recreates the file; the status goes back to ok for everyone.
+      c.send({ type: 'update', xml: variant(2), baseVersion: 2 });
+      assert.equal((await c.next('ack')).version, 3);
+      assert.deepEqual(await late.next('file-status'), { type: 'file-status', state: 'ok' });
+      assert.deepEqual(await c.next('file-status'), { type: 'file-status', state: 'ok' });
+      assert.equal(await readFile(file, 'utf8'), variant(2));
+      assert.ok((await stat(file)).isFile());
+
+      // A client that cannot display a version from disk reports it: the file is marked invalid.
+      await writeFile(file, variant(3));
+      const { version } = await c.next('remote-update');
+      late.send({ type: 'import-failed', version, message: 'no diagram to display' });
+      const invalid = await c.next('file-status');
+      assert.equal(invalid.state, 'invalid');
+      assert.match(invalid.message, /no diagram to display/);
+      assert.equal(await readFile(file, 'utf8'), variant(3), 'nothing written');
+      c.ws.close();
+      late.ws.close();
+    } finally {
+      await server.close();
       await rm(dir, { recursive: true, force: true });
     }
   });

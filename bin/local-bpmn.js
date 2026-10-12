@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 // CLI entry: `local-bpmn <file> [--port <n>] [--no-open]`
 import { readFileSync } from 'node:fs';
+import { basename } from 'node:path';
 import { Command, InvalidArgumentError, Option } from 'commander';
 import open from 'open';
 import { createFileStore } from '../src/file.js';
@@ -57,6 +58,24 @@ try {
   fail(err.message);
 }
 const session = new Session({ xml: initialXml, store });
+const fileName = basename(filePath);
+session.on('change', ({ origin }) => {
+  if (origin === 'disk') process.stderr.write(`local-bpmn: reloaded ${fileName} (changed on disk)\n`);
+});
+session.on('disk-status', ({ state, message }) => {
+  const text = {
+    ok: `${fileName} on disk is valid again`,
+    missing: `${fileName} was deleted on disk; the next edit will recreate it`,
+    invalid: `${fileName} on disk is not valid BPMN (${message}); keeping the last good version`,
+  }[state];
+  if (text) process.stderr.write(`local-bpmn: ${text}\n`);
+});
+try {
+  await store.watch();
+} catch (err) {
+  // Editing still works without watching; external edits just won't show up.
+  process.stderr.write(`local-bpmn: could not watch ${filePath} for changes: ${err.message}\n`);
+}
 
 const server = createServer({ filePath, session, port: options.port });
 let port;
@@ -92,6 +111,7 @@ async function shutdown() {
   if (signals > 1) return;
   server.stopAccepting();
   await server.drainClients(1000);
+  await store.unwatch(); // our final write must not come back as an external change
   await store.flush();
   await server.close();
   process.exit(0);

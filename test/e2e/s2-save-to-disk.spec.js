@@ -1,56 +1,12 @@
 // S2: edits are saved to disk.
 import { expect, test } from '@playwright/test';
-import { execFileSync } from 'node:child_process';
 import { watch } from 'node:fs';
-import { readdir, readFile } from 'node:fs/promises';
+import { readFile } from 'node:fs/promises';
 import { looksLikeBpmn, TEMP_FILE_RE } from '../../src/file.js';
-import { collectPageErrors, copyFixture, startCli } from './helpers/cli.js';
-
-const GIT = ['-c', 'user.name=local-bpmn tests', '-c', 'user.email=tests@local-bpmn.invalid', '-c', 'commit.gpgsign=false'];
-
-function git(dir, ...args) {
-  return execFileSync('git', [...GIT, ...args], { cwd: dir, encoding: 'utf8' });
-}
-
-/** Fixture copy in a fresh git repo with the file committed. */
-async function setupRepo() {
-  const fixture = await copyFixture('order.bpmn');
-  git(fixture.dir, 'init', '-q');
-  git(fixture.dir, 'add', 'order.bpmn');
-  git(fixture.dir, 'commit', '-q', '-m', 'initial');
-  return fixture;
-}
-
-function status(page) {
-  return page.locator('#save-status');
-}
-
-function shape(page, id) {
-  return page.locator(`.djs-element.djs-shape[data-element-id="${id}"]`);
-}
-
-async function openEditor(page, cli) {
-  await page.goto(cli.url);
-  await expect(shape(page, 'Task_CheckStock')).toBeVisible();
-  await expect(status(page)).toHaveAttribute('data-state', 'saved');
-  await expect(status(page)).toHaveText('Saved');
-}
-
-async function center(locator) {
-  const box = await locator.boundingBox();
-  return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
-}
-
-/** A canvas point away from every shape, the palette and the watermark. */
-async function emptyCanvasPoint(page) {
-  const canvas = await page.locator('#canvas').boundingBox();
-  return { x: canvas.x + canvas.width * 0.88, y: canvas.y + 80 };
-}
-
-async function clickEmptyCanvas(page) {
-  const p = await emptyCanvasPoint(page);
-  await page.mouse.click(p.x, p.y);
-}
+import { collectPageErrors, startCli } from './helpers/cli.js';
+import {
+  center, clickEmptyCanvas, expectNoTempFiles, git, openEditor, setupRepo, shape, status, typeLabel,
+} from './helpers/editor.js';
 
 /** Drags the Task tool from the palette onto the canvas below "Cancel order"; returns the new task's id. */
 async function dragNewTask(page) {
@@ -74,20 +30,6 @@ async function dragNewTask(page) {
 function newTaskIds(page) {
   return page.locator('.djs-element.djs-shape[data-element-id^="Activity_"]')
     .evaluateAll((els) => els.map((el) => el.getAttribute('data-element-id')));
-}
-
-/** Double-clicks an element, replaces its label by typing, optionally commits by clicking empty canvas. */
-async function typeLabel(page, id, text, { commit = true } = {}) {
-  await shape(page, id).dblclick();
-  await expect(page.locator('.djs-direct-editing-parent')).toBeVisible();
-  await page.keyboard.press('ControlOrMeta+a');
-  await page.keyboard.type(text);
-  if (commit) await clickEmptyCanvas(page);
-}
-
-async function expectNoTempFiles(dir) {
-  const names = await readdir(dir);
-  expect(names.filter((n) => TEMP_FILE_RE.test(n) || n.endsWith('.tmp'))).toEqual([]);
 }
 
 test.describe('S2: edits are saved to disk', () => {

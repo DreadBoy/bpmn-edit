@@ -1,5 +1,6 @@
 // HTTP + WebSocket server: serves the editor shell from web/, the document via /api/file, and the
-// sync protocol on /ws. Host secret and share routes are added in later steps.
+// sync protocol on /ws (including changes made to the file on disk). Host secret and share routes
+// are added in later steps.
 //
 // WebSocket protocol (JSON text frames, each with a `type`):
 //   server -> client  { type: 'init', xml, version, name, path } on connect
@@ -9,6 +10,17 @@
 //                                                               'write-failed' (pushed) | 'internal'
 //   server -> client  { type: 'flush' }                         shutting down: send pending edits now
 //   client -> server  { type: 'flushed' }                       nothing pending any more
+//   server -> client  { type: 'remote-update', xml, version, origin }
+//                                                               the document was replaced by someone
+//                                                               else; origin 'disk' = changed on disk
+//                                                               (other clients' edits will use it too)
+//   server -> client  { type: 'file-status', state, message? }  state of the file on disk: 'ok' |
+//                                                               'missing' | 'invalid'; pushed on change
+//                                                               and after 'init' when not 'ok'
+//   client -> server  { type: 'import-failed', version, message }
+//                                                               the client could not display that
+//                                                               version; if it came from disk, the file
+//                                                               is reported 'invalid' (nothing written)
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import http from 'node:http';
@@ -159,6 +171,14 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
       case 'flushed':
         flushWaiters.get(ws)?.();
         return undefined;
+      case 'import-failed': {
+        const { version, message: text } = message;
+        if (!Number.isInteger(version) || (text !== undefined && typeof text !== 'string')) {
+          return sendError(ws, 'bad-message', 'import-failed needs an integer "version" and a string "message"');
+        }
+        session.reportUnreadable(version, String(text ?? 'unknown error').slice(0, 500));
+        return undefined;
+      }
       default:
         return sendError(ws, 'bad-message', `Unknown message type: ${JSON.stringify(message.type)}`);
     }
@@ -178,6 +198,8 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     ws.on('close', () => flushWaiters.get(ws)?.());
     const { xml, version } = session.getState();
     send(ws, { type: 'init', xml, version, name: fileName, path: filePath });
+    const diskStatus = session.diskStatus;
+    if (diskStatus.state !== 'ok') send(ws, { type: 'file-status', ...diskStatus });
   });
 
   function onUpgrade(req, socket, head) {
@@ -200,11 +222,23 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     broadcast({ type: 'error', code: 'write-failed', message: err.message });
   }
 
+  function onChange({ xml, version, origin }) {
+    // Clients' own edits are not broadcast yet (live sync between clients comes later).
+    if (origin === 'disk') broadcast({ type: 'remote-update', xml, version, origin });
+  }
+
+  function onDiskStatus(status) {
+    broadcast({ type: 'file-status', ...status });
+  }
+
   function attachSession(newSession) {
     session = newSession;
     session.on('write-error', onWriteError);
+    session.on('change', onChange);
+    session.on('disk-status', onDiskStatus);
   }
   if (session) attachSession(session);
+  let ownStore = null; // store created by listen() (watched by us, unwatched on close)
 
   let closing = false;
   let closePromises = null;
@@ -271,6 +305,8 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
       if (!session) {
         const store = createFileStore(filePath);
         attachSession(new Session({ xml: await store.read(), store }));
+        ownStore = store;
+        await store.watch();
       }
       const candidates = [];
       if (port !== 0) {
@@ -326,6 +362,9 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
       for (const server of httpServers) server.closeAllConnections();
       await Promise.all(closePromises);
       session?.off('write-error', onWriteError);
+      session?.off('change', onChange);
+      session?.off('disk-status', onDiskStatus);
+      await ownStore?.unwatch();
     },
   };
   return self;

@@ -68,7 +68,7 @@ cannot tell host and collaborator apart:
   - **E2E:** in the browser, add a task from the palette and rename it; within ~1 s the file on disk contains the
     new task; `git diff` shows it. Ctrl-C right after an edit still persists it.
 
-- [ ] **S3. External edits show up in the browser**
+- [x] **S3. External edits show up in the browser**
   - Carry-over from S2: add a session method for external replacement (bump version, origin = disk). Use
     `store.isOwnWrite()` / `lastWrite` for self-write suppression. macOS `fs.watch` emits 2× rename + a temp-file
     event per atomic write, so ignore `TEMP_FILE_RE`.
@@ -78,6 +78,10 @@ cannot tell host and collaborator apart:
     reload; no write-back loop (file mtime stable afterwards).
 
 - [ ] **S4. Live sync between several browser windows**
+  - Carry-over from S3: broadcast client-origin changes via `remote-update` (today only disk-origin). Reuse the
+    client's `deferredUpdate` + "local activity" check (unacked edits, label editor, drag). Must also fix: a tab
+    whose first render failed stays blank when another tab repairs the file. Switch Playwright to real Chrome
+    (`channel: 'chrome'`).
   - Broadcast updates to all other clients (last-write-wins, monotonically increasing version), echo-loop
     suppression, viewport/selection preserved on remote import.
   - **E2E:** two (and three) browser contexts on the host URL; create/move/delete in A → appears in B and C and
@@ -121,6 +125,13 @@ cannot tell host and collaborator apart:
   - **E2E:** `npm run test:e2e` runs the whole suite × 3 browsers; Chrome must be green; Firefox/WebKit results
     reported, failures triaged into fix-now vs documented known issues.
 
+## Backlog (small known issues, fold into a later step)
+
+- Startup accepts a truncated file (`looksLikeBpmn` only); use `isCompleteBpmn` like the watcher. (S3)
+- Notice "showing the last good version" is wrong in a tab with nothing rendered. (S3)
+- Failed import → re-import of last good XML resets undo history. (S3)
+- `POST /api/file` → 404 instead of 405; raw EACCES message. (S1)
+
 ## Parallelisation
 
 Slices touch the same files (`server.js`, `app.js`), so they run mostly sequentially. Exception: the tunnel
@@ -147,6 +158,9 @@ implement the decision if it changes anything. These steps are as mandatory as t
 - [ ] **Q2. Collaborator edit racing an external IDE save** (after Q1)
   - Experiment: E2E — browser edit and an on-disk write of a different change within the debounce window, both
     orders. Observe what ends up on disk and in each window; is anything silently lost?
+  - Known from S3: an external save landing <~150 ms (settle delay) before the host writes a pending UI edit, or
+    just before Ctrl-C flush, is overwritten silently. Candidate fix: re-check disk (mtime/size vs last write) right
+    before each write and before shutdown flush. LWW is visible only on stderr/console today.
   - Decide policy (e.g. last-write-wins + visible "file changed on disk, your edit was overwritten" toast, or
     pause-and-ask). Record in `docs/decisions.md`, implement, E2E-verify the chosen behaviour.
 

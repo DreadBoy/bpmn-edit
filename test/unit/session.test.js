@@ -71,3 +71,84 @@ describe('Session', () => {
     assert.deepEqual(errors.map((e) => e.message), ['disk full']);
   });
 });
+
+describe('Session and changes on disk', () => {
+  it('replaceFromDisk: bumps the version, emits change with origin disk, never writes', () => {
+    const store = fakeStore();
+    const session = new Session({ xml: original, store });
+    const changes = [];
+    session.on('change', (c) => changes.push(c));
+
+    assert.equal(session.replaceFromDisk(variant(1)), 2);
+    assert.deepEqual(session.getState(), { xml: variant(1), version: 2 });
+    assert.deepEqual(changes, [{ xml: variant(1), version: 2, origin: 'disk' }]);
+    assert.deepEqual(store.writes, []);
+  });
+
+  it('replaceFromDisk with the current content is a no-op', () => {
+    const session = new Session({ xml: original, store: fakeStore() });
+    const changes = [];
+    session.on('change', (c) => changes.push(c));
+    assert.equal(session.replaceFromDisk(original), 1);
+    assert.deepEqual(changes, []);
+  });
+
+  it('applies external-change events from the store and tracks the disk status', () => {
+    const store = fakeStore();
+    const session = new Session({ xml: original, store });
+    const statuses = [];
+    const changes = [];
+    session.on('disk-status', (s) => statuses.push(s));
+    session.on('change', (c) => changes.push(c));
+
+    store.emit('external-change', { xml: variant(1) });
+    assert.deepEqual(session.getState(), { xml: variant(1), version: 2 });
+    assert.equal(changes[0].origin, 'disk');
+
+    store.emit('external-missing');
+    assert.deepEqual(session.diskStatus, { state: 'missing' });
+    store.emit('external-invalid', { message: 'truncated' });
+    assert.deepEqual(session.diskStatus, { state: 'invalid', message: 'truncated' });
+    store.emit('disk-ok');
+    assert.deepEqual(session.diskStatus, { state: 'ok' });
+    store.emit('external-missing');
+    store.emit('external-change', { xml: variant(1) }); // reappeared with the same content
+    assert.deepEqual(statuses.map((s) => s.state), ['missing', 'invalid', 'ok', 'missing', 'ok']);
+    assert.equal(session.getState().version, 2);
+    assert.deepEqual(store.writes, []);
+  });
+
+  it('warns when a stale browser edit replaces a change made on disk (and still applies it)', () => {
+    const logs = [];
+    const store = fakeStore();
+    const session = new Session({ xml: original, store, log: (m) => logs.push(m) });
+    session.replaceFromDisk(variant(1));
+    assert.equal(session.applyUpdate(variant(2), 1, 'a'), 3);
+    assert.equal(session.getState().xml, variant(2));
+    assert.deepEqual(store.writes, [variant(2)]);
+    assert.equal(logs.length, 1);
+    assert.match(logs[0], /^local-bpmn: warning: an edit from the browser replaced a change made on disk/);
+
+    session.applyUpdate(variant(3), 3, 'a'); // up to date: no warning
+    assert.equal(logs.length, 1);
+  });
+
+  it('reportUnreadable marks the file invalid only for the current version from disk', () => {
+    const store = fakeStore();
+    const session = new Session({ xml: original, store });
+    const statuses = [];
+    session.on('disk-status', (st) => statuses.push(st));
+
+    session.replaceFromDisk(variant(1)); // version 2, from disk
+    assert.equal(session.reportUnreadable(1, 'old version'), false);
+    assert.equal(session.reportUnreadable(2, 'no diagram to display'), true);
+    assert.equal(session.diskStatus.state, 'invalid');
+    assert.match(session.diskStatus.message, /no diagram to display/);
+
+    session.applyUpdate(variant(2), 2, 'a'); // version 3, from a client
+    assert.equal(session.reportUnreadable(3, 'x'), false);
+    store.emit('written', {}); // the edit reached the disk
+    assert.deepEqual(statuses.map((st) => st.state), ['invalid', 'ok']);
+    assert.deepEqual(store.writes, [variant(2)]);
+  });
+});
