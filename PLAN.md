@@ -97,6 +97,12 @@ cannot tell host and collaborator apart:
   - **E2E:** select a task in A → outlined in A's colour in B; deselect / close A → marker gone.
 
 - [ ] **S7. Share via public link**
+  - Tunnel internals done & verified on branch `worktree-agent-acd048da3da9a5c58` (commit "Add cloudflared
+    quick-tunnel module"); merge it first. Wiring notes: CLI SIGINT/SIGTERM must call `tunnel.stop()` (only an
+    `exit` hook exists); surface `TUNNEL_RATE_LIMITED` in the Share UI (Cloudflare limits quick tunnels per IP —
+    keep live-tunnel E2E runs few, `retries: 0`); tunnel e2e must open `/s/<token>`; Host check must accept the
+    tunnel host; show download/startup progress on the spinner (startup 7–13 s); add a timeout to the binary
+    download fetch.
   - `src/tunnel.js`: find `cloudflared` on PATH or download platform binary to `~/.local-bpmn/bin/`; spawn
     quick tunnel, parse `*.trycloudflare.com` URL; provider interface. Host-only `POST/DELETE /api/share`;
     security model above. UI: Share → spinner → URL + Copy; Stop sharing. Share button hidden for collaborators.
