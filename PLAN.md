@@ -106,8 +106,31 @@ Slices touch the same files (`server.js`, `app.js`), so they run mostly sequenti
 module internals of S7 (`src/tunnel.js`: binary resolution/download + URL parsing) can be built in parallel with
 S4–S6 in a separate worktree, then wired up and E2E-verified as S7.
 
-## Open questions (from spec)
+## Open questions → measure-and-decide steps
 
-- Full-XML vs op-level sync — measure in S4.
-- Collaborator change racing an external IDE save — v1: last-write-wins by arrival order at host, log a warning.
-- Persistent session links — out of scope for v1.
+The spec's open questions can't be answered up front; they depend on observed behaviour. Each one is a
+step: measure with a reproducible E2E experiment, record numbers + decision in `docs/decisions.md`, and
+implement the decision if it changes anything. These steps are as mandatory as the feature steps.
+
+- [ ] **Q1. Full-XML vs operation-level sync** (after S4, before S5)
+  - Experiment: Playwright with 2 and 3 concurrent browser windows on (a) the small fixture and (b) a large
+    generated diagram (~300 elements). Measure: edit-to-visible latency in other windows (p50/p95), WS payload size
+    per edit, lost edits when two users edit *different* elements within the same ~500 ms, UX glitches on remote
+    import (viewport jump, lost selection, interrupted drag/label edit in the receiving window).
+  - Decide: keep full-XML for v1, or switch to op-level. Thresholds to apply: lost edits on *different* elements
+    or an interrupted in-progress edit in the receiver is a defect → must be fixed (op-level or smarter merge);
+    latency p95 > 500 ms on the large diagram → switch to op-level.
+  - Record measurements + decision; if the decision is "change", add a new implementation step to this plan
+    right after Q1 and do it (E2E-verified) before S5.
+
+- [ ] **Q2. Collaborator edit racing an external IDE save** (after Q1)
+  - Experiment: E2E — browser edit and an on-disk write of a different change within the debounce window, both
+    orders. Observe what ends up on disk and in each window; is anything silently lost?
+  - Decide policy (e.g. last-write-wins + visible "file changed on disk, your edit was overwritten" toast, or
+    pause-and-ask). Record in `docs/decisions.md`, implement, E2E-verify the chosen behaviour.
+
+- [ ] **Q3. Persistent session links across restarts** (after S8)
+  - Experiment: what happens to a shared link when the host restarts the CLI or re-shares (quick tunnel gives a new
+    hostname each time); how long quick tunnels take to come up and how stable they are over ~30 min.
+  - Decide: confirm "out of scope for v1" (document the behaviour in README) or add a step for named tunnels.
+    Record in `docs/decisions.md`.
