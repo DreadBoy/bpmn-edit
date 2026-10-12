@@ -36,6 +36,31 @@ body {
   white-space: nowrap;
 }
 
+#save-status {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  color: #57606a;
+  white-space: nowrap;
+}
+
+#save-status::before {
+  content: "";
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.8;
+}
+
+#save-status[data-state="saved"] { color: #1a7f37; }
+#save-status[data-state="saving"],
+#save-status[data-state="connecting"] { color: #9a6700; }
+#save-status[data-state="disconnected"] { color: #57606a; }
+#save-status[data-state="error"] { color: #cf222e; }
+
 #canvas {
   flex: 1;
   min-height: 0;

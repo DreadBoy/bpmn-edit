@@ -1,10 +1,11 @@
 #!/usr/bin/env node
 // CLI entry: `local-bpmn <file> [--port <n>] [--no-open]`
 import { readFileSync } from 'node:fs';
-import { Command, InvalidArgumentError } from 'commander';
+import { Command, InvalidArgumentError, Option } from 'commander';
 import open from 'open';
-import { readBpmnFile } from '../src/file.js';
+import { createFileStore } from '../src/file.js';
 import { createServer } from '../src/server.js';
+import { Session } from '../src/session.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -21,6 +22,12 @@ function parsePort(value) {
   return port;
 }
 
+function parseDelay(value) {
+  const ms = Number(value);
+  if (!/^\d+$/.test(value) || ms > 60_000) throw new InvalidArgumentError('must be an integer between 0 and 60000.');
+  return ms;
+}
+
 const program = new Command()
   .name('local-bpmn')
   .description('Open a BPMN file in a browser-based editor.')
@@ -28,6 +35,8 @@ const program = new Command()
   .argument('<file>', 'path to the .bpmn file')
   .option('-p, --port <n>', 'preferred port (falls back to the next free one)', parsePort, 3000)
   .option('--no-open', 'do not open the browser')
+  // Delay before edits are written to disk; hidden, used by tests to observe a pending write.
+  .addOption(new Option('--write-delay <ms>').argParser(parseDelay).default(250).hideHelp())
   .configureOutput({
     // Route commander's own errors through the same "local-bpmn: error:" prefix.
     outputError: (str, write) => write(`local-bpmn: ${str}`),
@@ -40,13 +49,16 @@ const program = new Command()
 const [filePath] = program.args;
 const options = program.opts();
 
+const store = createFileStore(filePath, { debounceMs: options.writeDelay });
+let initialXml;
 try {
-  await readBpmnFile(filePath);
+  initialXml = await store.read();
 } catch (err) {
   fail(err.message);
 }
+const session = new Session({ xml: initialXml, store });
 
-const server = createServer({ filePath, port: options.port });
+const server = createServer({ filePath, session, port: options.port });
 let port;
 try {
   port = await server.listen();
@@ -66,10 +78,21 @@ if (options.open) {
   });
 }
 
-let shuttingDown = false;
+// Shutdown: stop accepting, let open editors send their last edits, write everything to disk, exit 0.
+// A second signal skips waiting for the editors but still finishes the disk write; a third one
+// exits immediately (escape hatch if the disk hangs).
+let signals = 0;
 async function shutdown() {
-  if (shuttingDown) return;
-  shuttingDown = true;
+  signals += 1;
+  if (signals === 3) process.exit(1);
+  if (signals === 2) {
+    await store.flush();
+    process.exit(0);
+  }
+  if (signals > 1) return;
+  server.stopAccepting();
+  await server.drainClients(1000);
+  await store.flush();
   await server.close();
   process.exit(0);
 }

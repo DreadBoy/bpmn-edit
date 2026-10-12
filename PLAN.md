@@ -52,7 +52,7 @@ cannot tell host and collaborator apart:
   - **E2E:** run CLI on a copy of the fixture with `--no-open`; open the printed URL in Chromium; the diagram's
     shapes/labels are visible, watermark present, no console errors. CLI with a bad path exits non-zero with message.
 
-- [ ] **S2. Edits are saved to disk**
+- [x] **S2. Edits are saved to disk**
   - Carry-over from S1: raise `engines.node` to `>=20.19` (chokidar 5 requirement) or pin chokidar 4. The server
     binds both 127.0.0.1 and ::1 (`httpServers`), so attach the WS `upgrade` handler to each.
   - `src/file.js`: debounced atomic write (tmp + rename), flush on exit. Client sends full XML on
@@ -62,6 +62,9 @@ cannot tell host and collaborator apart:
     new task; `git diff` shows it. Ctrl-C right after an edit still persists it.
 
 - [ ] **S3. External edits show up in the browser**
+  - Carry-over from S2: add a session method for external replacement (bump version, origin = disk). Use
+    `store.isOwnWrite()` / `lastWrite` for self-write suppression. macOS `fs.watch` emits 2× rename + a temp-file
+    event per atomic write, so ignore `TEMP_FILE_RE`.
   - `chokidar` watch; self-writes suppressed; external change → bump version → push XML to clients, which
     re-import preserving viewport.
   - **E2E:** with the page open, modify the file on disk (as an IDE would); the browser shows the change without
@@ -133,6 +136,13 @@ implement the decision if it changes anything. These steps are as mandatory as t
     orders. Observe what ends up on disk and in each window; is anything silently lost?
   - Decide policy (e.g. last-write-wins + visible "file changed on disk, your edit was overwritten" toast, or
     pause-and-ask). Record in `docs/decisions.md`, implement, E2E-verify the chosen behaviour.
+
+- [ ] **Q4. Noisy first `git diff` (formatting churn)** (after S3)
+  - Observed in S2: the first save rewrites the multi-line `<bpmn:definitions>` header onto one line (bpmn-js
+    serialisation), so users see unrelated diff lines. Experiment: take BPMN files saved by Camunda Modeler,
+    bpmn.io demo and a hand-formatted one; make one trivial edit through the UI; count diff lines unrelated to the
+    edit. Decide whether to preserve original formatting (e.g. keep the original header / attribute order) and
+    implement if the noise exceeds a handful of lines. Record in `docs/decisions.md`.
 
 - [ ] **Q3. Persistent session links across restarts** (after S8)
   - Experiment: what happens to a shared link when the host restarts the CLI or re-shares (quick tunnel gives a new
