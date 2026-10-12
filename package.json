@@ -1,0 +1,40 @@
+{
+  "name": "local-bpmn",
+  "version": "0.1.0",
+  "description": "Open a local BPMN file in a browser-based editor, save changes back to disk, and share a live editing session.",
+  "type": "module",
+  "bin": {
+    "local-bpmn": "bin/local-bpmn.js"
+  },
+  "files": [
+    "bin",
+    "src",
+    "web"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "start": "node bin/local-bpmn.js",
+    "vendor": "node scripts/vendor.js",
+    "test": "node --test test/unit/*.test.js",
+    "test:e2e": "playwright test"
+  },
+  "keywords": [
+    "bpmn",
+    "bpmn-js",
+    "editor",
+    "collaboration"
+  ],
+  "license": "MIT",
+  "dependencies": {
+    "chokidar": "^5.0.0",
+    "commander": "^14.0.3",
+    "open": "^11.0.4",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.64.0",
+    "bpmn-js": "^18.31.0"
+  }
+}

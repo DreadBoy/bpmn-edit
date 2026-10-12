@@ -1,0 +1,24 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>local-bpmn</title>
+  <link rel="icon" href="data:,">
+  <link rel="stylesheet" href="vendor/bpmn-js/assets/diagram-js.css">
+  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-js.css">
+  <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-font/css/bpmn-embedded.css">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header id="toolbar">
+    <span class="brand">local-bpmn</span>
+    <span id="file-name" title=""></span>
+  </header>
+  <main id="canvas"></main>
+  <div id="error" role="alert" hidden></div>
+
+  <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
+  <script type="module" src="app.js"></script>
+</body>
+</html>

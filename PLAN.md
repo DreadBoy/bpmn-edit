@@ -42,7 +42,7 @@ cannot tell host and collaborator apart:
 
 ## Steps
 
-- [ ] **S1. Open a diagram in the browser**
+- [x] **S1. Open a diagram in the browser**
   - Scaffold `package.json` (bin, engines, `type: module`, `files`), deps `ws`, `chokidar`, `commander`, `open`,
     `bpmn-js`; dev `playwright`. `scripts/vendor.js` copies bpmn-js dist into `web/vendor/bpmn-js/`.
   - `bin/local-bpmn.js <file> [--port] [--no-open]`, `src/server.js` (node:http, static `web/`, `GET /api/file`),
@@ -53,6 +53,8 @@ cannot tell host and collaborator apart:
     shapes/labels are visible, watermark present, no console errors. CLI with a bad path exits non-zero with message.
 
 - [ ] **S2. Edits are saved to disk**
+  - Carry-over from S1: raise `engines.node` to `>=20.19` (chokidar 5 requirement) or pin chokidar 4. The server
+    binds both 127.0.0.1 and ::1 (`httpServers`), so attach the WS `upgrade` handler to each.
   - `src/file.js`: debounced atomic write (tmp + rename), flush on exit. Client sends full XML on
     `commandStack.changed` (debounced) over WebSocket (`ws`); host keeps canonical XML + version.
   - SIGINT/SIGTERM: flush pending write, exit 0.
@@ -87,6 +89,9 @@ cannot tell host and collaborator apart:
   - **E2E (real tunnel):** click Share in the host window; a `https://…trycloudflare.com/s/<token>` URL appears;
     open it in a second browser context → the diagram loads and edits sync both ways and reach disk. Through the
     public URL: wrong token → 404, `/api/share` → 404, host page without secret → no host powers.
+  - Carry-over from S1: add a Host/Origin header check (DNS-rebinding protection; accept localhost/127.0.0.1/[::1]
+    and the active tunnel hostname only). Also: a wildcard `*:3000` listener elsewhere doesn't trigger port
+    fallback. Detect it and fall back.
 
 - [ ] **S8. Session ended / stop sharing / reconnect**
   - Stop sharing → collaborators disconnected, old link 404. Host Ctrl-C → collaborators get "Session ended"
