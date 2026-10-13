@@ -271,11 +271,16 @@ How it works:
   the file with what it last read or wrote: `stat` (inode, size, mtime) as a cheap pre-check, then the
   content. If another program changed it, the temp file is discarded, the write is held back and the
   change is reported after the usual settle delay, exactly like a change the watcher found first.
+  If the file was invalid or missing when last seen, the host may still replace it while it stays
+  invalid or missing (as before), but a complete BPMN document found there counts as a change made
+  on disk (no stat shortcut in that state).
 - Unwritten accepted edits: when a change on disk replaces a pending write, the session marks the
   disk version with `discardedAfter` (the last version that is on disk). The host also tells the
   windows when versions are on disk (`saved`), so each window keeps the edits of its acknowledged
   updates until then; on a disk version with `discardedAfter` it re-applies its own edits newer than
-  that, before its other unsent edits, and sends the result.
+  that, before its other unsent edits, and sends the result. If some of those edits came from a
+  window that has closed since (nobody can re-apply them), the unsaved document is also saved next to
+  the file (see Shutdown below for the name), with a stderr warning.
 - Browser (`web/app.js`): a change on disk is no longer sent over; it is rebased onto like another
   window's edit. Every window shows "Reloaded from disk" as before; the window whose edits were
   re-applied shows a toast (`data-kind="merged"`): "The file was changed on disk; your edits were
@@ -298,7 +303,10 @@ delay just before the host write, with the file sampled every 5 ms for 2 s to pr
 overwritten (`core.autocrlf=input`); browser edit right after an IDE save; same label in both (file
 wins, conflict toast with the exact text, file not overwritten later); Ctrl-C right after an IDE save
 (both kept, exit 0); Ctrl-C with no window left (file keeps the save, edit kept aside, untracked in
-`git status`). The two S3 tests that asserted last-write-wins now assert that both changes are kept.
+`git status`); a valid save just before the host write after the file was invalid, and after it was
+deleted (both kept); a save replacing the unwritten edit of a window that closed (edit kept aside,
+file keeps the save). The two S3 tests that asserted last-write-wins now assert that both changes are
+kept.
 
 ### Known limits
 
@@ -306,9 +314,9 @@ wins, conflict toast with the exact text, file not overwritten later); Ctrl-C ri
   still overwritten. The watcher then reads our content and reports nothing.
 - An IDE that is still writing (non-atomic, slow) when the host checks is "invalid" content; as
   before, the host's next write replaces an invalid file. At shutdown such a file is replaced as well.
-- Edits of a window that closed after its update was accepted but before it was written cannot be
-  re-applied by anyone during the session: the change on disk wins and only stderr says so ("…changed
-  on disk before the latest edits were saved…"). At shutdown that content is kept aside instead.
+- Edits of a window that closed after its update was accepted but before it was written are not
+  merged: the file keeps the change on disk and the unsaved document (all windows' unsaved edits) is
+  kept aside, reported on stderr only (no window of its author is left to show a toast).
 - A change on disk is merged only where Q1 has ops (label, move, create, append, connect, delete);
   other browser edits racing it (resize, bendpoints, type change, …) are dropped with a toast.
 - Conflict detection is per property (label text, position) as in Q1; a change on disk to other

@@ -31,7 +31,8 @@ export class Session extends EventEmitter {
   #origin = null; // origin of the current version (null for the initial file)
   #lastEditVersion = 1; // newest version made by applyUpdate (the initial file counts as one)
   #minBase = 1; // updates must be based on this version or newer (see applyUpdate)
-  #unsaved = []; // [{ version, xml }] accepted updates not on disk yet, oldest first
+  #unsaved = []; // [{ version, xml, origin }] accepted updates not on disk yet, oldest first
+  #gone = new WeakSet(); // origins that went away (see originGone)
   #store;
   #log;
   #diskStatus = { state: 'ok' };
@@ -55,10 +56,14 @@ export class Session extends EventEmitter {
         this.#setDiskStatus({ state: 'ok' });
         // A pending write was dropped for this change: the updates in it never reached the disk.
         const lost = discarded && this.#unsaved.length && diskXml !== this.#xml ? this.#unsaved[0].version - 1 : null;
+        const orphaned = lost !== null && this.#unsaved.some((entry) => this.#gone.has(entry.origin));
         this.#unsaved = [];
         if (lost !== null) {
-          this.#log(`local-bpmn: ${store.path ?? 'the file'} changed on disk before the latest edits were saved; `
+          this.#log(`local-bpmn: warning: ${store.path ?? 'the file'} changed on disk before the latest edits were saved; `
             + 'they are re-applied on top of the change\n');
+          // Some of them came from a window that has closed since: nobody re-applies those. Keep the
+          // whole unsaved document next to the file (as at shutdown) so they are not lost.
+          if (orphaned && typeof store.keepAside === 'function') store.keepAside(this.#xml);
         }
         this.replaceFromDisk(diskXml, lost === null ? {} : { discardedAfter: lost });
       });
@@ -126,7 +131,7 @@ export class Session extends EventEmitter {
     this.#minBase = this.#version;
     this.#origin = origin;
     if (this.#store) {
-      this.#unsaved.push({ version: this.#version, xml });
+      this.#unsaved.push({ version: this.#version, xml, origin });
       this.#store.write(xml);
     }
     this.emit('change', { xml, version: this.#version, baseVersion, origin, ...(overrides ? { overrides } : {}) });
@@ -146,6 +151,15 @@ export class Session extends EventEmitter {
     // Nobody can re-apply edits on it: an edit based on the last displayable version replaces it.
     this.#minBase = Math.min(this.#minBase, this.#lastEditVersion);
     return true;
+  }
+
+  /**
+   * The client `origin` (as given to applyUpdate) has disconnected: if its accepted edits are later
+   * replaced by a change on disk before they were written, nobody can re-apply them, so the
+   * unsaved document is kept next to the file instead (Q2). Objects only (e.g. the WebSocket).
+   */
+  originGone(origin) {
+    if (origin !== null && typeof origin === 'object') this.#gone.add(origin);
   }
 
   /**

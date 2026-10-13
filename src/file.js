@@ -218,24 +218,30 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
   let blockedByDisk = false; // a write was held back because the file changed on disk (see checkDisk)
   let flushing = 0;          // flush() calls running: a change on disk then keeps both versions
   let checkingNow = false;   // checkNow() is running (shutdown)
+  const savingAside = new Set(); // keepAside() calls still running (flush() waits for them)
   let unclaimedXml = null;   // write checkNow() dropped for a change on disk; saved aside by flush()
                              // unless new content is written meanwhile (the edits were re-applied)
 
   /**
    * Content another program wrote over what we last read or wrote, or null if the file still holds
-   * diskXml (or we do not know what it holds: missing or invalid before; our write replaces it).
+   * diskXml. If the file was missing or invalid when last seen (diskXml null), only complete BPMN
+   * counts as a change: a file that is still missing or invalid is replaced by our write.
    */
   async function externalContent() {
-    if (diskXml === null) return null;
     let info;
     let xml;
     try {
       info = statKey(await stat(targetPath));
-      if (sameStat(info, diskStat)) return null;
+      if (diskXml !== null && sameStat(info, diskStat)) return null;
       xml = await readFile(targetPath, 'utf8');
     } catch (err) {
       if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null; // deleted: recreated by the write
       throw err;
+    }
+    if (diskXml === null) {
+      // The file was missing or invalid when last seen: replacing it is fine while it still is, but
+      // a complete document saved there since is a change like any other.
+      return isCompleteBpmn(xml) ? xml : null;
     }
     if (xml === diskXml) {
       diskStat = info; // e.g. touched, or rewritten with the same content
@@ -336,7 +342,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
     try {
       aside = await saveAside(xml);
     } catch (err) {
-      log(`local-bpmn: ${path} changed on disk, but the editor's version could not be saved next to it `
+      log(`local-bpmn: warning: ${path} changed on disk, but the editor's version could not be saved next to it `
         + `(${err.message}); writing it to the file instead\n`);
       return false;
     }
@@ -563,6 +569,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
           unclaimedXml = null;
           await keepAside(xml);
         }
+        await Promise.all(savingAside);
         for (;;) {
           if (timer) {
             clearTimeout(timer);
@@ -634,6 +641,17 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
       } finally {
         checkingNow = false;
       }
+    },
+
+    /**
+     * Saves `xml` next to the file instead of writing it ('kept-aside', stderr warning); for content
+     * a change on disk replaced and nobody can re-apply. Resolves to whether it was saved.
+     */
+    keepAside(xml) {
+      if (unclaimedXml === xml) unclaimedXml = null; // kept now, not again by flush()
+      const saving = keepAside(xml).finally(() => savingAside.delete(saving));
+      savingAside.add(saving); // flush() waits for it
+      return saving;
     },
 
     /** Stops watching (closes the watcher, cancels a scheduled check, waits for a running one). */

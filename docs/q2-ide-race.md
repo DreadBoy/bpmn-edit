@@ -94,3 +94,21 @@ An intermediate run (before shutdown re-checked the file) had a-c identical and 
 10/10 "disk change kept, browser version saved next to it" (`order.local-bpmn-unsaved-<time>.bpmn`):
 that is now the fallback when no window is left to re-apply the edit (covered by
 `test/e2e/q2-ide-race.spec.js`).
+
+## Round 2: file invalid or deleted just before the save
+
+An independent check found a case the scenarios above did not cover: the file was made invalid (half
+written) or deleted, the host reported it, then a browser edit was accepted and a valid save landed
+10–130 ms before the host's write. The store forgets what is on disk while the file is invalid or
+missing (`diskXml = null`), and the pre-write check skipped such a file, so the write replaced the
+valid save: 10/10 lost for "invalid", 10/10 for "deleted" (in-place, temp+rename and truncate+write
+saves; `core.autocrlf` false and input), silently apart from "valid again" on stderr.
+
+Fix: in that state the pre-write check reads the file and treats complete BPMN as a change made on
+disk (held write, rebase as above); a file that is still invalid or missing is still replaced, as
+documented. Same repro afterwards: 10/10 both kept for "invalid", 10/10 for "deleted", merged toast in
+the editing window. Both cases are in `test/e2e/q2-ide-race.spec.js`.
+
+Also changed in that round: unsaved edits of a window that has closed are kept next to the file when
+a change on disk replaces them during the session (before: stderr only), and every Q2 stderr line
+starts with `warning:`.

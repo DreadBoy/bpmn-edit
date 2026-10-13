@@ -232,7 +232,10 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
         sendError(ws, 'internal', 'Internal server error');
       }
     });
-    ws.on('close', () => flushWaiters.get(ws)?.());
+    ws.on('close', () => {
+      flushWaiters.get(ws)?.();
+      session.originGone?.(ws); // its unsaved edits cannot be re-applied any more (Q2)
+    });
     lastClientNumber += 1;
     const clientId = `c${lastClientNumber}`;
     clientIds.set(ws, clientId);

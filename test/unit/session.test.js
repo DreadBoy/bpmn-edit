@@ -195,12 +195,25 @@ describe('Session and changes on disk', () => {
     assert.equal(logs.length, 1);
     assert.match(logs[0], /changed on disk before the latest edits were saved/);
 
+    // A window whose unsaved edit a change on disk replaces has closed: the document is kept aside.
+    store.keepAside = (xml) => { store.kept = [...(store.kept ?? []), xml]; };
+    const ws = {};
+    session.applyUpdate(variant(5), 5, ws); // v6
+    session.originGone(ws);
+    store.emit('external-change', { xml: variant(11), discarded: true });
+    assert.deepEqual(store.kept, [variant(5)]);
+    assert.equal(changes.at(-1).discardedAfter, 5);
+    // Still open: no copy (the window re-applies its edits).
+    session.applyUpdate(variant(6), 7, {}); // v8
+    store.emit('external-change', { xml: variant(12), discarded: true });
+    assert.deepEqual(store.kept, [variant(5)]);
+
     // Nothing unsaved: an external change is a plain one.
-    session.applyUpdate(variant(4), 5, 'a'); // v6
+    session.applyUpdate(variant(4), 9, 'a'); // v10
     store.emit('saved', { xml: variant(4) });
-    assert.deepEqual(saved, [2, 6]);
+    assert.deepEqual(saved, [2, 10]);
     store.emit('external-change', { xml: variant(10) });
-    assert.deepEqual(changes.at(-1), { xml: variant(10), version: 7, origin: 'disk' });
+    assert.deepEqual(changes.at(-1), { xml: variant(10), version: 11, origin: 'disk' });
   });
 
   it('reportUnreadable marks the file invalid only for the current version from disk', () => {

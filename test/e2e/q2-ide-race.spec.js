@@ -4,12 +4,12 @@
 // the file's version and says so in the window whose edit lost; at shutdown, if nobody can re-apply
 // any more, the file keeps its content and the editor's version is saved next to it.
 import { expect, test } from '@playwright/test';
-import { readFile } from 'node:fs/promises';
+import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { collectPageErrors, startCli } from './helpers/cli.js';
 import { expectNoTempFiles, git, label, status, typeLabel } from './helpers/editor.js';
 import {
-  ackAfter, asideFiles, ideRename, nameInXml, openWindow, setupRepoWithAutocrlf, toastsSince, windowNames,
+  ackAfter, asideFiles, ideRename, nameInXml, openWindow, renameInXml, setupRepoWithAutocrlf, toastsSince, windowNames,
 } from './helpers/q2.js';
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
@@ -112,6 +112,58 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     await expect(toast(A)).toHaveAttribute('data-kind', 'merged');
     expect(git(fixture.dir, 'status', '--porcelain')).toBe(' M order.bpmn\n');
     expect(errors).toEqual([]);
+  });
+
+  for (const before of ['invalid', 'missing']) {
+    test(`a valid save just before the host writes, after the file was ${before}, is not overwritten`, async ({ browser }) => {
+      // Write delay below the settle delay: the host's own write has to notice the save.
+      await start({ writeDelay: 100 });
+      const [A, B] = await open(browser);
+      const errors = [...collectPageErrors(A), ...collectPageErrors(B)];
+      const original = await disk();
+      if (before === 'invalid') await writeFile(fixture.file, original.slice(0, original.length / 2));
+      else await unlink(fixture.file);
+      await expect(A.locator('#notice')).toHaveAttribute('data-kind', before, { timeout: 2000 });
+
+      await renameInBrowser(A, 'Ship parcel');
+      await writeFile(fixture.file, renameInXml(original, 'Task_CheckStock', 'Check stock levels'));
+      await expect.poll(async () => {
+        const xml = await disk().catch(() => '');
+        return [nameInXml(xml, 'Task_ShipOrder'), nameInXml(xml, 'Task_CheckStock')];
+      }, { timeout: 4000 }).toEqual(['Ship parcel', 'Check stock levels']);
+      for (const page of [A, B]) {
+        await expect(status(page)).toHaveAttribute('data-state', 'saved');
+        expect(await windowNames(page, IDS)).toEqual({ Task_ShipOrder: 'Ship parcel', Task_CheckStock: 'Check stock levels' });
+        await expect(page.locator('#notice')).not.toHaveAttribute('data-kind', before);
+      }
+      await expect(toast(A)).toHaveAttribute('data-kind', 'merged');
+      expect(errors).toEqual([]);
+    });
+  }
+
+  test('a save on disk replacing the unwritten edit of a window that has closed: the edit is kept next to the file', async ({ browser }) => {
+    await start({ writeDelay: 2000 });
+    const [A, B] = await open(browser);
+    const errorsB = collectPageErrors(B);
+
+    await renameInBrowser(A, 'Ship parcel');
+    await expect(label(B, 'Task_ShipOrder')).toHaveText('Ship parcel');
+    await windows[0].context.close(); // nobody left to re-apply A's edit
+    windows.shift();
+    await delay(300);
+    await ideRename(fixture.file, 'Task_CheckStock', 'Check stock levels');
+
+    await expect.poll(() => cli.stderr(), { timeout: 3000 }).toContain("the editor's version was saved to");
+    const aside = await asideFiles(fixture.dir);
+    expect(aside).toHaveLength(1);
+    expect(cli.stderr()).toContain(`the editor's version was saved to ${join(fixture.dir, aside[0])}`);
+    expect(nameInXml(await readFile(join(fixture.dir, aside[0]), 'utf8'), 'Task_ShipOrder')).toBe('Ship parcel');
+    await expect(label(B, 'Task_CheckStock')).toHaveText('Check stock levels');
+    await expect(label(B, 'Task_ShipOrder')).toHaveText('Ship order');
+    await delay(2500); // past the write delay: the file keeps the save
+    const xml = await disk();
+    expect([nameInXml(xml, 'Task_ShipOrder'), nameInXml(xml, 'Task_CheckStock')]).toEqual(['Ship order', 'Check stock levels']);
+    expect(errorsB).toEqual([]);
   });
 
   test('a browser edit right after a save on disk is applied on top of it', async ({ browser }) => {

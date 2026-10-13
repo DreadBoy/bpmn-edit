@@ -406,6 +406,31 @@ describe('createFileStore watching', () => {
     assert.equal(asides.length, 1);
   });
 
+  for (const before of ['invalid', 'missing']) {
+    it(`a valid save not reported yet, after the file was ${before}, holds back the write`, async () => {
+      await start({ debounceMs: 0, settleMs: 300 });
+      const reported = next(before === 'invalid' ? 'external-invalid' : 'external-missing');
+      if (before === 'invalid') await writeFile(file, original.slice(0, 200));
+      else await unlink(file);
+      await reported;
+      await writeFile(file, variant(2)); // not reported yet (settle delay)
+      const changed = next('external-change');
+      store.write(variant(1));
+      assert.deepEqual(await changed, { xml: variant(2), discarded: true });
+      assert.equal(await readFile(file, 'utf8'), variant(2));
+    });
+  }
+
+  it('still replaces a file that is still invalid', async () => {
+    await start({ debounceMs: 0, settleMs: 100 });
+    const reported = next('external-invalid');
+    await writeFile(file, original.slice(0, 200));
+    await reported;
+    store.write(variant(1));
+    await store.flush();
+    assert.equal(await readFile(file, 'utf8'), variant(1));
+  });
+
   it('a touched file (same content, new mtime) does not hold back a write', async () => {
     await start({ debounceMs: 0, settleMs: 60_000 });
     const now = new Date(Date.now() + 5000);

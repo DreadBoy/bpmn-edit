@@ -991,6 +991,10 @@ async function handleMessage(message) {
         document.title = `${message.name} — local-bpmn`;
       }
       clientId = message.clientId ?? null;
+      // A (new) connection starts from the host's current document: edits waiting for a disk write
+      // under an earlier connection's versions no longer apply (Q2).
+      unsavedEdits = [];
+      lostEdits = [];
       try {
         await importDiagram(message.xml);
         version = message.version;
