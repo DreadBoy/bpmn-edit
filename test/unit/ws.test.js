@@ -254,6 +254,49 @@ describe('live sync between clients', () => {
     for (const client of [a, b, c]) client.ws.close();
   });
 
+  it('refuses an update based on a replaced version with conflict: no broadcast, no write', async () => {
+    const [a, b, c] = await connectAll(3);
+    const { version } = server.session.getState();
+    a.send({ type: 'update', xml: variant('first'), baseVersion: version });
+    assert.equal((await a.next('ack')).version, version + 1);
+    assert.equal((await b.next('remote-update')).version, version + 1, 'B is sent the newer version first');
+    await c.next('remote-update');
+
+    b.send({ type: 'update', xml: variant('stale'), baseVersion: version });
+    const conflict = await b.next('conflict');
+    assert.equal(conflict.version, version + 1);
+    assert.match(conflict.message, /based on version/);
+    assert.equal(server.session.getState().xml, variant('first'));
+    assert.equal(await nextWithin(a, 'remote-update'), null);
+    assert.equal(await nextWithin(c, 'remote-update'), null);
+
+    // B re-sends on top of the newer version: accepted and passed on.
+    b.send({ type: 'update', xml: variant('rebased'), baseVersion: version + 1 });
+    assert.equal((await b.next('ack')).version, version + 2);
+    assert.deepEqual(server.session.getState(), { xml: variant('rebased'), version: version + 2 });
+    for (const client of [a, b, c]) client.ws.close();
+  });
+
+  it('passes the overrides of an update on to the other clients, and validates them', async () => {
+    const [a, b] = await connectAll(2);
+    const { version } = server.session.getState();
+    const overrides = [{ id: 'Task_CheckStock', name: 'Check stock' }, { id: 'Flow_1', name: 'Check stock', kind: 'connection' }];
+    a.send({ type: 'update', xml: variant('overrides'), baseVersion: version, overrides });
+    assert.equal((await a.next('ack')).version, version + 1);
+    const update = await b.next('remote-update');
+    assert.deepEqual(update.overrides, overrides);
+
+    for (const bad of ['x', [{ id: 1, name: 'n' }], [null], [{ id: 'a' }], [{ id: 'a', name: 'n', kind: 'shape' }]]) {
+      a.send({ type: 'update', xml: variant('bad overrides'), baseVersion: version + 1, overrides: bad });
+      assert.equal((await a.next('error')).code, 'bad-message');
+    }
+    a.send({ type: 'update', xml: variant('plain'), baseVersion: version + 1 });
+    await a.next('ack');
+    assert.equal('overrides' in (await b.next('remote-update')), false);
+    a.ws.close();
+    b.ws.close();
+  });
+
   it('identical content is acknowledged without a broadcast', async () => {
     const [a, b] = await connectAll(2);
     const { xml, version } = server.session.getState();

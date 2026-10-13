@@ -38,11 +38,43 @@ describe('Session', () => {
     assert.deepEqual(changes.map((c) => [c.version, c.origin]), [[2, 'a'], [3, 'b']]);
   });
 
-  it('accepts a stale baseVersion (last write wins)', () => {
+  it('refuses an update based on a version another update replaced (conflict with the current version)', () => {
+    const store = fakeStore();
+    const session = new Session({ xml: original, store });
+    const changes = [];
+    session.on('change', (c) => changes.push(c));
+    session.applyUpdate(variant(1), 1, 'a');
+    assert.throws(() => session.applyUpdate(variant(2), 1, 'b'), (err) => err instanceof SessionError
+      && err.code === 'conflict' && err.details.version === 2 && /based on version 1/.test(err.message));
+    assert.deepEqual(session.getState(), { xml: variant(1), version: 2 });
+    assert.deepEqual(store.writes, [variant(1)]);
+    assert.equal(changes.length, 1);
+    // Re-sent on top of the current version: accepted.
+    assert.equal(session.applyUpdate(variant(2), 2, 'b'), 3);
+  });
+
+  it('passes overrides through in the change event', () => {
+    const session = new Session({ xml: original });
+    const changes = [];
+    session.on('change', (c) => changes.push(c));
+    session.applyUpdate(variant(1), 1, 'a', { overrides: [{ id: 'X', name: 'x' }] });
+    session.applyUpdate(variant(2), 2, 'a');
+    assert.deepEqual(changes[0].overrides, [{ id: 'X', name: 'x' }]);
+    assert.equal('overrides' in changes[1], false);
+  });
+
+  it('refuses a missing, non-integer or future baseVersion', () => {
+    const session = new Session({ xml: original });
+    for (const base of [undefined, null, '1', 1.5, 2, 99]) {
+      assert.throws(() => session.applyUpdate(variant(1), base), (err) => err.code === 'conflict' && err.details.version === 1);
+    }
+    assert.equal(session.getState().version, 1);
+  });
+
+  it('accepts identical content whatever its base (no-op)', () => {
     const session = new Session({ xml: original });
     session.applyUpdate(variant(1), 1);
-    assert.equal(session.applyUpdate(variant(2), 1), 3);
-    assert.equal(session.getState().xml, variant(2));
+    assert.equal(session.applyUpdate(variant(1), 1), 2);
   });
 
   it('treats identical content as a no-op', () => {
@@ -131,6 +163,18 @@ describe('Session and changes on disk', () => {
 
     session.applyUpdate(variant(3), 3, 'a'); // up to date: no warning
     assert.equal(logs.length, 1);
+  });
+
+  it('accepts an update over changes on disk only, never over another update', () => {
+    const logs = [];
+    const session = new Session({ xml: original, store: fakeStore(), log: (m) => logs.push(m) });
+    session.applyUpdate(variant(1), 1, 'a'); // v2
+    session.replaceFromDisk(variant(2)); // v3
+    session.replaceFromDisk(variant(3)); // v4
+    assert.throws(() => session.applyUpdate(variant(4), 1, 'b'), (err) => err.code === 'conflict' && err.details.version === 4);
+    assert.equal(session.applyUpdate(variant(4), 2, 'b'), 5, 'only disk changes since version 2');
+    assert.equal(logs.length, 1);
+    assert.throws(() => session.applyUpdate(variant(5), 4, 'a'), (err) => err.code === 'conflict' && err.details.version === 5);
   });
 
   it('reportUnreadable marks the file invalid only for the current version from disk', () => {

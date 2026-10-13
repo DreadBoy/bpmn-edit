@@ -4,17 +4,20 @@ import { EventEmitter } from 'node:events';
 import { looksLikeBpmn } from './file.js';
 
 export class SessionError extends Error {
-  constructor(code, message) {
+  /** `details` are extra fields for the client (e.g. { version } for 'conflict'). */
+  constructor(code, message, details = {}) {
     super(message);
     this.name = 'SessionError';
     this.code = code;
+    this.details = details;
   }
 }
 
 /**
  * Events:
- * - 'change' ({ xml, version, baseVersion?, origin }) after an accepted update. `origin` is the
- *   updating client (whatever applyUpdate was given) or 'disk' for a change made on disk.
+ * - 'change' ({ xml, version, baseVersion?, origin, overrides? }) after an accepted update. `origin`
+ *   is the updating client (whatever applyUpdate was given) or 'disk' for a change made on disk;
+ *   `overrides` is passed through from applyUpdate.
  * - 'write-error' (Error) when persisting to disk failed (forwarded from the store).
  * - 'disk-status' ({ state: 'ok' | 'missing' | 'invalid', message? }) when the state of the file on
  *   disk changes (deleted, not valid BPMN, valid again).
@@ -23,6 +26,7 @@ export class Session extends EventEmitter {
   #xml;
   #version = 1;
   #origin = null; // origin of the current version (null for the initial file)
+  #lastEditVersion = 1; // newest version made by applyUpdate (the initial file counts as one)
   #store;
   #log;
   #diskStatus = { state: 'ok' };
@@ -71,25 +75,37 @@ export class Session extends EventEmitter {
   }
 
   /**
-   * Replaces the document. Policy: last write wins, so a stale `baseVersion` is accepted (it is kept
-   * in the protocol for conflict handling later). Identical content is a no-op.
-   * Throws SessionError('invalid-xml') for anything that is not BPMN XML.
+   * Replaces the document with an edited version based on `baseVersion` (optimistic concurrency).
+   * The update is accepted if it is based on the current version, or on a version that only changes
+   * made on disk have replaced since (those are overwritten: last write wins, with a warning; see
+   * Q2 in PLAN.md). An update based on a version some other update replaced is refused with
+   * SessionError('conflict', …, { version }): the client re-applies its edits on the newer version
+   * (which it receives as a 'change') and sends again, so concurrent edits never overwrite each
+   * other. Identical content is a no-op (accepted whatever its base).
+   * Throws SessionError('invalid-xml') for anything that is not BPMN XML. `overrides` (elements this
+   * update deleted although someone else had changed them concurrently) is passed on in 'change'.
    *
    * @returns {number} the version after the update
    */
-  applyUpdate(xml, baseVersion, origin = null) {
+  applyUpdate(xml, baseVersion, origin = null, { overrides } = {}) {
     if (typeof xml !== 'string' || !looksLikeBpmn(xml)) {
       throw new SessionError('invalid-xml', 'Update rejected: not BPMN XML (no bpmn:definitions element)');
     }
     if (xml === this.#xml) return this.#version;
-    if (this.#origin === 'disk' && Number.isInteger(baseVersion) && baseVersion < this.#version) {
+    if (!Number.isInteger(baseVersion) || baseVersion < this.#lastEditVersion || baseVersion > this.#version) {
+      throw new SessionError('conflict',
+        `Update refused: based on version ${baseVersion}, but the document is at version ${this.#version}`,
+        { version: this.#version });
+    }
+    if (baseVersion < this.#version) {
       this.#log('local-bpmn: warning: an edit from the browser replaced a change made on disk\n');
     }
     this.#xml = xml;
     this.#version += 1;
+    this.#lastEditVersion = this.#version;
     this.#origin = origin;
     this.#store?.write(xml);
-    this.emit('change', { xml, version: this.#version, baseVersion, origin });
+    this.emit('change', { xml, version: this.#version, baseVersion, origin, ...(overrides ? { overrides } : {}) });
     return this.#version;
   }
 

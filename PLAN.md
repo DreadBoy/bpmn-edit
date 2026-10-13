@@ -158,7 +158,7 @@ The spec's open questions can't be answered up front; they depend on observed be
 step: measure with a reproducible E2E experiment, record numbers + decision in `docs/decisions.md`, and
 implement the decision if it changes anything. These steps are as mandatory as the feature steps.
 
-- [ ] **Q1. Full-XML vs operation-level sync** (after S4, before S5)
+- [x] **Q1. Full-XML vs operation-level sync** (after S4, before S5)
   - Experiment: Playwright with 2 and 3 concurrent browser windows on (a) the small fixture and (b) a large
     generated diagram (~300 elements). Measure: edit-to-visible latency in other windows (p50/p95), WS payload size
     per edit, lost edits when two users edit *different* elements within the same ~500 ms, UX glitches on remote

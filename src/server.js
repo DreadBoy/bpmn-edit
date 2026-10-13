@@ -6,20 +6,38 @@
 //   server -> client  { type: 'init', xml, version, name, path, clientId }
 //                                                               on connect; clientId ('c1', 'c2', …) is
 //                                                               unique for the server's lifetime
-//   client -> server  { type: 'update', xml, baseVersion }      full XML after an edit
+//   client -> server  { type: 'update', xml, baseVersion, overrides? }
+//                                                               full XML after an edit, based on the
+//                                                               version the client last received or
+//                                                               had acknowledged; at most one update
+//                                                               per client is in flight. overrides:
+//                                                               [{ id, name, kind? }] of elements it
+//                                                               deletes although someone else changed
+//                                                               them concurrently; kind 'connection' =
+//                                                               a connection someone added to an
+//                                                               element it deletes (name = that
+//                                                               element). Passed on unchanged.
 //   server -> client  { type: 'ack', version }                  update accepted (the sender gets no
 //                                                               remote-update for its own edit)
+//   server -> client  { type: 'conflict', version, message }    update refused: another update replaced
+//                                                               its baseVersion first (the client has
+//                                                               already been sent that newer version as
+//                                                               'remote-update'). The client re-applies
+//                                                               its edits on it and sends a new update.
+//                                                               Updates based on a version that only
+//                                                               changes on disk replaced since are
+//                                                               accepted (they overwrite those).
 //   server -> client  { type: 'error', code, message }          code: 'bad-message' | 'invalid-xml' |
 //                                                               'write-failed' (pushed) | 'internal'
 //   server -> client  { type: 'flush' }                         shutting down: send pending edits now
 //   client -> server  { type: 'flushed' }                       nothing pending any more
-//   server -> client  { type: 'remote-update', xml, version, origin }
+//   server -> client  { type: 'remote-update', xml, version, origin, overrides? }
 //                                                               the document was replaced by someone
 //                                                               else: origin 'disk' = changed on disk
 //                                                               (sent to every client), otherwise the
 //                                                               clientId of the editing client (sent to
-//                                                               every other client). Last write wins,
-//                                                               in arrival order; versions only grow.
+//                                                               every other client). Versions only
+//                                                               grow.
 //   server -> client  { type: 'file-status', state, message? }  state of the file on disk: 'ok' |
 //                                                               'missing' | 'invalid'; pushed on change
 //                                                               and after 'init' when not 'ok'
@@ -166,14 +184,20 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     }
     switch (message.type) {
       case 'update': {
-        const { xml, baseVersion } = message;
+        const { xml, baseVersion, overrides } = message;
         if (typeof xml !== 'string' || !Number.isInteger(baseVersion) || baseVersion < 0) {
           return sendError(ws, 'bad-message', 'update needs a string "xml" and an integer "baseVersion"');
         }
+        if (overrides !== undefined && !validOverrides(overrides)) {
+          return sendError(ws, 'bad-message', 'update "overrides" must be a list of { id, name } strings');
+        }
         try {
-          const version = session.applyUpdate(xml, baseVersion, ws);
+          const version = session.applyUpdate(xml, baseVersion, ws, overrides ? { overrides } : {});
           return send(ws, { type: 'ack', version });
         } catch (err) {
+          if (err instanceof SessionError && err.code === 'conflict') {
+            return send(ws, { type: 'conflict', version: err.details.version, message: err.message });
+          }
           if (err instanceof SessionError) return sendError(ws, err.code, err.message);
           throw err;
         }
@@ -239,11 +263,13 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
    * Pushes an accepted change to the clients that do not have it yet: a change on disk to everyone,
    * a client's edit to everyone else (the sender only gets its 'ack').
    */
-  function onChange({ xml, version, origin }) {
+  function onChange({ xml, version, origin, overrides }) {
     if (origin === 'disk') return broadcast({ type: 'remote-update', xml, version, origin });
     const sender = clientIds.has(origin) ? origin : null;
     const originId = sender ? clientIds.get(sender) : String(origin ?? 'host');
-    return broadcast({ type: 'remote-update', xml, version, origin: originId }, sender);
+    const message = { type: 'remote-update', xml, version, origin: originId };
+    if (overrides) message.overrides = overrides;
+    return broadcast(message, sender);
   }
 
   function onDiskStatus(status) {
@@ -387,6 +413,13 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     },
   };
   return self;
+}
+
+/** `overrides` of an update: at most 1000 { id, name, kind? } (strings; kind only 'connection'). */
+function validOverrides(overrides) {
+  return Array.isArray(overrides) && overrides.length <= 1000 && overrides.every((o) => o !== null
+    && typeof o === 'object' && typeof o.id === 'string' && typeof o.name === 'string'
+    && o.id.length <= 1000 && o.name.length <= 1000 && (o.kind === undefined || o.kind === 'connection'));
 }
 
 function listenOnce(server, port, host) {
