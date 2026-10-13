@@ -386,7 +386,6 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     }
   }
 
-  /** Saves `xml` next to the file as <name>.local-bpmn-unsaved-<time>.bpmn; resolves to its path. */
   /** `<name>.local-bpmn-<kind>-<time>[-n].bpmn` next to the file, for attempt `n` (1, 2, …). */
   function asideName(kind, n) {
     const ext = extname(path);
@@ -438,6 +437,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     file.link = null;
   }
 
+  /** Saves `xml` next to the file as <name>.local-bpmn-unsaved-<time>.bpmn; resolves to its path. */
   async function saveAside(xml) {
     for (let n = 1; ; n++) {
       const aside = asideName('unsaved', n);
