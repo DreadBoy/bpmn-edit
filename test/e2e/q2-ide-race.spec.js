@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 import { open as openFile, readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import WebSocket from 'ws';
-import { collectPageErrors, startCli } from './helpers/cli.js';
+import { collectPageErrors, proxiedPageErrors, startCli } from './helpers/cli.js';
 import {
   clickEmptyCanvas, dragBy, dragNewTask, expectNoTempFiles, git, label, status, typeLabel,
 } from './helpers/editor.js';
@@ -427,13 +427,14 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     return { page, net };
   }
 
-  test('a save on disk replaced the accepted edit of a window that was disconnected: it re-applies it on reconnect, with its offline edit', async ({ browser }) => {
+  test('a save on disk replaced the accepted edit of a window that was disconnected: it re-applies it on reconnect, with its offline edit', async ({ browser, browserName }) => {
     await start({ writeDelay: 2000 });
     windows = [];
     const { page: A, net } = await openProxied(browser);
     windows.push(await openWindow(browser, cli));
     const B = windows.at(-1).page;
-    const errors = [...collectPageErrors(A), ...collectPageErrors(B)];
+    const errorsA = collectPageErrors(A);
+    const errorsB = collectPageErrors(B);
     const original = await disk();
     const t0 = Date.now();
 
@@ -474,10 +475,11 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     expect(await asideFiles(fixture.dir)).toEqual([]);
     const xml = await disk();
     expect(xml.match(/name="Ship parcel"/g)).toHaveLength(1);
-    expect(errors).toEqual([]);
+    expect(proxiedPageErrors(errorsA, browserName)).toEqual([]); // A is proxied
+    expect(errorsB).toEqual([]);
   });
 
-  test('an edit already written before the connection dropped is not re-applied after a reconnect', async ({ browser }) => {
+  test('an edit already written before the connection dropped is not re-applied after a reconnect', async ({ browser, browserName }) => {
     await start();
     windows = [];
     const { page: A, net } = await openProxied(browser);
@@ -503,7 +505,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     await expect(label(A, 'Task_ShipOrder')).toHaveText('Ship it');
     expect((await toastsSince(A, t0)).map((t) => t.kind)).toEqual([]);
     expect(await asideFiles(fixture.dir)).toEqual([]);
-    expect(errors).toEqual([]);
+    expect(proxiedPageErrors(errors, browserName)).toEqual([]); // A is proxied
   });
 
   test('a window whose connection died unnoticed and that closed before re-applying: Ctrl-C keeps its discarded edit next to the file', async ({ browser }) => {
@@ -535,7 +537,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     expect(cli.stderr()).toContain(`the editor's version was saved to ${join(fixture.dir, aside[0])}`);
   });
 
-  test('a window the host saw disconnect re-applies its discarded edit on reconnect: no copy is kept aside', async ({ browser }) => {
+  test('a window the host saw disconnect re-applies its discarded edit on reconnect: no copy is kept aside', async ({ browser, browserName }) => {
     await start({ writeDelay: 2000, env: { LOCAL_BPMN_REAPPLY_GRACE_MS: '3000' } });
     windows = [];
     const { page: A, net } = await openProxied(browser);
@@ -558,10 +560,10 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     await delay(3500); // past the grace period
     expect(await asideFiles(fixture.dir)).toEqual([]);
     expect(cli.stderr()).not.toContain('saved to');
-    expect(errors).toEqual([]);
+    expect(proxiedPageErrors(errors, browserName)).toEqual([]); // A is proxied
   });
 
-  test('an update whose ack was lost, written, then reverted on disk while the window was away is not re-applied', async ({ browser }) => {
+  test('an update whose ack was lost, written, then reverted on disk while the window was away is not re-applied', async ({ browser, browserName }) => {
     await start();
     windows = [];
     const { page: A, net } = await openProxied(browser);
@@ -597,10 +599,10 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     expect((await toastsSince(A, t0)).map((t) => t.kind)).toEqual(['conflict']);
     expect(nameInXml(await readFile(join(fixture.dir, aside[0]), 'utf8'), 'Task_ShipOrder')).toBe('Ship parcel');
     expect(cli.stderr()).toContain('was saved on disk from a copy without the editor\'s last changes');
-    expect(errors).toEqual([]);
+    expect(proxiedPageErrors(errors, browserName)).toEqual([]); // A is proxied
   });
 
-  test('an edit made while disconnected that conflicts with a save on disk is reported with the disk wording', async ({ browser }) => {
+  test('an edit made while disconnected that conflicts with a save on disk is reported with the disk wording', async ({ browser, browserName }) => {
     await start();
     windows = [];
     const { page: A, net } = await openProxied(browser);
@@ -624,7 +626,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     await delay(800);
     expect(nameInXml(await disk(), 'Task_ShipOrder')).toBe('Ship it');
     expect((await toastsSince(A, t0)).map((t) => t.kind)).toEqual(['conflict']);
-    expect(errors).toEqual([]);
+    expect(proxiedPageErrors(errors, browserName)).toEqual([]); // A is proxied
   });
 
   test('a slow save in place through one file descriptor, finished after the host replaced the half-written file: both kept', async ({ browser }) => {

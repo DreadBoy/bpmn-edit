@@ -129,3 +129,20 @@ export function collectPageErrors(page) {
   page.on('pageerror', (err) => errors.push(`pageerror: ${err.message}`));
   return errors;
 }
+
+/**
+ * WebKit only, an artefact of page.routeWebSocket (the test proxies in s8-session and q2-ide-race):
+ * when the host terminates the server half of a proxied connection whose page half is already closed
+ * (the cut or dead connection,
+ * replaced once the page reconnects), WebKit logs this for the page. The page's own socket was closed
+ * before; Chrome and Firefox log nothing. Reproduced without local-bpmn: route a socket, close the page
+ * half, then terminate the server half. WebKit logs the same message whenever the server terminates a
+ * live socket abruptly, proxied or not: WebKit's benign counterpart of Chrome's "WebSocket connection
+ * failed".
+ */
+const WEBKIT_ROUTED_CLOSE = /^console\.error: WebSocket connection to '[^']+' failed: The network connection was lost\.$/;
+
+/** Page errors of a page whose WebSocket goes through the test proxy, without that WebKit artefact. */
+export function proxiedPageErrors(errors, browserName) {
+  return browserName === 'webkit' ? errors.filter((e) => !WEBKIT_ROUTED_CLOSE.test(e)) : errors;
+}

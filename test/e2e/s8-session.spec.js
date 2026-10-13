@@ -9,7 +9,7 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
 import WebSocket from 'ws';
-import { collectPageErrors, startCli } from './helpers/cli.js';
+import { collectPageErrors, proxiedPageErrors, startCli } from './helpers/cli.js';
 import {
   dragBy, expectNoTempFiles, git, label, setupRepo, shape, status, typeLabel,
 } from './helpers/editor.js';
@@ -35,22 +35,6 @@ const QUIET_MS = 1500;
  * was loading."
  */
 const EXPECTED_WHILE_DOWN = /WebSocket connection to .* failed|Failed to load resource|ERR_CONNECTION_REFUSED|404 \(Not Found\)|can’t establish a connection to the server at ws:|The connection to ws:\S+ was interrupted while the page was loading/;
-
-/**
- * WebKit only, an artefact of page.routeWebSocket (the test proxy below): when the host terminates the
- * server half of a proxied connection whose page half is already closed (the cut or dead connection,
- * replaced once the page reconnects), WebKit logs this for the page. The page's own socket was closed
- * before; Chrome and Firefox log nothing. Reproduced without local-bpmn: route a socket, close the page
- * half, then terminate the server half. WebKit logs the same message whenever the server terminates a
- * live socket abruptly, proxied or not: WebKit's benign counterpart of Chrome's "WebSocket connection
- * failed".
- */
-const WEBKIT_ROUTED_CLOSE = /^console\.error: WebSocket connection to '[^']+' failed: The network connection was lost\.$/;
-
-/** Page errors of a page whose WebSocket goes through the test proxy, without that WebKit artefact. */
-function proxiedPageErrors(errors, browserName) {
-  return browserName === 'webkit' ? errors.filter((e) => !WEBKIT_ROUTED_CLOSE.test(e)) : errors;
-}
 
 function overlay(page) {
   return {
