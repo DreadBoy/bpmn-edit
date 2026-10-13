@@ -1,0 +1,23 @@
+{"t":"2026-10-12T23:09:17.917Z","event":"start","out":"<out-dir>","mode":"cloudflare","port":3917}
+{"t":"2026-10-12T23:09:18.031Z","event":"cli1.ready","url":"http://localhost:3917/","pid":85608}
+{"t":"2026-10-12T23:09:18.033Z","event":"tunnel1.progress","phase":"cached","path":"<cloudflared-home>/bin/cloudflared"}
+{"t":"2026-10-12T23:09:18.034Z","event":"tunnel1.progress","phase":"spawn","pid":85609}
+{"t":"2026-10-12T23:09:23.111Z","event":"tunnel1.progress","phase":"url","url":"https://follow-staff-royal-telescope.trycloudflare.com"}
+{"t":"2026-10-12T23:09:24.182Z","event":"tunnel1.progress","phase":"dns","url":"https://follow-staff-royal-telescope.trycloudflare.com","address":"104.16.231.132"}
+{"t":"2026-10-12T23:09:24.420Z","event":"tunnel1.progress","phase":"ready","url":"https://follow-staff-royal-telescope.trycloudflare.com"}
+{"t":"2026-10-12T23:09:24.513Z","event":"tunnel1.up","url":"https://follow-staff-royal-telescope.trycloudflare.com","ms":{"spawnToUrlPrinted":5077,"spawnToAuthoritativeDns":6148,"spawnToReady":6386,"spawnToSystemDns":6403,"spawnToFirstHttp200":6479,"startCallToFirstHttp200":6482}}
+{"t":"2026-10-12T23:09:25.675Z","event":"browser.start","ok":true,"loadMs":589,"fileName":"order.bpmn","saveStatus":"Saved","svgCount":3,"shapes":13,"connections":6,"labelsFound":["Order received","Check stock","In stock?","Ship order","Cancel order","Order shipped","Order cancelled"],"pageErrors":[],"screenshot":"browser-start.png"}
+{"t":"2026-10-12T23:40:26.631Z","event":"browser.end","ok":true,"loadMs":684,"fileName":"order.bpmn","saveStatus":"Saved","svgCount":3,"shapes":13,"connections":6,"labelsFound":["Order received","Check stock","In stock?","Ship order","Cancel order","Order shipped","Order cancelled"],"pageErrors":[],"screenshot":"browser-end.png"}
+{"t":"2026-10-12T23:40:26.638Z","event":"tunnel1.stopping","url":"https://follow-staff-royal-telescope.trycloudflare.com"}
+{"t":"2026-10-12T23:40:26.663Z","event":"tunnel1.stopped","stopMs":25,"cliExit":{"code":0,"signal":null}}
+{"t":"2026-10-12T23:42:19.261Z","event":"gap.wait","waitMs":37377}
+{"t":"2026-10-12T23:42:56.745Z","event":"cli2.ready","url":"http://localhost:3917/","pid":19444}
+{"t":"2026-10-12T23:42:56.747Z","event":"tunnel2.progress","phase":"cached","path":"<cloudflared-home>/bin/cloudflared"}
+{"t":"2026-10-12T23:42:56.748Z","event":"tunnel2.progress","phase":"spawn","pid":19445}
+{"t":"2026-10-12T23:43:01.737Z","event":"tunnel2.progress","phase":"url","url":"https://entire-most-invalid-differ.trycloudflare.com"}
+{"t":"2026-10-12T23:43:03.296Z","event":"tunnel2.progress","phase":"dns","url":"https://entire-most-invalid-differ.trycloudflare.com","address":"104.16.231.132"}
+{"t":"2026-10-12T23:43:03.513Z","event":"tunnel2.progress","phase":"ready","url":"https://entire-most-invalid-differ.trycloudflare.com"}
+{"t":"2026-10-12T23:43:03.598Z","event":"tunnel2.up","url":"https://entire-most-invalid-differ.trycloudflare.com","ms":{"spawnToUrlPrinted":4989,"spawnToAuthoritativeDns":6548,"spawnToReady":6765,"spawnToSystemDns":6779,"spawnToFirstHttp200":6849,"startCallToFirstHttp200":6852},"sameHostAsTunnel1":false}
+{"t":"2026-10-12T23:43:04.270Z","event":"tunnel2.stopped","stopMs":20}
+{"t":"2026-10-12T23:43:54.715Z","event":"done","tunnelsOpened":2}
+{"t":"2026-10-12T23:43:54.971Z","event":"exit","tunnelsOpened":2}

@@ -1,0 +1,20 @@
+{"t":"2026-10-12T23:47:51.847Z","ev":"cli.stdout","text":"local-bpmn: editing <out-dir>/work/order.bpmn at http://localhost:3931/"}
+{"t":"2026-10-12T23:47:51.861Z","ev":"cli.ready","localPort":3931,"pid":22631}
+{"t":"2026-10-12T23:47:51.865Z","ev":"progress","phase":"cached","path":"<cloudflared-home>/bin/cloudflared"}
+{"t":"2026-10-12T23:47:51.866Z","ev":"progress","phase":"spawn","pid":22632}
+{"t":"2026-10-12T23:47:57.476Z","ev":"progress","phase":"url","url":"https://dropped-forestry-chairs-signed.trycloudflare.com"}
+{"t":"2026-10-12T23:47:58.540Z","ev":"progress","phase":"dns","url":"https://dropped-forestry-chairs-signed.trycloudflare.com","address":"104.16.230.132"}
+{"t":"2026-10-12T23:47:58.814Z","ev":"progress","phase":"ready","url":"https://dropped-forestry-chairs-signed.trycloudflare.com"}
+{"t":"2026-10-12T23:47:58.920Z","ev":"tunnel.up","url":"https://dropped-forestry-chairs-signed.trycloudflare.com","host":"dropped-forestry-chairs-signed.trycloudflare.com","timings":{"spawnToUrlPrinted":5610,"spawnToAuthoritativeDns":6674,"spawnToReady":6948,"spawnToFirstHttp200":7054,"startCallToFirstHttp200":7059,"httpAttempts":1},"spawnIso":"2026-10-12T23:47:51.866Z","differsFromPrior":true}
+{"t":"2026-10-12T23:47:59.011Z","ev":"ws.message","type":"init","version":1,"clientId":"c1","ms":90,"xmlLength":5650}
+{"t":"2026-10-12T23:47:59.011Z","ev":"stopping"}
+{"t":"2026-10-12T23:47:59.031Z","ev":"stopped","stopMs":20,"cloudflaredExit":0,"cloudflaredSignal":null}
+{"t":"2026-10-12T23:47:59.031Z","ev":"cli.exit","code":0,"signal":null}
+{"t":"2026-10-12T23:47:59.086Z","ev":"old-url","sinceStopMs":20,"status":530,"cfError":"1033","hasCanvas":false}
+{"t":"2026-10-12T23:48:09.113Z","ev":"old-url","sinceStopMs":10022,"status":530,"cfError":"1033","hasCanvas":false}
+{"t":"2026-10-12T23:48:19.130Z","ev":"old-url","sinceStopMs":20033,"status":530,"cfError":"1033","hasCanvas":false}
+{"t":"2026-10-12T23:48:29.114Z","ev":"old-url","sinceStopMs":30035,"status":530,"cfError":"1033","hasCanvas":false}
+{"t":"2026-10-12T23:48:39.127Z","ev":"old-url","sinceStopMs":40037,"status":530,"cfError":"1033","hasCanvas":false}
+{"t":"2026-10-12T23:48:49.106Z","ev":"old-url","sinceStopMs":50039,"status":530,"cfError":"1033","hasCanvas":false}
+{"t":"2026-10-12T23:48:59.245Z","ev":"old-url","sinceStopMs":60041,"status":530,"cfError":"1033","hasCanvas":false}
+{"t":"2026-10-12T23:48:59.246Z","ev":"done"}
