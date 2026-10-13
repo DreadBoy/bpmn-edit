@@ -134,16 +134,10 @@ cannot tell host and collaborator apart:
   - **E2E:** `npm run test:e2e` runs the whole suite × 3 browsers; Chrome must be green; Firefox/WebKit results
     reported, failures triaged into fix-now vs documented known issues.
 
-- [ ] **S11. Port via environment variable** (after the Q2 merge; touches `bin/local-bpmn.js`)
-  - `LOCAL_BPMN_PORT=<n>` sets the preferred port. Precedence: `--port` > `LOCAL_BPMN_PORT` > 3000. Invalid value
-    → clear error, exit 1 (same rules as `--port`). Port fallback still applies. Document in README + `--help`.
-  - **E2E:** env only → printed URL uses that port and the editor loads there; env + `--port` → flag wins; env port
-    busy → falls back to the next free one; invalid env → exit 1 with message.
-  - Product note (2026-10-13): devs bookmark `localhost:<port>`; a bookmarked plain tab can edit but not share.
-    Accepted for now (the CLI opens the host tab). Possible later polish: host cookie (HttpOnly, SameSite=Strict)
-    set by the printed link so any localhost tab in that browser gets host powers.
-
 ## Backlog (small known issues, fold into a later step)
+- Product note (2026-10-13): devs bookmark `localhost:<port>`; a bookmarked plain tab can edit but not share.
+  Accepted for now (the CLI opens the host tab; `--port` is enough, no env var wanted). Possible later polish:
+  host cookie (HttpOnly, SameSite=Strict) set by the printed link so any localhost tab in that browser can share.
 - S9 residuals: README race text must be updated when Q2 lands, formatting-churn paragraph after Q4-impl;
   downloaded cloudflared not checksum-verified (documented); full-XML per edit (~107 KB on 304 elements) not in
   README; not published to npm (name `local-bpmn` free as of 2026-10-13).
