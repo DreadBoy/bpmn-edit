@@ -39,6 +39,8 @@ async function publicGet(url, { method = 'GET', headers = {} } = {}) {
 }
 
 test.describe('S7: share via public link (real Cloudflare tunnel)', () => {
+  // Chrome only, so the browser matrix (S10) never starts more tunnels.
+  test.skip(({ browserName }) => browserName !== 'chromium', 'real Cloudflare tunnels are rate-limited; run once in Chrome');
   test.skip(process.env.LOCAL_BPMN_SKIP_TUNNEL_E2E === '1', 'LOCAL_BPMN_SKIP_TUNNEL_E2E=1');
   test.setTimeout(420_000); // a first run downloads cloudflared; on a slow line that takes minutes
 

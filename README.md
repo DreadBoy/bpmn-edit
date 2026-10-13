@@ -7,7 +7,8 @@ project setup; the file stays where it is, on your disk.
 ## Requirements
 
 - Node.js 20.19 or later.
-- Supported in v1: **macOS** with **Google Chrome**. Other systems and browsers may work but are not tested.
+- Supported in v1: **macOS** with **Google Chrome**. Other systems and browsers may work but are not
+  supported (the automated end-to-end tests also run in Firefox and WebKit, Safari's engine).
 
 ## Usage
 

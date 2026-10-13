@@ -128,13 +128,16 @@ cannot tell host and collaborator apart:
     git repo opens the browser editor (use `--no-open` + Playwright), edit → on disk, Share → public link works.
     Full `test/e2e` suite green.
 
-- [ ] **S10. Browser matrix: Firefox + WebKit** (after S9; v1 support stays Chrome-only)
+- [x] **S10. Browser matrix: Firefox + WebKit** (verified 2026-10-13: 79 pass / 2 skip / 0 fail in each browser) (after S9; v1 support stays Chrome-only)
   - Add Firefox and WebKit as Playwright `projects` so **every** E2E spec automatically runs in all three
     browsers (no per-test opt-in). Fix or explicitly `test.skip` (with reason) anything browser-specific.
   - **E2E:** `npm run test:e2e` runs the whole suite × 3 browsers; Chrome must be green; Firefox/WebKit results
     reported, failures triaged into fix-now vs documented known issues.
 
 ## Backlog (small known issues, fold into a later step)
+- S10 residuals: load-sensitive timings (s2 coalescing failed once at load ~150, q1 limits, WebKit s5 at 90 s);
+  WebKit-only "network connection was lost" filter in s8 drop tests; fixed 20 px `#users` height clips with larger
+  min font size; icon font now a separate 13 KB request (icons may appear late over a slow tunnel).
 - Product note (2026-10-13): devs bookmark `localhost:<port>`; a bookmarked plain tab can edit but not share.
   Accepted for now (the CLI opens the host tab; `--port` is enough, no env var wanted). Possible later polish:
   host cookie (HttpOnly, SameSite=Strict) set by the printed link so any localhost tab in that browser can share.

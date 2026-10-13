@@ -42,6 +42,18 @@ function upgradeStatus(url, headers) {
   });
 }
 
+/**
+ * Permissions that let the page write and the test read the clipboard. Playwright knows the clipboard
+ * permissions only in Chromium; WebKit knows 'clipboard-read' only (writing needs just the click);
+ * Firefox knows neither and allows both after a click anyway. Headless Firefox and WebKit leave the
+ * system clipboard alone (checked on macOS).
+ */
+const CLIPBOARD_PERMISSIONS = {
+  chromium: ['clipboard-read', 'clipboard-write'],
+  webkit: ['clipboard-read'],
+  firefox: [],
+};
+
 test.describe('S7: share via public link (stand-in tunnel)', () => {
   let fixture;
   let cli;
@@ -148,9 +160,9 @@ test.describe('S7: share via public link (stand-in tunnel)', () => {
   });
 
   test('host shares: secret leaves the address bar, spinner, link + Copy; a collaborator edits through it; Stop ends it',
-    async ({ browser }) => {
+    async ({ browser, browserName }) => {
       await start('fake', 1500);
-      const hostContext = await browser.newContext({ permissions: ['clipboard-read', 'clipboard-write'] });
+      const hostContext = await browser.newContext({ permissions: CLIPBOARD_PERMISSIONS[browserName] });
       const collabContext = await browser.newContext({ extraHTTPHeaders: CF_HEADERS });
       try {
         const host = await hostContext.newPage();

@@ -13,5 +13,11 @@ export default defineConfig({
     headless: true,
     trace: 'retain-on-failure',
   },
-  projects: [{ name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } }],
+  // Every spec runs in all three browsers (S10). v1 support is Chrome; Firefox and WebKit guard against
+  // browser-specific breakage. Run one with `npx playwright test --project=firefox`.
+  projects: [
+    { name: 'chrome', use: { ...devices['Desktop Chrome'], channel: 'chrome' } },
+    { name: 'firefox', use: { ...devices['Desktop Firefox'] } },
+    { name: 'webkit', use: { ...devices['Desktop Safari'] } },
+  ],
 });

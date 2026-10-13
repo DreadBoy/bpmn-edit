@@ -9,6 +9,10 @@
   justify-content: safe flex-end; /* should it still overflow, the own entry (first) stays visible */
   gap: 10px;
   min-width: 80px; /* the narrowest state, own dot + "+N", always fits (focus ring included) */
+  /* A fixed height, so fitting the entries never resizes the list: the ResizeObserver that re-fits it
+     would otherwise report a loop ("+N" is 18px, the own button 19px). It assumes entries of at most
+     ~19px (12px font); a style change that makes entries taller must revisit it. */
+  height: 20px;
   margin: 0;
   padding: 4px 12px 4px 3px; /* room for focus outlines (overflow is hidden) */
   border-right: 1px solid #d0d7de;

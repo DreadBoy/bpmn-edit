@@ -44,8 +44,7 @@ export function label(page, id) {
 
 /** Drags a shape by (`dx`, `dy`) screen pixels like a user; `dy` alone drags it down. */
 export async function dragBy(page, id, dy, dx = 0) {
-  const box = await shape(page, id).boundingBox();
-  const from = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  const from = await center(shape(page, id));
   await page.mouse.move(from.x, from.y);
   await page.mouse.down();
   await page.mouse.move(from.x + dx / 2, from.y + dy / 2, { steps: 5 });
@@ -70,8 +69,13 @@ export function expectViewboxUnchanged(actual, expected) {
   expect(Math.abs(actual.scale - expected.scale), 'scale').toBeLessThanOrEqual(0.01);
 }
 
+/**
+ * The centre of an element on screen. A remote update re-renders the diagram, so the element found
+ * can be replaced right before it is measured (boundingBox() is then null): measured again.
+ */
 export async function center(locator) {
-  const box = await locator.boundingBox();
+  let box = null;
+  await expect.poll(async () => (box = await locator.boundingBox()), { timeout: 2000 }).not.toBeNull();
   return { x: box.x + box.width / 2, y: box.y + box.height / 2 };
 }
 

@@ -59,6 +59,14 @@ function expectNoOverlap(boxes, what) {
   }
 }
 
+/**
+ * Both tests wait for rendered frames many times over, and headless WebKit's frames take about twice
+ * as long as Chrome's (~63 vs ~27 ms per two frames): measured 14-57 s in WebKit (busy machine) against
+ * 10-16 s in Chrome and the 30 s limit. (Called in each test: a describe-level test.slow() with a
+ * browserName callback runs as a beforeAll hook and does not extend the tests' timeout.)
+ */
+const WEBKIT_SLOW = 'headless WebKit renders frames about half as fast as Chrome, and these tests wait for many frames';
+
 test.describe('S5/S7: toolbar layout with the users list and the Share controls', () => {
   let fixture;
   let cli;
@@ -82,7 +90,8 @@ test.describe('S5/S7: toolbar layout with the users list and the Share controls'
     fixture = undefined;
   });
 
-  test('640, 800 and 1024 px wide, 2 and 5 users, sharing and not: nothing wraps, overlaps or is cut off', async ({ browser }, testInfo) => {
+  test('640, 800 and 1024 px wide, 2 and 5 users, sharing and not: nothing wraps, overlaps or is cut off', async ({ browser, browserName }, testInfo) => {
+    test.slow(browserName === 'webkit', WEBKIT_SLOW);
     const dir = screenshotDir(testInfo);
     await mkdir(dir, { recursive: true });
 
@@ -358,7 +367,8 @@ test.describe('S5/S7: toolbar layout with the users list and the Share controls'
     for (const { errors } of others) expect(errors).toEqual([]);
   });
 
-  test('sharing host, 2 and 5 users: no width from 640 to 1100 px overflows the toolbar or clips the focus ring', async ({ browser }) => {
+  test('sharing host, 2 and 5 users: no width from 640 to 1100 px overflows the toolbar or clips the focus ring', async ({ browser, browserName }) => {
+    test.slow(browserName === 'webkit', WEBKIT_SLOW);
     const contextsOpened = [];
     async function openPage() {
       const context = await browser.newContext();

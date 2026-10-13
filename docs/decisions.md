@@ -502,3 +502,31 @@ duplicate, even before the keepalive would notice the old connection. The key is
   `LOCAL_BPMN_TEST_TUNNEL`, plus the hidden `--write-delay` option.
 - Q3 wrap-up: the README states that every Share and every restart gives a new link and that persistent
   links are out of scope for v1 (see Q3 above).
+
+## S10: browser matrix (Firefox, WebKit)
+
+`playwright.config.js` has three projects, `chrome` (Google Chrome, `channel: 'chrome'`), `firefox` and
+`webkit` (Playwright's builds, `npx playwright install firefox webkit`), so every spec runs in all three
+with no per-test opt-in. v1 support stays Chrome-only; the other two guard against browser-specific
+breakage. Still one worker: specs start CLIs on random ports, but several windows per test and
+timing-sensitive sync checks were only measured serially.
+
+- Whole matrix: `LOCAL_BPMN_SKIP_TUNNEL_E2E=1 npm run test:e2e`.
+- One browser: `npx playwright test --project=chrome` (or `firefox`, `webkit`); several projects can be
+  given. Combine with a file or `-g` as usual.
+- The real-tunnel specs (`s7-share-tunnel`, `s8-keepalive-tunnel`) run in Chrome only, also without
+  `LOCAL_BPMN_SKIP_TUNNEL_E2E` (Cloudflare rate-limits quick tunnels, so the matrix never starts more).
+  Measurement specs stay behind `LOCAL_BPMN_MEASURE`.
+
+### Triage of the first matrix run
+
+| Spec / test | Browser | Cause | Action |
+| --- | --- | --- | --- |
+| q1-concurrency: an edit made right before the window is reloaded is saved | Firefox | Product bug: Firefox closes the page's WebSocket (1001) right after `beforeunload`, before `pagehide`, so the pending edit sent from `pagehide` was lost (always). | Fixed in `web/app.js`: the pending edit is sent from `beforeunload` too. |
+| s1-open-diagram: renders … no errors | Firefox | Product: `bpmn-embedded.css` declares the font first with EOT + SVG only, neither of which Firefox supports: "downloadable font: no supported format found" warning (icons still showed via the embedded WOFF). | Fixed in `web/index.html`: `bpmn.css` (same glyphs, WOFF2 file served by the host) instead. |
+| s5-toolbar-layout: both tests | WebKit (fires in all three) | Product: re-fitting the users list changed its height (18 px "+N" vs 19 px own entry), so its ResizeObserver reported "ResizeObserver loop completed with undelivered notifications". Only Playwright's WebKit reports it as a page error. | Fixed in `web/presence.css`: the list has a fixed height. |
+| s7-share: host shares … Copy … | Firefox, WebKit | Harness: Playwright knows `clipboard-read`/`clipboard-write` only in Chromium; WebKit knows `clipboard-read` only; Firefox neither (and allows both after a click). | Permissions per browser in the test. |
+| s8-session: host process killed and restarted … | Firefox | Harness: Firefox words the failed WebSocket handshakes while the host is down differently ("can’t establish a connection to the server at ws://…", now and then "The connection to ws://… was interrupted while the page was loading."). | Added to the expected-while-down messages. |
+| s8-session: a dropped connection …; heartbeat … | WebKit | Harness: with `page.routeWebSocket` (the test's proxy), when the host terminates the server half of a connection whose page half is already closed, Playwright's WebKit logs "WebSocket connection … failed: The network connection was lost." for the page. Reproduced without local-bpmn. WebKit logs the same message whenever the server terminates a live socket abruptly, proxied or not (its benign counterpart of Chrome's "WebSocket connection failed"). | That exact message is ignored for proxied pages in WebKit only. |
+| s5-toolbar-layout: both tests | WebKit | Too slow, not wrong: they wait for rendered frames many times over (the sweep: ~400 widths), and headless WebKit's frames take about twice as long as Chrome's; 14-57 s (busy machine) against the 30 s limit, Chrome 10-16 s. | `test.slow()` in WebKit (90 s), called in each test (a describe-level `test.slow()` with a `browserName` callback runs as a beforeAll hook and does not extend the tests' timeout). |
+| q1-concurrency: rapid back-and-forth edits … | Firefox (once) | Harness race: a remote update re-renders the diagram between finding a shape and measuring it, so `boundingBox()` was `null`. | `center()` (and `dragBy`) measure again until the shape is on screen. |

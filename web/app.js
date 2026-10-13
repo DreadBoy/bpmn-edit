@@ -1516,11 +1516,14 @@ modeler.on('directEditing.deactivate', () => settleLocalActivity());
 modeler.on('drag.cleanup', () => settleLocalActivity());
 modeler.on('popupMenu.close', () => settleLocalActivity());
 
-// Leaving or hiding the page: send a pending edit now rather than after the debounce.
-window.addEventListener('pagehide', () => {
+// Leaving or hiding the page: send a pending edit now rather than after the debounce. Firefox closes
+// the page's WebSocket right after 'beforeunload' (before 'pagehide'), so leaving sends from both.
+function sendBeforeLeaving() {
   if (directEditing.isActive()) directEditing.complete();
   if (sendTimer) sendNow();
-});
+}
+window.addEventListener('beforeunload', sendBeforeLeaving);
+window.addEventListener('pagehide', sendBeforeLeaving);
 document.addEventListener('visibilitychange', () => {
   if (document.visibilityState === 'hidden' && sendTimer) sendNow();
 });

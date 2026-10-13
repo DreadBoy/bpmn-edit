@@ -29,9 +29,28 @@ const QUIET_MS = 1500;
 
 /**
  * Browser messages that are expected while the host is down: Chrome logs the failed WebSocket
- * handshake and the failed probe of api/file (404 / connection refused) as console errors.
+ * handshake and the failed probe of api/file (404 / connection refused) as console errors; Firefox
+ * logs a refused handshake as "can’t establish a connection to the server at ws://…" and one cut off
+ * by the host going away or coming back as "The connection to ws://… was interrupted while the page
+ * was loading."
  */
-const EXPECTED_WHILE_DOWN = /WebSocket connection to .* failed|Failed to load resource|ERR_CONNECTION_REFUSED|404 \(Not Found\)/;
+const EXPECTED_WHILE_DOWN = /WebSocket connection to .* failed|Failed to load resource|ERR_CONNECTION_REFUSED|404 \(Not Found\)|can’t establish a connection to the server at ws:|The connection to ws:\S+ was interrupted while the page was loading/;
+
+/**
+ * WebKit only, an artefact of page.routeWebSocket (the test proxy below): when the host terminates the
+ * server half of a proxied connection whose page half is already closed (the cut or dead connection,
+ * replaced once the page reconnects), WebKit logs this for the page. The page's own socket was closed
+ * before; Chrome and Firefox log nothing. Reproduced without local-bpmn: route a socket, close the page
+ * half, then terminate the server half. WebKit logs the same message whenever the server terminates a
+ * live socket abruptly, proxied or not: WebKit's benign counterpart of Chrome's "WebSocket connection
+ * failed".
+ */
+const WEBKIT_ROUTED_CLOSE = /^console\.error: WebSocket connection to '[^']+' failed: The network connection was lost\.$/;
+
+/** Page errors of a page whose WebSocket goes through the test proxy, without that WebKit artefact. */
+function proxiedPageErrors(errors, browserName) {
+  return browserName === 'webkit' ? errors.filter((e) => !WEBKIT_ROUTED_CLOSE.test(e)) : errors;
+}
 
 function overlay(page) {
   return {
@@ -237,7 +256,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
   }
 
   test('a dropped connection shows "Reconnecting…", recovers, and keeps every edit made around the drop',
-    async ({ browser }) => {
+    async ({ browser, browserName }) => {
       cli = await startHost();
       const host = await openWindow(browser, cli.url);
       const { token } = await share(host.page);
@@ -324,11 +343,11 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
       expectEntries(await userList(page));
 
       expect(host.errors).toEqual([]);
-      expect(collab.errors).toEqual([]);
+      expect(proxiedPageErrors(collab.errors, browserName)).toEqual([]);
     });
 
   test('heartbeat: a connection that silently stops delivering is noticed by the page, which reconnects',
-    async ({ browser }) => {
+    async ({ browser, browserName }) => {
       cli = await startHost();
       const context = await browser.newContext();
       contexts.push(context);
@@ -352,7 +371,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
         .toEqual([{ name: before.name, color: before.color }]);
       // Still the host tab: Share is there.
       await expect(page.locator('#share-start')).toBeVisible();
-      expect(errors).toEqual([]);
+      expect(proxiedPageErrors(errors, browserName)).toEqual([]);
     });
 
   test('keepalive: a connection that stops answering pings is dropped and leaves the users list; live ones stay',
