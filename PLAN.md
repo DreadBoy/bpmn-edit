@@ -134,6 +134,24 @@ cannot tell host and collaborator apart:
   - **E2E:** `npm run test:e2e` runs the whole suite × 3 browsers; Chrome must be green; Firefox/WebKit results
     reported, failures triaged into fix-now vs documented known issues.
 
+- [ ] **S11. Rename to `bpmn-edit`** (after the Q2 merge lands; decided 2026-10-13 by product owner)
+  - Package name, CLI command (`npx bpmn-edit`), terminal prefix, env vars `LOCAL_BPMN_*` → `BPMN_EDIT_*`, cache dir
+    `~/.local-bpmn/` → `~/.bpmn-edit/`, side files `.local-bpmn-unsaved-*` → `.bpmn-edit-unsaved-*`, header names,
+    README, docs, tests, scripts. Spec file renamed accordingly. npm name `bpmn-edit` free as of 2026-10-13.
+  - Package metadata: `repository`/`homepage`/`bugs` → https://github.com/DreadBoy/bpmn-edit; version `1.0.0`.
+  - **E2E:** full suite × 3 browsers green; `npm pack` → install tarball → `npx bpmn-edit` from a fresh repo works
+    (edit → disk, Share via one real tunnel); `git grep -i 'local-bpmn\|local_bpmn'` only hits historical docs.
+
+- [ ] **S12. Release via GitHub Actions** (after S11 and Q4-impl)
+  - Modelled on DreadBoy/glyphmark: `release.yml` (push to main → check: `npm ci` + unit tests → publish if the
+    version is not on npm, npm Trusted Publishing/OIDC, provenance, Node 24) and `version.yml` (manual bump →
+    dispatch Release). E2E stays local (needs macOS + real Chrome + tunnels).
+  - Before first push: rewrite all history to author **and** committer `Matic Leva <vertical3life@gmail.com>`
+    (no work email anywhere); no Co-Authored-By / "Generated with" / @-mentions in any commit. PLAN.md may stay.
+  - Product owner: configure trusted publisher on npmjs.com (`dread_boy`); the very first publish may have to be
+    manual if npm requires the package to exist first (check). Push to https://github.com/DreadBoy/bpmn-edit
+    only on explicit go-ahead.
+
 ## Backlog (small known issues, fold into a later step)
 - S10 residuals: load-sensitive timings (s2 coalescing failed once at load ~150, q1 limits, WebKit s5 at 90 s);
   WebKit-only "network connection was lost" filter in s8 drop tests; fixed 20 px `#users` height clips with larger
