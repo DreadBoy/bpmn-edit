@@ -220,3 +220,21 @@ something was actually re-applied.
 New E2E cases: Ctrl-C soon after the host replaced a half-written file with the IDE finishing after
 exit, with and without a second edit waiting for its write (side file holds the edits, stderr names
 it, exit within 1.5 s), and a normal Ctrl-C (under 1 s, no side file, no warning).
+
+## Round 6: unconfirmed write stuck after a racing confirm read
+
+The round-5 check found that an unconfirmed write could stay unconfirmed for good. This happened
+when one of our own writes landed while the 2 s confirm read was in flight, so the read returned
+the content from before that write. The check that followed saw our own content and ended without
+confirming. After that, `saved` was never sent again, windows kept re-applying old acknowledged edits
+on later IDE saves, and the next Ctrl-C, even minutes later, left a spurious side file. The verifier's
+store-level probe (`c2r5/stuck.mjs`, confirm window 200 ms, writes hammered at its deadline) hit it in
+2/30 runs.
+
+Fix (`src/file.js`, `confirmProvisional`): when the confirm read sees other content while the store
+believes the file holds our latest write, it reads again after the settle delay. A change by another
+program still ends the unconfirmed state through its own check. After the fix, `stuck.mjs` was stuck
+in 0/50 runs, and a deterministic unit test covers the case. The shutdown warning is now shorter and
+states the actual time since the broken file was replaced, e.g. "the editor replaced the broken
+order.bpmn 0.6 s ago; its version was also saved to <side file> (in case another program finishes an
+older save)".

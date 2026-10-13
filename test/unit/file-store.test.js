@@ -487,7 +487,31 @@ describe('createFileStore watching', () => {
     assert.equal(await readFile(file, 'utf8'), variant(1));
     assert.equal(asides.length, 1);
     assert.equal(await readFile(asides[0].path, 'utf8'), variant(1));
-    assert.match(logs.at(-1), /replaced by the editor less than 5 s ago .* also saved to .*local-bpmn-unsaved/);
+    assert.match(logs.at(-1), /the editor replaced the broken order\.bpmn \d+\.\d s ago; its version was also saved to .*local-bpmn-unsaved/);
+  });
+
+  it('an unconfirmed write is confirmed later if the confirm read saw other content but the file then holds ours', async () => {
+    // The confirm read can race one of our own writes and return the content before it. Simulated
+    // here without the watcher: the file briefly holds something else when the confirm reads it.
+    await start({ debounceMs: 0, settleMs: 50, confirmMs: 100 });
+    const saved = [];
+    store.on('saved', ({ xml }) => saved.push(xml));
+    const reported = next('external-invalid');
+    await writeFile(file, original.slice(0, 200));
+    await reported;
+    store.write(variant(1));
+    await next('written');
+    await store.unwatch();
+    await writeFile(file, variant(9)); // what the racing read returns
+    await delay(130); // the confirm read happened
+    assert.deepEqual(saved, []);
+    await writeFile(file, variant(1)); // our write has landed
+    await delay(150);
+    assert.deepEqual(saved, [variant(1)], 'confirmed, not stuck');
+    const asides = [];
+    store.on('kept-aside', (a) => asides.push(a));
+    await store.flush();
+    assert.deepEqual(asides, [], 'no side file at a later shutdown');
   });
 
   it('does not replace an invalid file that is still changing (waits until it settles)', async () => {

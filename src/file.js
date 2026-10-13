@@ -365,7 +365,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
   }
 
   /** Saves `xml` next to the file instead of writing it (see 'kept-aside'); resolves to success. */
-  async function keepAside(xml, { unconfirmed = false } = {}) {
+  async function keepAside(xml, { unconfirmed = false, since = null } = {}) {
     let aside;
     try {
       aside = await saveAside(xml);
@@ -375,9 +375,9 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       return false;
     }
     if (unconfirmed) {
-      log(`local-bpmn: warning: ${path} was replaced by the editor less than ${Math.ceil(confirmMs / 1000)} s ago while it `
-        + 'was broken or missing (another program may still be saving it); in case that program finishes '
-        + `its save from an older copy, the editor's version was also saved to ${aside}\n`);
+      const ago = since === null ? '' : ` ${((Date.now() - since) / 1000).toFixed(1)} s ago`;
+      log(`local-bpmn: warning: the editor replaced the broken ${basename(path)}${ago}; `
+        + `its version was also saved to ${aside} (in case another program finishes an older save)\n`);
     } else {
       log(`local-bpmn: warning: ${path} changed on disk while the editor's last changes were being saved; `
         + `the file keeps the version on disk, the editor's version was saved to ${aside}\n`);
@@ -393,10 +393,11 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
    * reported as replacing it (`discarded`), so its edits are re-applied on top (Q2).
    */
   function confirmLater(xml) {
+    const since = provisional?.since ?? Date.now();
     if (provisional) clearTimeout(provisional.timer);
     const timer = setTimeout(confirmProvisional, confirmMs);
     timer.unref?.();
-    provisional = { xml, timer };
+    provisional = { xml, timer, since };
   }
 
   async function confirmProvisional() {
@@ -411,6 +412,13 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     if (provisional !== entry) return; // superseded meanwhile
     if (current !== entry.xml || entry.xml !== diskXml) {
       if (current !== entry.xml && watcher && !settleTimer) settleTimer = setTimeout(runCheck, settleMs);
+      // We believe the file holds our latest write: the read probably raced one of our own writes
+      // (it returned the content before it). Look again shortly, or the write would stay
+      // unconfirmed for good. (If another program changed the file, its check ends this state.)
+      if (current !== entry.xml && entry.xml === diskXml) {
+        entry.timer = setTimeout(confirmProvisional, settleMs);
+        entry.timer.unref?.();
+      }
       return;
     }
     provisional = null;
@@ -669,8 +677,9 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
         // whether or not the file holds it right now (Q2: never lose it silently; no shutdown delay).
         if (provisional) {
           const current = await readFile(targetPath, 'utf8').catch(() => null);
+          const { since } = provisional;
           const unconfirmed = dropProvisional();
-          await keepAside(unconfirmed, { unconfirmed: current === unconfirmed });
+          await keepAside(unconfirmed, { unconfirmed: current === unconfirmed, since });
         }
       } finally {
         flushing -= 1;
