@@ -153,6 +153,12 @@ cannot tell host and collaborator apart:
     only on explicit go-ahead.
 
 ## Backlog (small known issues, fold into a later step)
+- Q2 residuals: unsent edit lost if a disk change lands and the window closes before it is sent (host never
+  overwrites); IDE temp+rename landing in the ~2 ms check-to-rename gap of the final Ctrl-C write is overwritten
+  (~1/70); stale-save detection only within 5 s of our write chain, and not after exit; deliberate revert within 5 s
+  gives notice + side file; element comparison literal on entities/CDATA/prefixes; SIGKILL loses accepted-unwritten
+  edits; notice tooltip no longer hoverable (pointer-events none); `.local-bpmn-replaced-*` link left on Ctrl-C
+  within 2 s of replacing a broken file.
 - S10 residuals: load-sensitive timings (s2 coalescing failed once at load ~150, q1 limits, WebKit s5 at 90 s);
   WebKit-only "network connection was lost" filter in s8 drop tests; fixed 20 px `#users` height clips with larger
   min font size; icon font now a separate 13 KB request (icons may appear late over a slow tunnel).
@@ -212,7 +218,7 @@ implement the decision if it changes anything. These steps are as mandatory as t
   - Record measurements + decision; if the decision is "change", add a new implementation step to this plan
     right after Q1 and do it (E2E-verified) before S5.
 
-- [ ] **Q2. Collaborator edit racing an external IDE save** (after Q1)
+- [x] **Q2. Collaborator edit racing an external IDE save** (verified 2026-10-14; merged with S7/S8/S10, all 3 browsers green)
   - Experiment: E2E — browser edit and an on-disk write of a different change within the debounce window, both
     orders. Observe what ends up on disk and in each window; is anything silently lost?
   - Known from S3: an external save landing <~150 ms (settle delay) before the host writes a pending UI edit, or
