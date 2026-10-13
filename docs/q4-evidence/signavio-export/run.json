@@ -1,0 +1,10 @@
+{
+  "fixture": "signavio-export.bpmn",
+  "ok": true,
+  "taskA": "sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C",
+  "taskB": "sid-28CA9418-A686-4DD4-9576-2611515C414F",
+  "oldNameA": "Task 1",
+  "oldNameB": "Task 2",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

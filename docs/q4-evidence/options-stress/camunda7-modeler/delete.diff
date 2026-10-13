@@ -1,0 +1,117 @@
+diff --git before after
+index 7d50346..5103152 100644
+--- before
++++ after
+@@ -14,11 +14,9 @@
+     <bpmn:sequenceFlow id="Flow_1gbes6j" sourceRef="Gateway_0ie3wvv" targetRef="Event_1ehjh04" />
+     <bpmn:sequenceFlow id="Flow_024gkp6" sourceRef="Gateway_0ie3wvv" targetRef="Event_0ocbwmf" />
+     <bpmn:sequenceFlow id="Flow_1rw4q11" sourceRef="Gateway_0ie3wvv" targetRef="Event_1hc22e8" />
+-    <bpmn:sequenceFlow id="Flow_1p1pk8c" sourceRef="Activity_09yexpb" targetRef="Gateway_1x24306" />
+     <bpmn:inclusiveGateway id="Gateway_1x24306" camunda:asyncBefore="true">
+       <bpmn:incoming>Flow_0qoxewa</bpmn:incoming>
+       <bpmn:incoming>Flow_15y59t2</bpmn:incoming>
+-      <bpmn:incoming>Flow_1p1pk8c</bpmn:incoming>
+       <bpmn:outgoing>Flow_0nwrle8</bpmn:outgoing>
+     </bpmn:inclusiveGateway>
+     <bpmn:sequenceFlow id="Flow_15y59t2" sourceRef="Activity_1navjv9" targetRef="Gateway_1x24306" />
+@@ -28,12 +26,6 @@
+       <bpmn:incoming>Flow_1udwnrx</bpmn:incoming>
+     </bpmn:endEvent>
+     <bpmn:sequenceFlow id="Flow_1udwnrx" sourceRef="Activity_1dvmbn6" targetRef="Event_00wju04" />
+-    <bpmn:scriptTask id="Activity_09yexpb" name="1" camunda:asyncBefore="true" camunda:exclusive="false" scriptFormat="javascript">
+-      <bpmn:incoming>Flow_04zxo8z</bpmn:incoming>
+-      <bpmn:outgoing>Flow_1p1pk8c</bpmn:outgoing>
+-      <bpmn:outgoing>Flow_0kdvral</bpmn:outgoing>
+-      <bpmn:script>;</bpmn:script>
+-    </bpmn:scriptTask>
+     <bpmn:scriptTask id="Activity_0noigib" name="3" camunda:asyncBefore="true" camunda:exclusive="false" scriptFormat="javascript">
+       <bpmn:extensionElements>
+         <camunda:failedJobRetryTimeCycle>R0/PT1S</camunda:failedJobRetryTimeCycle>
+@@ -47,12 +39,10 @@
+       <bpmn:outgoing>Flow_1udwnrx</bpmn:outgoing>
+       <bpmn:script>;</bpmn:script>
+     </bpmn:scriptTask>
+-    <bpmn:sequenceFlow id="Flow_04zxo8z" sourceRef="Event_1ehjh04" targetRef="Activity_09yexpb" />
+     <bpmn:sequenceFlow id="Flow_1u1g5am" sourceRef="Event_0ocbwmf" targetRef="Activity_1navjv9" />
+     <bpmn:sequenceFlow id="Flow_1xv2p5r" sourceRef="Event_1hc22e8" targetRef="Activity_0noigib" />
+     <bpmn:intermediateCatchEvent id="Event_1ehjh04">
+       <bpmn:incoming>Flow_1gbes6j</bpmn:incoming>
+-      <bpmn:outgoing>Flow_04zxo8z</bpmn:outgoing>
+       <bpmn:timerEventDefinition id="TimerEventDefinition_1282ia2">
+         <bpmn:timeDuration xsi:type="bpmn:tFormalExpression">PT10S</bpmn:timeDuration>
+       </bpmn:timerEventDefinition>
+@@ -72,9 +62,7 @@
+       </bpmn:timerEventDefinition>
+     </bpmn:intermediateCatchEvent>
+     <bpmn:task id="Activity_1bkm2v8">
+-      <bpmn:incoming>Flow_0kdvral</bpmn:incoming>
+     </bpmn:task>
+-    <bpmn:sequenceFlow id="Flow_0kdvral" sourceRef="Activity_09yexpb" targetRef="Activity_1bkm2v8" />
+     <bpmn:userTask id="Activity_1navjv9" name="2">
+       <bpmn:incoming>Flow_1u1g5am</bpmn:incoming>
+       <bpmn:outgoing>Flow_15y59t2</bpmn:outgoing>
+@@ -82,7 +70,6 @@
+     <bpmn:textAnnotation id="TextAnnotation_17e1mo7">
+       <bpmn:text>Note – Änderung</bpmn:text>
+     </bpmn:textAnnotation>
+-    <bpmn:association id="Association_1k1ybw3" associationDirection="None" sourceRef="Activity_09yexpb" targetRef="TextAnnotation_17e1mo7" />
+   </bpmn:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="Process_0ocuipq">
+@@ -103,11 +90,6 @@
+         <di:waypoint x="580" y="227" />
+         <di:waypoint x="675" y="227" />
+       </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_1p1pk8c_di" bpmnElement="Flow_1p1pk8c">
+-        <di:waypoint x="580" y="120" />
+-        <di:waypoint x="700" y="120" />
+-        <di:waypoint x="700" y="202" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_1rw4q11_di" bpmnElement="Flow_1rw4q11">
+         <di:waypoint x="290" y="252" />
+         <di:waypoint x="290" y="340" />
+@@ -126,10 +108,6 @@
+         <di:waypoint x="215" y="227" />
+         <di:waypoint x="265" y="227" />
+       </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_04zxo8z_di" bpmnElement="Flow_04zxo8z">
+-        <di:waypoint x="398" y="120" />
+-        <di:waypoint x="480" y="120" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_1u1g5am_di" bpmnElement="Flow_1u1g5am">
+         <di:waypoint x="398" y="227" />
+         <di:waypoint x="480" y="227" />
+@@ -138,12 +116,6 @@
+         <di:waypoint x="398" y="340" />
+         <di:waypoint x="480" y="340" />
+       </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_0kdvral_di" bpmnElement="Flow_0kdvral">
+-        <di:waypoint x="530" y="160" />
+-        <di:waypoint x="530" y="200" />
+-        <di:waypoint x="590" y="200" />
+-        <di:waypoint x="590" y="240" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNShape id="TextAnnotation_17e1mo7_di" bpmnElement="TextAnnotation_17e1mo7">
+         <dc:Bounds x="480" y="-20" width="100" height="43" />
+         <bpmndi:BPMNLabel />
+@@ -154,9 +126,6 @@
+       <bpmndi:BPMNShape id="Gateway_1vvu407_di" bpmnElement="Gateway_0ie3wvv">
+         <dc:Bounds x="265" y="202" width="50" height="50" />
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Activity_0fevdvq_di" bpmnElement="Activity_09yexpb" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+-        <dc:Bounds x="480" y="80" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Activity_0ab7n6t_di" bpmnElement="Activity_0noigib">
+         <dc:Bounds x="480" y="300" width="100" height="80" />
+       </bpmndi:BPMNShape>
+@@ -184,10 +153,6 @@
+       <bpmndi:BPMNShape id="Activity_1k8pbot_di" bpmnElement="Activity_1navjv9">
+         <dc:Bounds x="480" y="187" width="100" height="80" />
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNEdge id="Association_1k1ybw3_di" bpmnElement="Association_1k1ybw3">
+-        <di:waypoint x="530" y="80" />
+-        <di:waypoint x="530" y="23" />
+-      </bpmndi:BPMNEdge>
+     </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+ </bpmn:definitions>

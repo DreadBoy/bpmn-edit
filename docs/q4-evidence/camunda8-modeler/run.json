@@ -1,0 +1,10 @@
+{
+  "fixture": "camunda8-modeler.bpmn",
+  "ok": true,
+  "taskA": "Activity_1kpg3ok",
+  "taskB": "Activity_0kzg0nb",
+  "oldNameA": "Verify Data is Correct",
+  "oldNameB": "View and Correct Error",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

@@ -1,0 +1,46 @@
+diff --git before after
+index 5b35956..6e211a1 100644
+--- before
++++ after
+@@ -20,6 +20,7 @@
+       </bpmn:extensionElements>
+       <bpmn:incoming>Flow_ToCheckStock</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToGateway</bpmn:outgoing>
++      <bpmn:outgoing>Flow_1rv1sf5</bpmn:outgoing>
+     </bpmn:task>
+     <bpmn:exclusiveGateway id="Gateway_InStock" name="Na zalogi? 在库?">
+       <bpmn:incoming>Flow_ToGateway</bpmn:incoming>
+@@ -46,6 +47,10 @@
+     <bpmn:sequenceFlow id="Flow_No" name="no" sourceRef="Gateway_InStock" targetRef="Task_CancelOrder" />
+     <bpmn:sequenceFlow id="Flow_ToShipped" sourceRef="Task_ShipOrder" targetRef="EndEvent_OrderShipped" />
+     <bpmn:sequenceFlow id="Flow_ToCancelled" sourceRef="Task_CancelOrder" targetRef="EndEvent_OrderCancelled" />
++    <bpmn:task id="Activity_0pyn6v7">
++      <bpmn:incoming>Flow_1rv1sf5</bpmn:incoming>
++    </bpmn:task>
++    <bpmn:sequenceFlow id="Flow_1rv1sf5" sourceRef="Task_CheckStock" targetRef="Activity_0pyn6v7" />
+   </bpmn:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_Order">
+     <bpmndi:BPMNPlane id="BPMNPlane_Order" bpmnElement="Process_Order">
+@@ -82,6 +87,9 @@
+           <dc:Bounds x="641" y="325" width="79" height="14" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="Activity_0pyn6v7_di" bpmnElement="Activity_0pyn6v7">
++        <dc:Bounds x="300" y="320" width="100" height="80" />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="Flow_ToCheckStock_di" bpmnElement="Flow_ToCheckStock">
+         <di:waypoint x="188" y="200" />
+         <di:waypoint x="240" y="200" />
+@@ -114,6 +122,12 @@
+         <di:waypoint x="600" y="300" />
+         <di:waypoint x="662" y="300" />
+       </bpmndi:BPMNEdge>
++      <bpmndi:BPMNEdge id="Flow_1rv1sf5_di" bpmnElement="Flow_1rv1sf5">
++        <di:waypoint x="290" y="240" />
++        <di:waypoint x="290" y="280" />
++        <di:waypoint x="350" y="280" />
++        <di:waypoint x="350" y="320" />
++      </bpmndi:BPMNEdge>
+     </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+ </bpmn:definitions>

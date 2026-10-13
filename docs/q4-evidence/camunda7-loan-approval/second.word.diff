@@ -1,0 +1,12 @@
+diff --git a/camunda7-loan-approval.bpmn b/camunda7-loan-approval.bpmn
+index c879936..db799bb 100644
+--- a/camunda7-loan-approval.bpmn
++++ b/camunda7-loan-approval.bpmn
+@@ -8,7 +8,7 @@
+    <bpmn2:endEvent id="EndEvent_1" name="Done">
+      <bpmn2:incoming>SequenceFlow_3</bpmn2:incoming>
+    </bpmn2:endEvent>
+    <bpmn2:userTask id="UserTask_1" name="Q4 [-first rename"-]{+zweite Änderung"+} camunda:formKey="embedded:app:task-form.html" camunda:assignee="demo">
+      <bpmn2:incoming>SequenceFlow_1</bpmn2:incoming>
+      <bpmn2:outgoing>SequenceFlow_3</bpmn2:outgoing>
+    </bpmn2:userTask>

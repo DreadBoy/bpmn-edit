@@ -1,0 +1,30 @@
+diff --git before after
+index c8e6d3c..d2de6c5 100644
+--- before
++++ after
+@@ -22,9 +22,6 @@
+     </bpmn:exclusiveGateway>
+     <bpmn:sequenceFlow id="Flow_0krdbvt" sourceRef="Activity_0kzg0nb" targetRef="Gateway_1n3fnvz" />
+     <bpmn:userTask id="Activity_0kzg0nb" name="View and Correct Error">
+-      <bpmn:extensionElements>
+-        <zeebe:formDefinition formKey="camunda-forms:bpmn:userTaskForm_1q238ds" />
+-      </bpmn:extensionElements>
+       <bpmn:incoming>Flow_1may791</bpmn:incoming>
+       <bpmn:outgoing>Flow_0krdbvt</bpmn:outgoing>
+     </bpmn:userTask>
+@@ -186,12 +183,12 @@
+       <bpmndi:BPMNShape id="Gateway_1n3fnvz_di" bpmnElement="Gateway_1n3fnvz" isMarkerVisible="true" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="555" y="452" width="50" height="50" />
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Activity_0t5rsxo_di" bpmnElement="Activity_0kzg0nb" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+-        <dc:Bounds x="410" y="560" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Activity_0csmb9b_di" bpmnElement="Activity_0csmb9b">
+         <dc:Bounds x="330" y="597" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="Activity_1i8njmr_di" bpmnElement="Activity_0kzg0nb" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
++        <dc:Bounds x="410" y="560" width="100" height="80" />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Activity_1luk15l_di" bpmnElement="Activity_0h20swu" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="890" y="220" width="100" height="80" />
+       </bpmndi:BPMNShape>

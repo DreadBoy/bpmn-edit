@@ -1,0 +1,16 @@
+7c1d3da save 3: move task A
+
+ camunda7-loan-approval.bpmn | 6 +++---
+ 1 file changed, 3 insertions(+), 3 deletions(-)
+9ac0d25 save 2: rename task B
+
+ camunda7-loan-approval.bpmn | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+b188047 save 1: rename task A
+
+ camunda7-loan-approval.bpmn | 41 +++++++++++++++++++++--------------------
+ 1 file changed, 21 insertions(+), 20 deletions(-)
+025baf7 original
+
+ camunda7-loan-approval.bpmn | 50 +++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 50 insertions(+)

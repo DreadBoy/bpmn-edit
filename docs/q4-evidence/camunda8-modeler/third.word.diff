@@ -1,0 +1,49 @@
+diff --git a/camunda8-modeler.bpmn b/camunda8-modeler.bpmn
+index 6012c25..f8e70e4 100644
+--- a/camunda8-modeler.bpmn
++++ b/camunda8-modeler.bpmn
+@@ -132,6 +132,10 @@
+        <dc:Bounds x="410" y="560" width="100" height="80" />
+        <bpmndi:BPMNLabel />
+      </bpmndi:BPMNShape>
+      {+<bpmndi:BPMNShape id="Activity_0pr0kv0_di" bpmnElement="Activity_1kpg3ok" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">+}
+{+        <dc:Bounds x="310" y="437" width="100" height="80" />+}
+{+        <bpmndi:BPMNLabel />+}
+{+      </bpmndi:BPMNShape>+}
+      <bpmndi:BPMNShape id="Activity_17oxyev_di" bpmnElement="Activity_17oxyev" isExpanded="true" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="730" y="340" width="680" height="300" />
+      </bpmndi:BPMNShape>
+@@ -210,10 +214,6 @@
+      <bpmndi:BPMNShape id="Activity_1luk15l_di" bpmnElement="Activity_0h20swu" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="890" y="220" width="100" height="80" />
+      </bpmndi:BPMNShape>
+[-      <bpmndi:BPMNShape id="Activity_0pr0kv0_di" bpmnElement="Activity_1kpg3ok" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">-]
+[-        <dc:Bounds x="270" y="437" width="100" height="80" />-]
+[-        <bpmndi:BPMNLabel />-]
+[-      </bpmndi:BPMNShape>-]
+      <bpmndi:BPMNShape id="Event_0jvwp0l_di" bpmnElement="Event_0ewdllh" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds x="802" y="322" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+@@ -221,22 +221,22 @@
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_1m8k3en_di" bpmnElement="Event_05j9v3i" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+        <dc:Bounds [-x="322"-]{+x="362"+} y="499" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds [-x="254"-]{+x="294"+} y="533" width="72" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_0rfbpf0_di" bpmnElement="Flow_0rfbpf0" bioc:stroke="#000000" color:border-color="#000000">
+        <di:waypoint x="215" y="477" />
+        <di:waypoint [-x="270"-]{+x="310"+} y="477" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_1may791_di" bpmnElement="Flow_1may791" bioc:stroke="#000000" color:border-color="#000000">
+        <di:waypoint [-x="340"-]{+x="380"+} y="535" />
+        <di:waypoint [-x="340"-]{+x="380"+} y="600" />
+        <di:waypoint x="410" y="600" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0o6zxl7_di" bpmnElement="Flow_0o6zxl7" bioc:stroke="#000000" color:border-color="#000000">
+        <di:waypoint [-x="370"-]{+x="410"+} y="477" />
+        <di:waypoint x="555" y="477" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_0krdbvt_di" bpmnElement="Flow_0krdbvt" bioc:stroke="#000000" color:border-color="#000000">

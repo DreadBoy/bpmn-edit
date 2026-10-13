@@ -1,0 +1,12 @@
+diff --git a/bizagi-export.bpmn b/bizagi-export.bpmn
+index be10168..55bd4d3 100644
+--- a/bizagi-export.bpmn
++++ b/bizagi-export.bpmn
+@@ -36,7 +36,7 @@
+      <incoming>_a3d40a56-9b7f-417e-911e-d39e7f18b90c</incoming>
+      <incoming>_d4ce87c6-1373-45d6-a3b4-fbb2a04ee2e5</incoming>
+    </endEvent>
+    <task id="_4f7d62d7-f0e6-46bc-be00-69e02da38f65" [-name="Task 2">-]{+name="Q4 zweite Änderung">+}
+      <extensionElements>
+        <bizagi:BizagiExtensions xmlns:bizagi="http://www.bizagi.com/bpmn20">
+          <bizagi:BizagiProperties>

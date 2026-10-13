@@ -1,0 +1,47 @@
+diff --git before after
+index 770197b..7d50346 100644
+--- before
++++ after
+@@ -34,11 +34,6 @@
+       <bpmn:outgoing>Flow_0kdvral</bpmn:outgoing>
+       <bpmn:script>;</bpmn:script>
+     </bpmn:scriptTask>
+-    <bpmn:scriptTask id="Activity_1navjv9" name="2" camunda:asyncBefore="true" camunda:exclusive="false" scriptFormat="javascript">
+-      <bpmn:incoming>Flow_1u1g5am</bpmn:incoming>
+-      <bpmn:outgoing>Flow_15y59t2</bpmn:outgoing>
+-      <bpmn:script>;</bpmn:script>
+-    </bpmn:scriptTask>
+     <bpmn:scriptTask id="Activity_0noigib" name="3" camunda:asyncBefore="true" camunda:exclusive="false" scriptFormat="javascript">
+       <bpmn:extensionElements>
+         <camunda:failedJobRetryTimeCycle>R0/PT1S</camunda:failedJobRetryTimeCycle>
+@@ -80,6 +75,10 @@
+       <bpmn:incoming>Flow_0kdvral</bpmn:incoming>
+     </bpmn:task>
+     <bpmn:sequenceFlow id="Flow_0kdvral" sourceRef="Activity_09yexpb" targetRef="Activity_1bkm2v8" />
++    <bpmn:userTask id="Activity_1navjv9" name="2">
++      <bpmn:incoming>Flow_1u1g5am</bpmn:incoming>
++      <bpmn:outgoing>Flow_15y59t2</bpmn:outgoing>
++    </bpmn:userTask>
+     <bpmn:textAnnotation id="TextAnnotation_17e1mo7">
+       <bpmn:text>Note – Änderung</bpmn:text>
+     </bpmn:textAnnotation>
+@@ -158,9 +157,6 @@
+       <bpmndi:BPMNShape id="Activity_0fevdvq_di" bpmnElement="Activity_09yexpb" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+         <dc:Bounds x="480" y="80" width="100" height="80" />
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Activity_0aala7l_di" bpmnElement="Activity_1navjv9">
+-        <dc:Bounds x="480" y="187" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Activity_0ab7n6t_di" bpmnElement="Activity_0noigib">
+         <dc:Bounds x="480" y="300" width="100" height="80" />
+       </bpmndi:BPMNShape>
+@@ -185,6 +181,9 @@
+       <bpmndi:BPMNShape id="Activity_1bkm2v8_di" bpmnElement="Activity_1bkm2v8">
+         <dc:Bounds x="540" y="240" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="Activity_1k8pbot_di" bpmnElement="Activity_1navjv9">
++        <dc:Bounds x="480" y="187" width="100" height="80" />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="Association_1k1ybw3_di" bpmnElement="Association_1k1ybw3">
+         <di:waypoint x="530" y="80" />
+         <di:waypoint x="530" y="23" />

@@ -1,0 +1,46 @@
+diff --git before after
+index fc35303..19c4dd5 100644
+--- before
++++ after
+@@ -14,10 +14,6 @@
+       <bpmn:outgoing>Flow_Yes</bpmn:outgoing>
+       <bpmn:outgoing>Flow_No</bpmn:outgoing>
+     </bpmn:exclusiveGateway>
+-    <bpmn:task id="Task_ShipOrder" name="Ship order">
+-      <bpmn:incoming>Flow_Yes</bpmn:incoming>
+-      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+-    </bpmn:task>
+     <bpmn:task id="Task_CancelOrder" name="Cancel order">
+       <bpmn:incoming>Flow_No</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToCancelled</bpmn:outgoing>
+@@ -38,6 +34,10 @@
+       <bpmn:incoming>Flow_080e0y2</bpmn:incoming>
+     </bpmn:task>
+     <bpmn:sequenceFlow id="Flow_080e0y2" sourceRef="Task_CheckStock" targetRef="Activity_0vgjglj" />
++    <bpmn:userTask id="Task_ShipOrder" name="Ship order">
++      <bpmn:incoming>Flow_Yes</bpmn:incoming>
++      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
++    </bpmn:userTask>
+     <bpmn:textAnnotation id="TextAnnotation_0eywss3">
+       <bpmn:text>Note – Änderung</bpmn:text>
+     </bpmn:textAnnotation>
+@@ -60,9 +60,6 @@
+           <dc:Bounds x="456" y="193" width="47" height="14" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Task_ShipOrder_di" bpmnElement="Task_ShipOrder">
+-        <dc:Bounds x="500" y="60" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Task_CancelOrder_di" bpmnElement="Task_CancelOrder">
+         <dc:Bounds x="500" y="260" width="100" height="80" />
+       </bpmndi:BPMNShape>
+@@ -81,6 +78,9 @@
+       <bpmndi:BPMNShape id="Activity_0vgjglj_di" bpmnElement="Activity_0vgjglj">
+         <dc:Bounds x="300" y="320" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="Activity_0kffzxb_di" bpmnElement="Task_ShipOrder">
++        <dc:Bounds x="500" y="60" width="100" height="80" />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="Association_1rem2c6_di" bpmnElement="Association_1rem2c6">
+         <di:waypoint x="290" y="160" />
+         <di:waypoint x="290" y="103" />

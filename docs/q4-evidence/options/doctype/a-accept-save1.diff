@@ -1,0 +1,37 @@
+diff --git before after
+index 22fbf0b..01ae1c6 100644
+--- before
++++ after
+@@ -1,13 +1,10 @@
+-<?xml version="1.0" encoding="UTF-8" standalone="no"?>
+-<!DOCTYPE bpmn:definitions [
+-  <!ENTITY company "ACME d.o.o.">
+-]>
++<?xml version="1.0" encoding="UTF-8"?>
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Order" targetNamespace="http://bpmn.io/schema/bpmn">
+   <bpmn:process id="Process_Order" name="Order process" isExecutable="false">
+     <bpmn:startEvent id="StartEvent_OrderReceived" name="Order received">
+       <bpmn:outgoing>Flow_ToCheckStock</bpmn:outgoing>
+     </bpmn:startEvent>
+-    <bpmn:task id="Task_CheckStock" name="Check stock">
++    <bpmn:task id="Task_CheckStock" name="Q4 first rename">
+       <bpmn:incoming>Flow_ToCheckStock</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToGateway</bpmn:outgoing>
+     </bpmn:task>
+@@ -17,7 +14,7 @@
+       <bpmn:outgoing>Flow_No</bpmn:outgoing>
+     </bpmn:exclusiveGateway>
+     <bpmn:task id="Task_ShipOrder" name="Ship order">
+-      <bpmn:documentation>Shipped by &company; logistics</bpmn:documentation>
++      <bpmn:documentation>Shipped by &amp;company; logistics</bpmn:documentation>
+       <bpmn:incoming>Flow_Yes</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+     </bpmn:task>
+@@ -48,6 +45,7 @@
+       </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Task_CheckStock_di" bpmnElement="Task_CheckStock">
+         <dc:Bounds x="240" y="160" width="100" height="80" />
++        <bpmndi:BPMNLabel />
+       </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Gateway_InStock_di" bpmnElement="Gateway_InStock" isMarkerVisible="true">
+         <dc:Bounds x="395" y="175" width="50" height="50" />

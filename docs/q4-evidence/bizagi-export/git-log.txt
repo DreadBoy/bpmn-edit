@@ -1,0 +1,16 @@
+005295e save 3: move task A
+
+ bizagi-export.bpmn | 52 +++++++++++++++++++++++++---------------------------
+ 1 file changed, 25 insertions(+), 27 deletions(-)
+a32de49 save 2: rename task B
+
+ bizagi-export.bpmn | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+a5c0714 save 1: rename task A
+
+ bizagi-export.bpmn | 156 ++++++++++++++++++++++++++---------------------------
+ 1 file changed, 78 insertions(+), 78 deletions(-)
+f1156aa original
+
+ bizagi-export.bpmn | 437 +++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 437 insertions(+)

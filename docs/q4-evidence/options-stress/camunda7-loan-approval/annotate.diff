@@ -1,0 +1,37 @@
+diff --git before after
+index b8e0709..6404d17 100644
+--- before
++++ after
+@@ -18,6 +18,10 @@
+       <bpmn2:incoming>Flow_1vyi612</bpmn2:incoming>
+     </bpmn2:task>
+     <bpmn2:sequenceFlow id="Flow_1vyi612" sourceRef="UserTask_1" targetRef="Activity_01vk4zp" />
++    <bpmn2:textAnnotation id="TextAnnotation_0yppkg5">
++      <bpmn2:text>Note – Änderung</bpmn2:text>
++    </bpmn2:textAnnotation>
++    <bpmn2:association id="Association_077472f" associationDirection="None" sourceRef="UserTask_1" targetRef="TextAnnotation_0yppkg5" />
+   </bpmn2:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_1">
+     <bpmndi:BPMNPlane id="BPMNPlane_1" bpmnElement="embeddedFormsQuickstart">
+@@ -34,6 +38,10 @@
+         <di:waypoint x="408" y="200" />
+         <di:waypoint x="408" y="238" />
+       </bpmndi:BPMNEdge>
++      <bpmndi:BPMNShape id="TextAnnotation_0yppkg5_di" bpmnElement="TextAnnotation_0yppkg5">
++        <dc:Bounds x="298" y="-22" width="100" height="43" />
++        <bpmndi:BPMNLabel />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="BPMNEdge_SequenceFlow_1" bpmnElement="SequenceFlow_1" sourceElement="_BPMNShape_StartEvent_3" targetElement="_BPMNShape_UserTask_3">
+         <di:waypoint x="212" y="118" />
+         <di:waypoint x="298" y="118" />
+@@ -53,6 +61,10 @@
+       <bpmndi:BPMNShape id="Activity_01vk4zp_di" bpmnElement="Activity_01vk4zp">
+         <dc:Bounds x="358" y="238" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNEdge id="Association_077472f_di" bpmnElement="Association_077472f">
++        <di:waypoint x="348" y="78" />
++        <di:waypoint x="348" y="21" />
++      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNShape id="_BPMNShape_EndEvent_8" bpmnElement="EndEvent_1">
+         <dc:Bounds x="460" y="100" width="36" height="36" />
+         <bpmndi:BPMNLabel>

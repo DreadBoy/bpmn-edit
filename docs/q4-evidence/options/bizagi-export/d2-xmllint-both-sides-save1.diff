@@ -1,0 +1,95 @@
+diff --git before after
+index 2f09856..403a1c4 100644
+--- before
++++ after
+@@ -1,5 +1,5 @@
+-<?xml version="1.0"?>
+-<definitions xmlns:xsd="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" id="_2014120801424" targetNamespace="http://www.bizagi.com/definitions/_2014120801424">
++<?xml version="1.0" encoding="UTF-8"?>
++<definitions xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:xsd="http://www.w3.org/2001/XMLSchema" id="_2014120801424" targetNamespace="http://www.bizagi.com/definitions/_2014120801424">
+   <process id="WFP-6-" isExecutable="false">
+     <startEvent id="_6b5db6a9-037a-49ad-9201-09201e2aaa97" name="Start Event">
+       <extensionElements>
+@@ -12,7 +12,7 @@
+       </extensionElements>
+       <outgoing>_b50f530c-3450-4e1a-b81f-ea346dc6e1cb</outgoing>
+     </startEvent>
+-    <task id="_5a972b87-735d-454a-b31c-f52fb3afc5c7" name="Task 1">
++    <task id="_5a972b87-735d-454a-b31c-f52fb3afc5c7" name="Q4 first rename">
+       <extensionElements>
+         <bizagi:BizagiExtensions xmlns:bizagi="http://www.bizagi.com/bpmn20">
+           <bizagi:BizagiProperties>
+@@ -228,7 +228,7 @@
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="120" y="174" width="30" height="30"/>
+         <BPMNLabel id="DiagramElement_05d5265d-2b92-499c-a022-e339533d6089" labelStyle="Style_35e829d8-1dc4-443b-8f15-7bfc8038eab5">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="87.67767333984375" y="209.33334350585937" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="87.67767333984375" y="209.33334350585938" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+       <BPMNShape id="DiagramElement_57dad906-f70a-4843-ab50-5cf02eabb1e5" bpmnElement="_5a972b87-735d-454a-b31c-f52fb3afc5c7">
+@@ -236,7 +236,7 @@
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="186" y="155" width="83" height="68"/>
+         <BPMNLabel id="DiagramElement_9488c098-c643-40ca-ac95-62ed571a3baa" labelStyle="Style_6b41969d-9f3b-4d41-be89-6b5b6a905a1d">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="191.33334350585937" y="182.58187866210937" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="191.33334350585938" y="182.58187866210938" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+       <BPMNShape id="DiagramElement_facf6d26-5d6d-4c41-b060-d0cc9f250b4c" bpmnElement="_258f51eb-b764-4a71-b681-3a01cca14143">
+@@ -244,7 +244,7 @@
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="670" y="142" width="32" height="32"/>
+         <BPMNLabel id="DiagramElement_7e200536-b5fd-4722-802e-131929e4c890" labelStyle="Style_d0491eba-3243-4e39-a2ae-358f99a6e57c">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="590.5963134765625" y="155.59762573242187" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="590.5963134765625" y="155.59762573242188" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+       <BPMNShape id="DiagramElement_4f88b7cd-320d-4003-be8d-56a557de8396" bpmnElement="_4f7d62d7-f0e6-46bc-be00-69e02da38f65">
+@@ -252,7 +252,7 @@
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="414" y="70" width="83" height="68"/>
+         <BPMNLabel id="DiagramElement_a35c3f30-667f-4906-8c2f-70fb0e186fb7" labelStyle="Style_9f3fab87-242d-4376-af4b-366937b1ce20">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="419.33334350585937" y="97.581878662109375" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="419.3333435058594" y="97.58187866210938" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+       <BPMNShape id="DiagramElement_6fa29b15-cbae-410b-80fd-0421110a9e17" bpmnElement="_e6eb725a-34bc-45c7-aed0-9f9596cd7bee">
+@@ -260,15 +260,15 @@
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="414" y="155" width="83" height="68"/>
+         <BPMNLabel id="DiagramElement_ab28d7c3-b86b-4ad2-8181-8ece1c76c807" labelStyle="Style_0cd7ecae-0a83-4e65-93e2-fb4d6590d3fb">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="419.33334350585937" y="182.58187866210937" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="419.3333435058594" y="182.58187866210938" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+-      <BPMNShape id="DiagramElement_fb690f75-3550-4078-b911-8b7d597928ef" bpmnElement="_35fe57a7-1302-44e2-bf58-032f11af7ecb">
++      <BPMNShape id="DiagramElement_fb690f75-3550-4078-b911-8b7d597928ef" bpmnElement="_35fe57a7-1302-44e2-bf58-032f11af7ecb" isMarkerVisible="true">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="333" y="168" width="42" height="42"/>
+         <BPMNLabel id="DiagramElement_455a3648-b363-4cac-a96b-99fe2fcf3428" labelStyle="Style_bcf36f6d-d912-4861-a544-73ed2837a7e8">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="270.79318237304687" y="209.26589965820313" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="270.7931823730469" y="209.26589965820312" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+       <BPMNShape id="DiagramElement_377da205-5851-4e7f-a3c2-dadd4dc1da2b" bpmnElement="_7d399717-1aba-47ac-8d7d-8aaa033255e0">
+@@ -276,15 +276,15 @@
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="414" y="250" width="83" height="68"/>
+         <BPMNLabel id="DiagramElement_90a06af7-c3b5-4bab-90f2-832a395a1fae" labelStyle="Style_5f26b270-7166-47bf-8263-537f015a74d8">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="419.33334350585937" y="277.58187866210937" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="419.3333435058594" y="277.5818786621094" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+-      <BPMNShape id="DiagramElement_9701f195-6b26-44ce-9dc0-b7130c20b925" bpmnElement="_33c66216-391c-49c2-aa19-d8f0b7f5f91d">
++      <BPMNShape id="DiagramElement_9701f195-6b26-44ce-9dc0-b7130c20b925" bpmnElement="_33c66216-391c-49c2-aa19-d8f0b7f5f91d" isMarkerVisible="true">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+         <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="555" y="213" width="42" height="42"/>
+         <BPMNLabel id="DiagramElement_1997c114-c1f6-426f-93e5-e8dbfa3bb53e" labelStyle="Style_cfaf7b76-be90-4d54-816a-d3bef5e5f782">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI"/>
+-          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="588.32073974609375" y="245.41024780273437" width="0" height="0"/>
++          <Bounds xmlns="http://www.omg.org/spec/DD/20100524/DC" x="588.3207397460938" y="245.41024780273438" width="0" height="0"/>
+         </BPMNLabel>
+       </BPMNShape>
+       <BPMNEdge id="DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459" bpmnElement="_b50f530c-3450-4e1a-b81f-ea346dc6e1cb">

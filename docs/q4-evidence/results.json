@@ -1,0 +1,2193 @@
+{
+  "environment": {
+    "date": "2026-10-13T00:55:36.985Z",
+    "node": "v22.22.2",
+    "chrome": "155.0.8059.40",
+    "playwright": "1.64.0",
+    "bpmnJs": "18.31.0",
+    "git": "git version 2.54.0 (Apple Git-157)",
+    "platform": "darwin arm64"
+  },
+  "definitions": {
+    "totalLines": "added+deleted lines of git diff previous -> saved file",
+    "editLines": "added+deleted lines of the ideal edit (only name=\"...\" of the renamed task replaced in place)",
+    "churnLines": "added+deleted lines between the ideal edit and the saved file (unrelated to the edit)",
+    "churnLinesIgnoringWhitespace": "the same with git diff -w"
+  },
+  "results": [
+    {
+      "fixture": "bizagi-export.bpmn",
+      "ok": true,
+      "taskA": "_5a972b87-735d-454a-b31c-f52fb3afc5c7",
+      "taskB": "_4f7d62d7-f0e6-46bc-be00-69e02da38f65",
+      "originalLines": 437,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 156,
+        "totalAdded": 78,
+        "totalDeleted": 78,
+        "totalLinesIgnoringWhitespace": 154,
+        "editLines": 2,
+        "churnLines": 154,
+        "churnLinesIgnoringWhitespace": 152,
+        "semanticByCategory": {
+          "XML declaration changed": 1,
+          "number formatting changed": 14,
+          "attribute added": 2
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": "false -> true",
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": true,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "XML declaration changed",
+            "key": "decl",
+            "before": "<?xml version=\"1.0\"?>",
+            "after": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_05d5265d-2b92-499c-a022-e339533d6089/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "209.33334350585937",
+            "after": "209.33334350585938",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_9488c098-c643-40ca-ac95-62ed571a3baa/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "191.33334350585937",
+            "after": "191.33334350585938",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_9488c098-c643-40ca-ac95-62ed571a3baa/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "182.58187866210937",
+            "after": "182.58187866210938",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_7e200536-b5fd-4722-802e-131929e4c890/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "155.59762573242187",
+            "after": "155.59762573242188",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_a35c3f30-667f-4906-8c2f-70fb0e186fb7/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "419.33334350585937",
+            "after": "419.3333435058594",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_a35c3f30-667f-4906-8c2f-70fb0e186fb7/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "97.581878662109375",
+            "after": "97.58187866210938",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_ab28d7c3-b86b-4ad2-8181-8ece1c76c807/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "419.33334350585937",
+            "after": "419.3333435058594",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_ab28d7c3-b86b-4ad2-8181-8ece1c76c807/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "182.58187866210937",
+            "after": "182.58187866210938",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_455a3648-b363-4cac-a96b-99fe2fcf3428/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "270.79318237304687",
+            "after": "270.7931823730469",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_455a3648-b363-4cac-a96b-99fe2fcf3428/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "209.26589965820313",
+            "after": "209.26589965820312",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_90a06af7-c3b5-4bab-90f2-832a395a1fae/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "419.33334350585937",
+            "after": "419.3333435058594",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_90a06af7-c3b5-4bab-90f2-832a395a1fae/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "277.58187866210937",
+            "after": "277.5818786621094",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_1997c114-c1f6-426f-93e5-e8dbfa3bb53e/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "588.32073974609375",
+            "after": "588.3207397460938",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#DiagramElement_1997c114-c1f6-426f-93e5-e8dbfa3bb53e/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "245.41024780273437",
+            "after": "245.41024780273438",
+            "loss": false
+          },
+          {
+            "category": "attribute added",
+            "key": "attr:#DiagramElement_fb690f75-3550-4078-b911-8b7d597928ef@{}isMarkerVisible",
+            "after": "true",
+            "loss": false
+          },
+          {
+            "category": "attribute added",
+            "key": "attr:#DiagramElement_9701f195-6b26-44ce-9dc0-b7130c20b925@{}isMarkerVisible",
+            "after": "true",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 2,
+        "totalAdded": 1,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 2,
+        "editLines": 2,
+        "churnLines": 0,
+        "churnLinesIgnoringWhitespace": 0,
+        "semanticByCategory": {},
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": []
+      },
+      "third": {
+        "totalLines": 52,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 3,
+          "diElementsReordered": 2,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#DiagramElement_57dad906-f70a-4843-ab50-5cf02eabb1e5/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#DiagramElement_9488c098-c643-40ca-ac95-62ed571a3baa/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "prefix:#DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]",
+          "ns:#DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]:",
+          "prefix:#DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]",
+          "ns:#DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]:",
+          "attr:#DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "el:#DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]",
+          "prefix:#DiagramElement_095cf762-c4f4-47e1-83fe-a0949e335721/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]",
+          "ns:#DiagramElement_095cf762-c4f4-47e1-83fe-a0949e335721/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]:",
+          "attr:#DiagramElement_095cf762-c4f4-47e1-83fe-a0949e335721/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+          "prefix:#DiagramElement_095cf762-c4f4-47e1-83fe-a0949e335721/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]",
+          "ns:#DiagramElement_095cf762-c4f4-47e1-83fe-a0949e335721/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]:",
+          "attr:#DiagramElement_095cf762-c4f4-47e1-83fe-a0949e335721/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "el:#DiagramElement_095cf762-c4f4-47e1-83fe-a0949e335721/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]",
+          "ns:#Diagram_b34aa446-8da3-43b6-a90c-b97299544a16:di"
+        ]
+      }
+    },
+    {
+      "fixture": "bpmnio-demo-export.bpmn",
+      "ok": true,
+      "taskA": "task_id",
+      "taskB": "user_task_id",
+      "originalLines": 878,
+      "importWarnings": [
+        "unknown attribute <implementation>"
+      ],
+      "first": {
+        "totalLines": 900,
+        "totalAdded": 462,
+        "totalDeleted": 438,
+        "totalLinesIgnoringWhitespace": 900,
+        "editLines": 2,
+        "churnLines": 898,
+        "churnLinesIgnoringWhitespace": 898,
+        "semanticByCategory": {
+          "bpmn-js DI migration: collapsed sub-process content moved": 4,
+          "edit side effect: BPMNLabel element added": 1,
+          "bpmn-js DI migration: diagram added for collapsed sub-process": 7
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 95,
+          "diElementsReordered": 95,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "bpmn-js DI migration: collapsed sub-process content moved",
+            "key": "attr:#Event_0rdw479_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "305",
+            "after": "180",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: collapsed sub-process content moved",
+            "key": "attr:#Event_0rdw479_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "1362",
+            "after": "160",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: collapsed sub-process content moved",
+            "key": "attr:#Event_0s6zoyl_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "755",
+            "after": "180",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: collapsed sub-process content moved",
+            "key": "attr:#Event_0s6zoyl_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "1722",
+            "after": "160",
+            "loss": false
+          },
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#task_id_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: diagram added for collapsed sub-process",
+            "key": "el:#Definitions_08ie96i/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram[1]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: diagram added for collapsed sub-process",
+            "key": "el:#Definitions_08ie96i/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram[2]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: diagram added for collapsed sub-process",
+            "key": "el:#Definitions_08ie96i/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram[3]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: diagram added for collapsed sub-process",
+            "key": "el:#Definitions_08ie96i/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram[4]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: diagram added for collapsed sub-process",
+            "key": "el:#Definitions_08ie96i/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram[5]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: diagram added for collapsed sub-process",
+            "key": "el:#Definitions_08ie96i/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram[6]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram",
+            "loss": false
+          },
+          {
+            "category": "bpmn-js DI migration: diagram added for collapsed sub-process",
+            "key": "el:#Definitions_08ie96i/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram[7]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNDiagram",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Activity_0mq5ooj_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 12,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#task_id_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_1ozpodx_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}x",
+          "attr:#Flow_0y2ppzn_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "camunda7-loan-approval.bpmn",
+      "ok": true,
+      "taskA": "UserTask_1",
+      "taskB": "UserTask_1",
+      "originalLines": 50,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 41,
+        "totalAdded": 21,
+        "totalDeleted": 20,
+        "totalLinesIgnoringWhitespace": 39,
+        "editLines": 2,
+        "churnLines": 39,
+        "churnLinesIgnoringWhitespace": 37,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": "false -> true",
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 3,
+          "diElementsReordered": 3,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#_BPMNShape_UserTask_3/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 2,
+        "totalAdded": 1,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 2,
+        "editLines": 2,
+        "churnLines": 0,
+        "churnLinesIgnoringWhitespace": 0,
+        "semanticByCategory": {},
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": []
+      },
+      "third": {
+        "totalLines": 6,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#_BPMNShape_UserTask_3/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#BPMNEdge_SequenceFlow_1/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#BPMNEdge_SequenceFlow_3/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "camunda7-modeler.bpmn",
+      "ok": true,
+      "taskA": "Activity_09yexpb",
+      "taskB": "Activity_1navjv9",
+      "originalLines": 168,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 127,
+        "totalAdded": 64,
+        "totalDeleted": 63,
+        "totalLinesIgnoringWhitespace": 127,
+        "editLines": 2,
+        "churnLines": 127,
+        "churnLinesIgnoringWhitespace": 127,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 4,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 14,
+          "diElementsReordered": 14,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Activity_0fevdvq_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Activity_0aala7l_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 12,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Activity_0fevdvq_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_1p1pk8c_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+          "attr:#Flow_04zxo8z_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "camunda8-modeler.bpmn",
+      "ok": true,
+      "taskA": "Activity_1kpg3ok",
+      "taskB": "Activity_0kzg0nb",
+      "originalLines": 268,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 145,
+        "totalAdded": 73,
+        "totalDeleted": 72,
+        "totalLinesIgnoringWhitespace": 145,
+        "editLines": 2,
+        "churnLines": 143,
+        "churnLinesIgnoringWhitespace": 143,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 1,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 17,
+          "diElementsReordered": 17,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Activity_0pr0kv0_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Activity_0t5rsxo_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 20,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Activity_0pr0kv0_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Event_1m8k3en_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Event_1m8k3en_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_0rfbpf0_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_1may791_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+          "attr:#Flow_1may791_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_0o6zxl7_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "comments-nonascii.bpmn",
+      "ok": true,
+      "taskA": "Task_CheckStock",
+      "taskB": "Task_ShipOrder",
+      "originalLines": 119,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 16,
+        "totalAdded": 5,
+        "totalDeleted": 11,
+        "totalLinesIgnoringWhitespace": 16,
+        "editLines": 2,
+        "churnLines": 14,
+        "churnLinesIgnoringWhitespace": 14,
+        "semanticByCategory": {
+          "comment dropped": 3,
+          "processing instruction dropped": 2,
+          "CDATA section turned into escaped text": 1,
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [
+          {
+            "category": "comment dropped",
+            "key": "comment:prolog:0",
+            "before": "Order process. Owner: Team Šumi. Do not rename ids: referenced by the worker code.",
+            "loss": true
+          },
+          {
+            "category": "processing instruction dropped",
+            "key": "pi:prolog:0",
+            "before": "<?acme-tool version=\"2.1\" generated=\"2026-10-01\"?>",
+            "loss": true
+          },
+          {
+            "category": "comment dropped",
+            "key": "comment:#Process_Order:0",
+            "before": "Happy path first, then the cancellation branch",
+            "loss": true
+          },
+          {
+            "category": "comment dropped",
+            "key": "comment:#Task_CheckStock:0",
+            "before": "Stock is checked against the warehouse system (Lager)",
+            "loss": true
+          },
+          {
+            "category": "processing instruction dropped",
+            "key": "pi:#Task_CheckStock/{http://www.omg.org/spec/BPMN/20100524/MODEL}extensionElements[0]:0",
+            "before": "<?acme-lint ignore=\"missing-implementation\"?>",
+            "loss": true
+          }
+        ],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 2,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "comment dropped",
+            "key": "comment:prolog:0",
+            "before": "Order process. Owner: Team Šumi. Do not rename ids: referenced by the worker code.",
+            "loss": true
+          },
+          {
+            "category": "processing instruction dropped",
+            "key": "pi:prolog:0",
+            "before": "<?acme-tool version=\"2.1\" generated=\"2026-10-01\"?>",
+            "loss": true
+          },
+          {
+            "category": "comment dropped",
+            "key": "comment:#Process_Order:0",
+            "before": "Happy path first, then the cancellation branch",
+            "loss": true
+          },
+          {
+            "category": "comment dropped",
+            "key": "comment:#Task_CheckStock:0",
+            "before": "Stock is checked against the warehouse system (Lager)",
+            "loss": true
+          },
+          {
+            "category": "CDATA section turned into escaped text",
+            "key": "cdata:#Task_CheckStock/{http://www.omg.org/spec/BPMN/20100524/MODEL}documentation[0]",
+            "before": true,
+            "loss": false
+          },
+          {
+            "category": "processing instruction dropped",
+            "key": "pi:#Task_CheckStock/{http://www.omg.org/spec/BPMN/20100524/MODEL}extensionElements[0]:0",
+            "before": "<?acme-lint ignore=\"missing-implementation\"?>",
+            "loss": true
+          },
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_CheckStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_ShipOrder_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 14,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Task_CheckStock_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Gateway_InStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Gateway_InStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+          "attr:#Flow_ToCheckStock_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_ToGateway_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "crlf.bpmn",
+      "ok": true,
+      "taskA": "Task_CheckStock",
+      "taskB": "Task_ShipOrder",
+      "originalLines": 106,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 213,
+        "totalAdded": 107,
+        "totalDeleted": 106,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 213,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": "CRLF -> LF",
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_CheckStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_ShipOrder_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 12,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Task_CheckStock_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_ToCheckStock_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_ToGateway_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "doctype.bpmn",
+      "ok": true,
+      "taskA": "Task_CheckStock",
+      "taskB": "Task_ShipOrder",
+      "originalLines": 110,
+      "importWarnings": [
+        "unparsable content ]>"
+      ],
+      "first": {
+        "totalLines": 10,
+        "totalAdded": 4,
+        "totalDeleted": 6,
+        "totalLinesIgnoringWhitespace": 10,
+        "editLines": 2,
+        "churnLines": 8,
+        "churnLinesIgnoringWhitespace": 8,
+        "semanticByCategory": {
+          "XML declaration changed": 1,
+          "DOCTYPE dropped": 1,
+          "text content changed": 1,
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [
+          {
+            "category": "DOCTYPE dropped",
+            "key": "doctype",
+            "before": "<!DOCTYPE bpmn:definitions [\n  <!ENTITY company \"ACME d.o.o.\">\n]>",
+            "loss": true
+          },
+          {
+            "category": "text content changed",
+            "key": "text:#Task_ShipOrder/{http://www.omg.org/spec/BPMN/20100524/MODEL}documentation[0]",
+            "before": "Shipped by ACME d.o.o. logistics",
+            "after": "Shipped by &company; logistics",
+            "loss": true
+          }
+        ],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 1,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": true,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "XML declaration changed",
+            "key": "decl",
+            "before": "<?xml version=\"1.0\" encoding=\"UTF-8\" standalone=\"no\"?>",
+            "after": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>",
+            "loss": false
+          },
+          {
+            "category": "DOCTYPE dropped",
+            "key": "doctype",
+            "before": "<!DOCTYPE bpmn:definitions [\n  <!ENTITY company \"ACME d.o.o.\">\n]>",
+            "loss": true
+          },
+          {
+            "category": "text content changed",
+            "key": "text:#Task_ShipOrder/{http://www.omg.org/spec/BPMN/20100524/MODEL}documentation[0]",
+            "before": "Shipped by ACME d.o.o. logistics",
+            "after": "Shipped by &company; logistics",
+            "loss": true
+          },
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_CheckStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_ShipOrder_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 12,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Task_CheckStock_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_ToCheckStock_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_ToGateway_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "hand-4space.bpmn",
+      "ok": true,
+      "taskA": "Task_CheckStock",
+      "taskB": "Task_ShipOrder",
+      "originalLines": 202,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 305,
+        "totalAdded": 105,
+        "totalDeleted": 200,
+        "totalLinesIgnoringWhitespace": 209,
+        "editLines": 2,
+        "churnLines": 305,
+        "churnLinesIgnoringWhitespace": 209,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": "4 spaces -> 2 spaces",
+          "multiLineTagsReflowed": 56,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 33,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_CheckStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_ShipOrder_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 12,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Task_CheckStock_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_ToCheckStock_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_ToGateway_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "hand-tabs.bpmn",
+      "ok": true,
+      "taskA": "Task_CheckStock",
+      "taskB": "Task_ShipOrder",
+      "originalLines": 202,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 305,
+        "totalAdded": 105,
+        "totalDeleted": 200,
+        "totalLinesIgnoringWhitespace": 211,
+        "editLines": 2,
+        "churnLines": 305,
+        "churnLinesIgnoringWhitespace": 211,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": "tab -> 2 spaces",
+          "multiLineTagsReflowed": 56,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 149,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_CheckStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_ShipOrder_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 12,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Task_CheckStock_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_ToCheckStock_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_ToGateway_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "no-trailing-newline.bpmn",
+      "ok": true,
+      "taskA": "Task_CheckStock",
+      "taskB": "Task_ShipOrder",
+      "originalLines": 106,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 5,
+        "totalAdded": 3,
+        "totalDeleted": 2,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 3,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": "false -> true",
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_CheckStock_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 3,
+        "totalAdded": 2,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 3,
+        "editLines": 2,
+        "churnLines": 1,
+        "churnLinesIgnoringWhitespace": 1,
+        "semanticByCategory": {
+          "edit side effect: BPMNLabel element added": 1
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": [
+          {
+            "category": "edit side effect: BPMNLabel element added",
+            "key": "el:#Task_ShipOrder_di/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]",
+            "after": "{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel",
+            "loss": false
+          }
+        ]
+      },
+      "third": {
+        "totalLines": 12,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#Task_CheckStock_di/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#Flow_ToCheckStock_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+          "attr:#Flow_ToGateway_di/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x"
+        ]
+      }
+    },
+    {
+      "fixture": "signavio-export.bpmn",
+      "ok": true,
+      "taskA": "sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C",
+      "taskB": "sid-28CA9418-A686-4DD4-9576-2611515C414F",
+      "originalLines": 216,
+      "importWarnings": [],
+      "first": {
+        "totalLines": 431,
+        "totalAdded": 216,
+        "totalDeleted": 215,
+        "totalLinesIgnoringWhitespace": 137,
+        "editLines": 2,
+        "churnLines": 431,
+        "churnLinesIgnoringWhitespace": 137,
+        "semanticByCategory": {
+          "BPMN attribute dropped (default value)": 13,
+          "number formatting changed": 82
+        },
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": "3 spaces -> 2 spaces",
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 40,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 68,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": true
+        },
+        "semantic": [
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-f5d6cd04-a906-4134-b345-dd1525807812@{}typeLanguage",
+            "before": "http://www.w3.org/2001/XMLSchema",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C@{}completionQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C@{}isForCompensation",
+            "before": "false",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C@{}startQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F@{}completionQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F@{}isForCompensation",
+            "before": "false",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F@{}startQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8@{}completionQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8@{}isForCompensation",
+            "before": "false",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8@{}startQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639@{}completionQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639@{}isForCompensation",
+            "before": "false",
+            "loss": false
+          },
+          {
+            "category": "BPMN attribute dropped (default value)",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639@{}startQuantity",
+            "before": "1",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "30.0",
+            "after": "30",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "30.0",
+            "after": "30",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "120.0",
+            "after": "120",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "295.0",
+            "after": "295",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "11.0",
+            "after": "11",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "327.0",
+            "after": "327",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "80.0",
+            "after": "80",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "100.0",
+            "after": "100",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "225.0",
+            "after": "225",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "270.0",
+            "after": "270",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "12.0",
+            "after": "12",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "302.0",
+            "after": "302",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "80.0",
+            "after": "80",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "100.0",
+            "after": "100",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "536.0",
+            "after": "536",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "140.0",
+            "after": "140",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "12.0",
+            "after": "12",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-28CA9418-A686-4DD4-9576-2611515C414F_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "172.0",
+            "after": "172",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "28.0",
+            "after": "28",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "28.0",
+            "after": "28",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "780.0",
+            "after": "780",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "265.0",
+            "after": "265",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "11.0",
+            "after": "11",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "277.0",
+            "after": "277",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A18FB91D-A854-460E-A012-6DB0628FB5DB_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "40.0",
+            "after": "40",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A18FB91D-A854-460E-A012-6DB0628FB5DB_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "40.0",
+            "after": "40",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A18FB91D-A854-460E-A012-6DB0628FB5DB_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "419.0",
+            "after": "419",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A18FB91D-A854-460E-A012-6DB0628FB5DB_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "290.0",
+            "after": "290",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A18FB91D-A854-460E-A012-6DB0628FB5DB_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "24.0",
+            "after": "24",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "80.0",
+            "after": "80",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "100.0",
+            "after": "100",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "536.0",
+            "after": "536",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "270.0",
+            "after": "270",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "12.0",
+            "after": "12",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-9C797D74-EF57-4E27-8933-984D257F72A8_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "302.0",
+            "after": "302",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "80.0",
+            "after": "80",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "100.0",
+            "after": "100",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "536.0",
+            "after": "536",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "400.0",
+            "after": "400",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "12.0",
+            "after": "12",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-32FA64AE-D938-49BA-B86D-265DEB089639_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "432.0",
+            "after": "432",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-F8DDD239-8DD8-46F7-BA9B-C95C316715E3_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "40.0",
+            "after": "40",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-F8DDD239-8DD8-46F7-BA9B-C95C316715E3_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}width",
+            "before": "40.0",
+            "after": "40",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-F8DDD239-8DD8-46F7-BA9B-C95C316715E3_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+            "before": "679.0",
+            "after": "679",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-F8DDD239-8DD8-46F7-BA9B-C95C316715E3_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}y",
+            "before": "358.0",
+            "after": "358",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-F8DDD239-8DD8-46F7-BA9B-C95C316715E3_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}height",
+            "before": "24.0",
+            "after": "24",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-D84DD080-9128-42BB-BCC9-BD5148D97547_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+            "before": "325.0",
+            "after": "325",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-D84DD080-9128-42BB-BCC9-BD5148D97547_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+            "before": "419.0",
+            "after": "419",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A75D7241-700A-460E-9F38-0D456F5AFB93_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}y",
+            "before": "290.0",
+            "after": "290",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A75D7241-700A-460E-9F38-0D456F5AFB93_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}y",
+            "before": "180.0",
+            "after": "180",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A75D7241-700A-460E-9F38-0D456F5AFB93_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}x",
+            "before": "536.0",
+            "after": "536",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-A75D7241-700A-460E-9F38-0D456F5AFB93_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}y",
+            "before": "180.0",
+            "after": "180",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-F56D0719-2D0C-441E-BF1A-B2643A6515D0_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+            "before": "459.0",
+            "after": "459",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-F56D0719-2D0C-441E-BF1A-B2643A6515D0_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+            "before": "536.0",
+            "after": "536",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-B00D852A-12F3-4A29-AEF4-07E6612B0A5E_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}y",
+            "before": "330.0",
+            "after": "330",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-B00D852A-12F3-4A29-AEF4-07E6612B0A5E_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}y",
+            "before": "440.0",
+            "after": "440",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-B00D852A-12F3-4A29-AEF4-07E6612B0A5E_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}x",
+            "before": "536.0",
+            "after": "536",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-B00D852A-12F3-4A29-AEF4-07E6612B0A5E_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}y",
+            "before": "440.0",
+            "after": "440",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-2595595D-5F23-45DD-AC11-828D9F0C715F_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+            "before": "636.0",
+            "after": "636",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-2595595D-5F23-45DD-AC11-828D9F0C715F_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}y",
+            "before": "180.0",
+            "after": "180",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-2595595D-5F23-45DD-AC11-828D9F0C715F_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+            "before": "794.0",
+            "after": "794",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-2595595D-5F23-45DD-AC11-828D9F0C715F_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}y",
+            "before": "180.0",
+            "after": "180",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-2595595D-5F23-45DD-AC11-828D9F0C715F_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}x",
+            "before": "794.0",
+            "after": "794",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-2595595D-5F23-45DD-AC11-828D9F0C715F_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}y",
+            "before": "265.0",
+            "after": "265",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-02D25F8D-9055-4638-9EEB-728EFBBA22AD_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+            "before": "636.0",
+            "after": "636",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-02D25F8D-9055-4638-9EEB-728EFBBA22AD_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}y",
+            "before": "440.0",
+            "after": "440",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-02D25F8D-9055-4638-9EEB-728EFBBA22AD_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}y",
+            "before": "440.0",
+            "after": "440",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-02D25F8D-9055-4638-9EEB-728EFBBA22AD_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}y",
+            "before": "398.0",
+            "after": "398",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-8FF0E0E2-73BD-4A0D-9E2E-4915AFF8F3E3_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+            "before": "719.0",
+            "after": "719",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-8FF0E0E2-73BD-4A0D-9E2E-4915AFF8F3E3_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+            "before": "794.0",
+            "after": "794",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-8FF0E0E2-73BD-4A0D-9E2E-4915AFF8F3E3_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}x",
+            "before": "794.0",
+            "after": "794",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-8FF0E0E2-73BD-4A0D-9E2E-4915AFF8F3E3_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}y",
+            "before": "293.0",
+            "after": "293",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-90CE81CF-66D6-4238-910B-54419C7BCCF0_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+            "before": "636.0",
+            "after": "636",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-90CE81CF-66D6-4238-910B-54419C7BCCF0_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}y",
+            "before": "310.0",
+            "after": "310",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-90CE81CF-66D6-4238-910B-54419C7BCCF0_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}y",
+            "before": "310.0",
+            "after": "310",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-90CE81CF-66D6-4238-910B-54419C7BCCF0_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[2]@{}y",
+            "before": "358.0",
+            "after": "358",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-6F611B9A-FD78-435D-936D-6B67F123C9D6_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+            "before": "150.0",
+            "after": "150",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-6F611B9A-FD78-435D-936D-6B67F123C9D6_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}y",
+            "before": "310.0",
+            "after": "310",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-6F611B9A-FD78-435D-936D-6B67F123C9D6_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x",
+            "before": "225.0",
+            "after": "225",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-6F611B9A-FD78-435D-936D-6B67F123C9D6_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}y",
+            "before": "310.0",
+            "after": "310",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-dc3ba873-47b5-4027-8306-93aeab017ac3/{http://www.omg.org/spec/DD/20100524/DC}Font[0]@{}size",
+            "before": "11.0",
+            "after": "11",
+            "loss": false
+          },
+          {
+            "category": "number formatting changed",
+            "key": "attr:#sid-98dc5a42-8fd4-4484-ba25-961a7288d3d2/{http://www.omg.org/spec/DD/20100524/DC}Font[0]@{}size",
+            "before": "12.0",
+            "after": "12",
+            "loss": false
+          }
+        ]
+      },
+      "second": {
+        "totalLines": 2,
+        "totalAdded": 1,
+        "totalDeleted": 1,
+        "totalLinesIgnoringWhitespace": 2,
+        "editLines": 2,
+        "churnLines": 0,
+        "churnLinesIgnoringWhitespace": 0,
+        "semanticByCategory": {},
+        "informationLoss": [],
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 0,
+          "diElementsReordered": 0,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "semantic": []
+      },
+      "third": {
+        "totalLines": 18,
+        "formatting": {
+          "lineEndings": null,
+          "finalNewline": null,
+          "indent": null,
+          "multiLineTagsReflowed": 0,
+          "attributeOrderChanged": 0,
+          "quoteStyleChanged": 0,
+          "escapingChanged": 0,
+          "selfClosingChanged": 0,
+          "selfCloseSpacingChanged": 0,
+          "elementsReordered": 1,
+          "diElementsReordered": 1,
+          "xmlDeclarationChanged": false,
+          "rootStartTagChanged": false
+        },
+        "changedFacts": [
+          "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui/{http://www.omg.org/spec/BPMN/20100524/DI}BPMNLabel[0]/{http://www.omg.org/spec/DD/20100524/DC}Bounds[0]@{}x",
+          "attr:#sid-D84DD080-9128-42BB-BCC9-BD5148D97547_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}x",
+          "attr:#sid-D84DD080-9128-42BB-BCC9-BD5148D97547_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[0]@{}y",
+          "attr:#sid-D84DD080-9128-42BB-BCC9-BD5148D97547_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}y",
+          "attr:#sid-6F611B9A-FD78-435D-936D-6B67F123C9D6_gui/{http://www.omg.org/spec/DD/20100524/DI}waypoint[1]@{}x"
+        ]
+      }
+    }
+  ]
+}

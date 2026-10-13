@@ -1,0 +1,10 @@
+{
+  "fixture": "bizagi-export.bpmn",
+  "ok": true,
+  "taskA": "_5a972b87-735d-454a-b31c-f52fb3afc5c7",
+  "taskB": "_4f7d62d7-f0e6-46bc-be00-69e02da38f65",
+  "oldNameA": "Task 1",
+  "oldNameB": "Task 2",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

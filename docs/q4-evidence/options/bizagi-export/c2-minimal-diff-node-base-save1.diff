@@ -1,0 +1,31 @@
+diff --git before after
+index 7ec35ea..03a65ff 100644
+--- before
++++ after
+@@ -12,7 +12,7 @@
+       </extensionElements>
+       <outgoing>_b50f530c-3450-4e1a-b81f-ea346dc6e1cb</outgoing>
+     </startEvent>
+-    <task id="_5a972b87-735d-454a-b31c-f52fb3afc5c7" name="Task 1">
++    <task id="_5a972b87-735d-454a-b31c-f52fb3afc5c7" name="Q4 first rename">
+       <extensionElements>
+         <bizagi:BizagiExtensions xmlns:bizagi="http://www.bizagi.com/bpmn20">
+           <bizagi:BizagiProperties>
+@@ -263,7 +263,7 @@
+           <Bounds x="419.33334350585937" y="182.58187866210937" width="0" height="0" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+         </BPMNLabel>
+       </BPMNShape>
+-      <BPMNShape id="DiagramElement_fb690f75-3550-4078-b911-8b7d597928ef" bpmnElement="_35fe57a7-1302-44e2-bf58-032f11af7ecb">
++      <BPMNShape id="DiagramElement_fb690f75-3550-4078-b911-8b7d597928ef" bpmnElement="_35fe57a7-1302-44e2-bf58-032f11af7ecb" isMarkerVisible="true">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+         <Bounds x="333" y="168" width="42" height="42" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+         <BPMNLabel id="DiagramElement_455a3648-b363-4cac-a96b-99fe2fcf3428" labelStyle="Style_bcf36f6d-d912-4861-a544-73ed2837a7e8">
+@@ -279,7 +279,7 @@
+           <Bounds x="419.33334350585937" y="277.58187866210937" width="0" height="0" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+         </BPMNLabel>
+       </BPMNShape>
+-      <BPMNShape id="DiagramElement_9701f195-6b26-44ce-9dc0-b7130c20b925" bpmnElement="_33c66216-391c-49c2-aa19-d8f0b7f5f91d">
++      <BPMNShape id="DiagramElement_9701f195-6b26-44ce-9dc0-b7130c20b925" bpmnElement="_33c66216-391c-49c2-aa19-d8f0b7f5f91d" isMarkerVisible="true">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+         <Bounds x="555" y="213" width="42" height="42" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+         <BPMNLabel id="DiagramElement_1997c114-c1f6-426f-93e5-e8dbfa3bb53e" labelStyle="Style_cfaf7b76-be90-4d54-816a-d3bef5e5f782">

@@ -1,0 +1,16 @@
+ac6c7ee save 3: move task A
+
+ bpmnio-demo-export.bpmn | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+ec31b6d save 2: rename task B
+
+ bpmnio-demo-export.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+0fdde2e save 1: rename task A
+
+ bpmnio-demo-export.bpmn | 900 +++++++++++++++++++++++++-----------------------
+ 1 file changed, 462 insertions(+), 438 deletions(-)
+e243dbd original
+
+ bpmnio-demo-export.bpmn | 878 ++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 878 insertions(+)

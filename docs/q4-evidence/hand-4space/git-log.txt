@@ -1,0 +1,16 @@
+4749c1b save 3: move task A
+
+ hand-4space.bpmn | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+7747ae6 save 2: rename task B
+
+ hand-4space.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+f7fb9fb save 1: rename task A
+
+ hand-4space.bpmn | 305 +++++++++++++++++++------------------------------------
+ 1 file changed, 105 insertions(+), 200 deletions(-)
+0dcdbfc original
+
+ hand-4space.bpmn | 202 +++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 202 insertions(+)

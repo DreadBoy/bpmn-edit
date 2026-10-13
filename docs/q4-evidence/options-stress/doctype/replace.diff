@@ -1,0 +1,48 @@
+diff --git before after
+index ba3bb17..b25f1f3 100644
+--- before
++++ after
+@@ -17,11 +17,6 @@
+       <bpmn:outgoing>Flow_Yes</bpmn:outgoing>
+       <bpmn:outgoing>Flow_No</bpmn:outgoing>
+     </bpmn:exclusiveGateway>
+-    <bpmn:task id="Task_ShipOrder" name="Ship order">
+-      <bpmn:documentation>Shipped by &company; logistics</bpmn:documentation>
+-      <bpmn:incoming>Flow_Yes</bpmn:incoming>
+-      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+-    </bpmn:task>
+     <bpmn:task id="Task_CancelOrder" name="Cancel order">
+       <bpmn:incoming>Flow_No</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToCancelled</bpmn:outgoing>
+@@ -42,6 +37,11 @@
+       <bpmn:incoming>Flow_0ghss7g</bpmn:incoming>
+     </bpmn:task>
+     <bpmn:sequenceFlow id="Flow_0ghss7g" sourceRef="Task_CheckStock" targetRef="Activity_0vgu3sg" />
++    <bpmn:userTask id="Task_ShipOrder" name="Ship order">
++      <bpmn:documentation>Shipped by &amp;company; logistics</bpmn:documentation>
++      <bpmn:incoming>Flow_Yes</bpmn:incoming>
++      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
++    </bpmn:userTask>
+     <bpmn:textAnnotation id="TextAnnotation_1kyvkae">
+       <bpmn:text>Note – Änderung</bpmn:text>
+     </bpmn:textAnnotation>
+@@ -64,9 +64,6 @@
+           <dc:Bounds x="456" y="193" width="47" height="14" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Task_ShipOrder_di" bpmnElement="Task_ShipOrder">
+-        <dc:Bounds x="500" y="60" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Task_CancelOrder_di" bpmnElement="Task_CancelOrder">
+         <dc:Bounds x="500" y="260" width="100" height="80" />
+       </bpmndi:BPMNShape>
+@@ -85,6 +82,9 @@
+       <bpmndi:BPMNShape id="Activity_0vgu3sg_di" bpmnElement="Activity_0vgu3sg">
+         <dc:Bounds x="300" y="320" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="Activity_15ydrj6_di" bpmnElement="Task_ShipOrder">
++        <dc:Bounds x="500" y="60" width="100" height="80" />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="Association_0tse7yb_di" bpmnElement="Association_0tse7yb">
+         <di:waypoint x="290" y="160" />
+         <di:waypoint x="290" y="103" />

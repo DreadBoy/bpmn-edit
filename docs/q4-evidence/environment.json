@@ -1,0 +1,9 @@
+{
+  "date": "2026-10-13T00:55:36.985Z",
+  "node": "v22.22.2",
+  "chrome": "155.0.8059.40",
+  "playwright": "1.64.0",
+  "bpmnJs": "18.31.0",
+  "git": "git version 2.54.0 (Apple Git-157)",
+  "platform": "darwin arm64"
+}

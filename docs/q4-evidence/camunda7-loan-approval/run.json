@@ -1,0 +1,10 @@
+{
+  "fixture": "camunda7-loan-approval.bpmn",
+  "ok": true,
+  "taskA": "UserTask_1",
+  "taskB": "UserTask_1",
+  "oldNameA": "Approve Request",
+  "oldNameB": "Approve Request",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

@@ -1,0 +1,30 @@
+diff --git before after
+index 08bf216..796c54d 100644
+--- before
++++ after
+@@ -220,6 +220,10 @@
+         </bizagi:BizagiExtensions>
+       </extensionElements>
+     </participant>
++    <textAnnotation id="TextAnnotation_0h3sg17">
++      <text>Note – Änderung</text>
++    </textAnnotation>
++    <association id="Association_0epek0l" associationDirection="None" sourceRef="_5a972b87-735d-454a-b31c-f52fb3afc5c7" targetRef="TextAnnotation_0h3sg17" />
+   </collaboration>
+   <BPMNDiagram id="Diagram_b34aa446-8da3-43b6-a90c-b97299544a16" xmlns="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0">
+     <BPMNPlane id="DiagramElement_1f749ba5-7c1e-4cf5-b3d3-8d77d14be642" bpmnElement="Id_f860e7d7-a3df-4807-ae81-26e8b801893e">
+@@ -395,6 +399,14 @@
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+         <Bounds x="30" y="30" width="0" height="0" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+       </BPMNShape>
++      <BPMNEdge id="Association_0epek0l_di" bpmnElement="Association_0epek0l">
++        <di:waypoint x="230" y="155" />
++        <di:waypoint x="235" y="98" />
++      </BPMNEdge>
++      <BPMNShape id="TextAnnotation_0h3sg17_di" bpmnElement="TextAnnotation_0h3sg17">
++        <dc:Bounds x="186" y="55" width="100" height="43" />
++        <BPMNLabel />
++      </BPMNShape>
+     </BPMNPlane>
+     <BPMNLabelStyle id="Style_35e829d8-1dc4-443b-8f15-7bfc8038eab5">
+       <Font name="Arial" size="8" isBold="false" isItalic="false" isUnderline="false" isStrikeThrough="false" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
