@@ -83,6 +83,104 @@ body {
 #save-status[data-state="disconnected"] { color: #57606a; }
 #save-status[data-state="error"] { color: #cf222e; }
 
+#share {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex: none;
+}
+
+#share[hidden],
+#share [hidden],
+#share-error[hidden] { display: none; }
+
+#share button {
+  height: 28px;
+  padding: 0 12px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2328;
+  font: inherit;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+#share button:hover { background: #f3f4f6; }
+#share button:disabled { opacity: 0.6; cursor: default; }
+
+#share-start {
+  border-color: #1f883d !important;
+  background: #1f883d !important;
+  color: #fff !important;
+  font-weight: 600;
+}
+
+#share-start:hover { background: #1a7f37 !important; }
+
+#share-progress,
+#share-active {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 12px;
+  color: #57606a;
+  white-space: nowrap;
+}
+
+#share-progress .spinner {
+  width: 12px;
+  height: 12px;
+  border: 2px solid #d0d7de;
+  border-top-color: #0969da;
+  border-radius: 50%;
+  animation: share-spin 0.8s linear infinite;
+}
+
+@keyframes share-spin { to { transform: rotate(360deg); } }
+
+#share-url {
+  width: 360px;
+  max-width: 32vw;
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+  font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: 12px;
+  text-overflow: ellipsis;
+}
+
+/* Why sharing failed; stays until dismissed or the next Share. */
+#share-error {
+  position: fixed;
+  right: 16px;
+  top: 52px;
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+  max-width: min(480px, calc(100% - 32px));
+  padding: 10px 12px;
+  border: 1px solid #ff8182;
+  border-radius: 6px;
+  background: #ffebe9;
+  color: #82071e;
+  font-size: 13px;
+  box-shadow: 0 2px 8px rgba(31, 35, 40, 0.15);
+  z-index: 100;
+}
+
+#share-error-close {
+  border: none;
+  background: none;
+  color: inherit;
+  font-size: 16px;
+  line-height: 1;
+  cursor: pointer;
+  padding: 0 2px;
+}
+
 #canvas {
   flex: 1;
   min-height: 0;

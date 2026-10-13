@@ -15,6 +15,11 @@
 //      one Chrome load), stops it and probes its old URL for --probe-old2-s seconds.
 // At most two tunnels are opened, never retried (Cloudflare rate-limits quick tunnels per IP).
 //
+// Since S7 the server only answers for the tunnel it started itself (Share button / POST /api/share): a
+// request for any other hostname gets 421 and one coming through a tunnel needs /s/<token>/. Run against
+// a CLI of S7 or later, this script therefore no longer reaches the editor; it records the Q3 run as it
+// was (commit e406a46) and would need to share through /api/share to be repeated.
+//
 // Options:
 //   --out <dir>            where all logs go (required)
 //   --local                no tunnel: the "public" URL is the CLI's local URL (dry run)

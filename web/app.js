@@ -16,6 +16,13 @@
 //
 // Only one update is in flight at a time. A document from someone else that arrives while the user
 // is in the middle of an edit (label editor open, drag, popup menu) is held back until it is done.
+//
+// The same page serves the host (`/?host=<secret>`, printed by the CLI) and collaborators
+// (`/s/<token>/`); every URL it uses is relative to the page, so it works under both. The host secret
+// is moved out of the address bar at once (history.replaceState) into sessionStorage (this tab only,
+// survives a reload); it is sent only to this server, on host-only calls and on the WebSocket
+// handshake. With a valid secret the host's socket receives 'share' messages, which show the Share
+// controls; without one (or as a collaborator) they never appear.
 
 /** Edits are sent this long after the last change (coalesces bursts such as keyboard nudges). */
 const SEND_DELAY_MS = 300;
@@ -39,6 +46,41 @@ const statusEl = document.getElementById('save-status');
 const errorEl = document.getElementById('error');
 const noticeEl = document.getElementById('notice');
 const toastEl = document.getElementById('toast');
+const shareEl = document.getElementById('share');
+const shareStartEl = document.getElementById('share-start');
+const shareProgressEl = document.getElementById('share-progress');
+const shareProgressTextEl = document.getElementById('share-progress-text');
+const shareActiveEl = document.getElementById('share-active');
+const shareUrlEl = document.getElementById('share-url');
+const shareCopyEl = document.getElementById('share-copy');
+const shareStopEl = document.getElementById('share-stop');
+const shareErrorEl = document.getElementById('share-error');
+const shareErrorTextEl = document.getElementById('share-error-text');
+
+/** Collaborator page (`/s/<token>/`): never has host powers. */
+const isCollaborator = location.pathname.startsWith('/s/');
+const HOST_SECRET_KEY = 'local-bpmn:host-secret';
+const hostSecret = takeHostSecret();
+
+/**
+ * Removes `?host=` from the address bar (so it is not bookmarked, shown or shared by accident) and
+ * returns the host secret: from the URL, or from this tab's sessionStorage after a reload.
+ */
+function takeHostSecret() {
+  const url = new URL(location.href);
+  const fromUrl = url.searchParams.get('host');
+  if (fromUrl !== null) {
+    url.searchParams.delete('host');
+    history.replaceState(history.state, '', `${url.pathname}${url.search}${url.hash}`);
+  }
+  if (isCollaborator) return null;
+  try {
+    if (fromUrl) sessionStorage.setItem(HOST_SECRET_KEY, fromUrl);
+    return fromUrl || sessionStorage.getItem(HOST_SECRET_KEY);
+  } catch {
+    return fromUrl || null; // storage blocked: works until the next reload
+  }
+}
 
 const modeler = new window.BpmnJS({ container: '#canvas' });
 const canvas = modeler.get('canvas');
@@ -918,7 +960,7 @@ async function rebaseLocalEdits(message) {
 
 /** Fetches the host's current document (used if a newer one is needed but was not received). */
 async function fetchLatest() {
-  const response = await fetch('/api/file', { cache: 'no-store' });
+  const response = await fetch('api/file', { cache: 'no-store' });
   const { xml, version: latest } = await response.json();
   return { type: 'remote-update', xml, version: latest, origin: 'host' };
 }
@@ -1016,15 +1058,114 @@ async function handleMessage(message) {
       }
       renderNotice();
       break;
+    case 'share':
+      shareEpoch += 1;
+      renderShare(message);
+      break;
     default:
       break; // unknown types are ignored so newer hosts can add messages
   }
   renderStatus();
 }
 
+// --- Share (host only) -----------------------------------------------------------------------------
+
+let shareEpoch = 0; // number of 'share' messages received (a newer one beats an HTTP answer)
+let copiedTimer = null;
+
+/** Calls a host-only endpoint (relative to this page, with the host secret). */
+async function shareRequest(method) {
+  const response = await fetch('api/share', {
+    method,
+    cache: 'no-store',
+    headers: { 'X-Local-Bpmn-Host': hostSecret },
+  });
+  let body = null;
+  try {
+    body = await response.json();
+  } catch {
+    // fall through
+  }
+  if (body && typeof body.state === 'string') return body;
+  throw new Error(body?.error || `HTTP ${response.status}`);
+}
+
+function showShareError(message) {
+  shareErrorTextEl.textContent = message;
+  shareErrorEl.hidden = false;
+}
+
+function hideShareError() {
+  shareErrorEl.hidden = true;
+  shareErrorTextEl.textContent = '';
+}
+
+/** Shows the sharing status: { state: 'idle' | 'starting' | 'active' | 'error', url?, progress?, error? }. */
+function renderShare(status) {
+  shareEl.hidden = false;
+  shareEl.dataset.state = status.state;
+  shareStartEl.hidden = status.state === 'starting' || status.state === 'active';
+  shareStartEl.disabled = false;
+  shareProgressEl.hidden = status.state !== 'starting';
+  shareActiveEl.hidden = status.state !== 'active';
+  shareStopEl.disabled = false;
+  if (status.state === 'starting') shareProgressTextEl.textContent = status.progress || 'Starting tunnel…';
+  if (status.state === 'active' && shareUrlEl.value !== status.url) {
+    shareUrlEl.value = status.url;
+    shareCopyEl.textContent = 'Copy';
+  }
+  if (status.state === 'error') showShareError(status.error?.message || 'Sharing failed.');
+  else if (status.state !== 'idle') hideShareError();
+}
+
+/** Renders an HTTP answer unless a 'share' message newer than the request already did. */
+async function shareAction(method, pending) {
+  const epoch = shareEpoch;
+  if (pending) renderShare(pending);
+  try {
+    const status = await shareRequest(method);
+    if (shareEpoch === epoch) renderShare(status);
+  } catch (err) {
+    renderShare({ state: 'error', error: { message: `Sharing failed: ${err.message}` } });
+  }
+}
+
+shareStartEl.addEventListener('click', () => {
+  hideShareError();
+  shareAction('POST', { state: 'starting', progress: 'Starting tunnel…' });
+});
+
+shareStopEl.addEventListener('click', () => {
+  shareStopEl.disabled = true;
+  shareAction('DELETE', null);
+});
+
+shareCopyEl.addEventListener('click', async () => {
+  try {
+    await navigator.clipboard.writeText(shareUrlEl.value);
+  } catch {
+    shareUrlEl.select(); // fallback: let the user copy it
+    document.execCommand?.('copy');
+  }
+  shareCopyEl.textContent = 'Copied';
+  clearTimeout(copiedTimer);
+  copiedTimer = setTimeout(() => { shareCopyEl.textContent = 'Copy'; }, 2000);
+});
+
+shareUrlEl.addEventListener('focus', () => shareUrlEl.select());
+document.getElementById('share-error-close').addEventListener('click', hideShareError);
+
+/** WebSocket URL next to this page (`/ws` or `/s/<token>/ws`), with the host secret if any. */
+function socketUrl() {
+  const url = new URL('ws', location.href);
+  url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
+  url.search = hostSecret ? `?host=${encodeURIComponent(hostSecret)}` : '';
+  url.hash = '';
+  return url.href;
+}
+
 function connect() {
-  const url = `${location.protocol === 'https:' ? 'wss' : 'ws'}://${location.host}/ws`;
-  socket = new WebSocket(url);
+  socket = new WebSocket(socketUrl());
   socket.addEventListener('open', () => {
     connected = true;
     everConnected = true;
@@ -1039,11 +1180,12 @@ function connect() {
     }
     enqueue(() => handleMessage(message)); // in order: init imports asynchronously
   });
-  socket.addEventListener('close', () => {
+  socket.addEventListener('close', (event) => {
     const wasConnected = connected;
     connected = false;
     renderStatus();
-    if (!wasConnected && !rendered) showError('Could not connect to the local-bpmn server.');
+    if (event.code === 4001) showError('The host stopped sharing. This link no longer works.');
+    else if (!wasConnected && !rendered) showError('Could not connect to the local-bpmn server.');
   });
 }
 

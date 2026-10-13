@@ -16,6 +16,8 @@ import { pipeline } from 'node:stream/promises';
 const DEFAULT_URL_BASE = 'https://github.com/cloudflare/cloudflared/releases/latest/download';
 const OUTPUT_LINES_KEPT = 20;
 const STOP_GRACE_MS = 3_000;
+/** The binary download fails if no response arrives, or the body stalls, for this long. */
+const DOWNLOAD_STALL_MS = 30_000;
 
 /** Directory holding local-bpmn's own state (binary cache etc.). */
 export function defaultHome() {
@@ -105,6 +107,7 @@ const inFlight = new Map();
  * or freshly downloaded into that cache. Progress is reported through `onProgress`:
  *   { phase: 'path', path } | { phase: 'cached', path } | { phase: 'download', received, total }
  *   | { phase: 'extract' } | { phase: 'done', path }
+ * The download is aborted if the server does not answer, or the body stops arriving, for `stallMs`.
  */
 export async function ensureCloudflared({
   home = defaultHome(),
@@ -113,6 +116,7 @@ export async function ensureCloudflared({
   usePath = true,
   platform = process.platform,
   arch = process.arch,
+  stallMs = DOWNLOAD_STALL_MS,
 } = {}) {
   // PATH first, so an installed cloudflared works even where no release asset is known.
   const binName = platform === 'win32' ? 'cloudflared.exe' : 'cloudflared';
@@ -133,23 +137,33 @@ export async function ensureCloudflared({
   if (!pending) {
     const { asset, archive } = assetFor(platform, arch);
     const url = downloadUrl(asset, baseUrl);
-    pending = download({ url, archive, binName, binDir, target, onProgress }).finally(() => inFlight.delete(target));
+    pending = download({ url, archive, binName, binDir, target, onProgress, stallMs }).finally(() => inFlight.delete(target));
     inFlight.set(target, pending);
   }
   return pending;
 }
 
-async function download({ url, archive, binName, binDir, target, onProgress }) {
+async function download({ url, archive, binName, binDir, target, onProgress, stallMs }) {
   await mkdir(binDir, { recursive: true });
   // All temporary files live in a private dir inside the cache, removed whatever happens.
   const tmpDir = await mkdtemp(path.join(binDir, '.cloudflared-'));
+  // Stall timer: armed until the response arrives, re-armed on every chunk of the body.
+  const abort = new AbortController();
+  let stallTimer = null;
+  const armStall = () => {
+    clearTimeout(stallTimer);
+    stallTimer = setTimeout(() => abort.abort(new Error(`no data for ${stallMs} ms`)), stallMs);
+  };
+  const stalled = () => (abort.signal.aborted ? `timed out (${abort.signal.reason.message})` : null);
   try {
     let res;
+    armStall();
     try {
-      res = await fetch(url, { redirect: 'follow' });
+      res = await fetch(url, { redirect: 'follow', signal: abort.signal });
     } catch (err) {
-      throw new Error(`Failed to download cloudflared from ${url}: ${err.cause?.message || err.message}`);
+      throw new Error(`Failed to download cloudflared from ${url}: ${stalled() || err.cause?.message || err.message}`);
     }
+    armStall();
     if (!res.ok || !res.body) {
       res.body?.cancel().catch(() => {});
       throw new Error(`Failed to download cloudflared from ${url}: HTTP ${res.status}`);
@@ -159,6 +173,7 @@ async function download({ url, archive, binName, binDir, target, onProgress }) {
     let received = 0;
     const counter = new Transform({
       transform(chunk, _enc, done) {
+        armStall();
         received += chunk.length;
         onProgress({ phase: 'download', received, total });
         done(null, chunk);
@@ -168,8 +183,9 @@ async function download({ url, archive, binName, binDir, target, onProgress }) {
     try {
       await pipeline(Readable.fromWeb(res.body), counter, createWriteStream(downloaded, { mode: 0o600 }));
     } catch (err) {
-      throw new Error(`Failed to download cloudflared from ${url}: ${err.message}`);
+      throw new Error(`Failed to download cloudflared from ${url}: ${stalled() || err.message}`);
     }
+    clearTimeout(stallTimer);
     if (total !== null && received !== total) {
       throw new Error(`Failed to download cloudflared from ${url}: incomplete download (${received} of ${total} bytes)`);
     }
@@ -192,6 +208,7 @@ async function download({ url, archive, binName, binDir, target, onProgress }) {
     onProgress({ phase: 'done', path: target });
     return target;
   } finally {
+    clearTimeout(stallTimer);
     await rm(tmpDir, { recursive: true, force: true }).catch(() => {});
   }
 }

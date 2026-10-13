@@ -216,3 +216,106 @@ Why this and not the alternatives:
 - The client relies on diagram-js internals (`commandStack._currentExecution`, `_stack`, `_stackIdx`)
   to find root commands and undone edits; if they change, every edit is treated as unsupported (safe,
   but concurrent edits are then dropped with a toast instead of merged).
+
+## Q3: persistent session links across restarts
+
+### Question
+
+Should a shared link survive a restart of the CLI or a new Share (which needs a stable hostname and a
+session token that outlives the process), or is a new link per share acceptable for v1? And how quickly and
+how reliably does a Cloudflare quick tunnel come up and stay up?
+
+### Experiment
+
+`scripts/measure-tunnel.js` (full write-up and raw logs: `docs/q3-tunnel-measurements.md`,
+`docs/q3-tunnel-evidence/`). The real CLI on a copy of `test/fixtures/order.bpmn`, a quick tunnel from
+`src/tunnel.js` pointed at it, one GET of `/` every 20 s for 31 min, a WebSocket held open without sending
+anything, Chrome loads at start and end; then the tunnel was stopped together with the CLI, the old URL
+probed for 2 min, and after 150 s a second CLI + tunnel started on the same file and port. macOS (M1 Pro),
+cloudflared 2026.10.0, Chrome 155. Three tunnels in total (one from an independent verification run), no
+rate limiting.
+
+### Results
+
+| | |
+|---|---|
+| Startup, cached binary (spawn → first HTTP 200) | 6479 / 6849 / 7054 ms; ~5–5.6 s of it is cloudflared obtaining the tunnel |
+| HTTP over 31 min | 93/93 × 200, latency p95 101 ms, no cloudflared reconnects |
+| Idle WebSocket | cut after 125.08–125.12 s every time (close 1006), 14 times in 31 min |
+| Old URL after stop | HTTP 530 / Cloudflare error 1033 from the first probe (1.6 s) for at least 2.6 min; the hostname keeps resolving |
+| Restart / re-share | a different random hostname every time; nothing points from the old link to the new one |
+| Stable hostname | needs a named Cloudflare Tunnel: a Cloudflare account, an own domain on Cloudflare, `cloudflared tunnel login` or a dashboard token, a DNS route |
+
+### Decision
+
+Persistent links are out of scope for v1. A quick tunnel gets a new hostname on every start, so every
+Share (and every CLI restart) gives a new link, and the old one stops working at once (Cloudflare error
+1033, which local-bpmn cannot customise). The README (S9) has to say so: collaborators need the new link.
+
+Why: the only way to a stable hostname is a named tunnel, which needs the user's own Cloudflare account and
+domain plus a browser login or dashboard token, so `npx local-bpmn` cannot set it up for anyone, and the
+session token in `/s/<token>` would also have to be persisted across restarts. If ever wanted, it is a
+separate opt-in feature (e.g. a `--tunnel-token` option running `cloudflared tunnel run --token`), not
+something to block v1 on. Within one run the quick tunnel's HTTP path was stable, which is what v1 needs.
+
+What does have to change, independent of persistent links: an idle WebSocket through the tunnel is cut
+after ~125 s, and the page does not reconnect, so an idle collaborator silently stops syncing. The server
+must send a keepalive well below 125 s (e.g. every 30 s) and the page must reconnect with backoff and
+re-sync; both are handled in S8, with an E2E check that a socket idle for more than 125 s through a real
+tunnel stays connected (or recovers transparently). S7 wires sharing up without keepalive.
+
+### Known limits
+
+- The numbers come from one machine on one network over one afternoon; quick tunnels have no uptime
+  guarantee ("for testing and development"), and Cloudflare rate-limits their creation per IP (HTTP 429;
+  ~5 in a burst locked tunnels out for more than 35 min). The Share UI reports this as such and lets the
+  user retry; it never retries on its own.
+- Quick tunnels allow at most 200 in-flight requests and no Server-Sent Events (local-bpmn uses neither).
+- The 125 s cut is attributed to Cloudflare's proxy read timeout by the matching number only.
+
+## S7: who may share, and how the secrets are kept
+
+How the security model of `PLAN.md` is implemented (`src/security.js`, `src/server.js`, `web/app.js`):
+
+- **Host secret** (256 bit, base64url) is created at startup and only ever appears in the URL the CLI
+  prints and opens, `http://localhost:PORT/?host=<secret>`. The page moves it out of the address bar at
+  once (`history.replaceState`, which also rewrites the history entry) into `sessionStorage`, so a reload
+  keeps host powers but the secret is not bookmarked, shown on screen or copied with the URL. It is sent
+  only to the same origin: in an `X-Local-Bpmn-Host` header on `/api/share` and as `?host=` on the
+  WebSocket URL. Every response carries `Referrer-Policy: no-referrer` (and the page a matching meta tag),
+  so neither the secret nor a collaborator's session token leaks to bpmn.io through the watermark link.
+  Collaborators never receive it: nothing the server sends contains it, and a socket opened under
+  `/s/<token>/` gets no host role even if it presents the secret. A wrong or stale secret simply means no
+  host powers (no Share controls, 403 on `/api/share`).
+- **Session token** (192 bit, base64url) is created when a tunnel comes up and accepted only while sharing
+  is active; Stop sharing (or cloudflared dying) invalidates it at once, closes the collaborators'
+  sockets (close code 4001) and stops the tunnel. The next Share gets a new tunnel and a new token.
+- **Remote requests** are those with `cf-connecting-ip` or `cf-ray` (the Cloudflare edge always adds
+  them and a client cannot remove them; the tunnel connects from 127.0.0.1, so the address cannot be
+  used). They are served only `/s/<token>/…` with the current token; everything else, `/api/share`
+  included and whatever secret they carry, is 404. `/s/<token>` redirects to `/s/<token>/` because the
+  page loads its assets, `api/file` and `ws` relative to itself.
+- **Host / Origin check** (DNS rebinding, other web sites): the Host header must be `localhost`,
+  `127.0.0.1` or `[::1]` with our port, or the hostname of the tunnel being started or active (421
+  otherwise); an Origin, if present, must be one of those as `http://…:PORT` or `https://<tunnel host>`
+  (403 otherwise). Both apply to HTTP and to the WebSocket upgrade.
+- **No host paths for collaborators**: windows under `/s/<token>/` get the file name only: no absolute
+  `path` in `init` or `api/file`, and a failed save is reported as "Could not save <name> on the host's
+  machine (<code>)" instead of the file system message (which names the directory). The host's own
+  windows keep the full path (tooltip, errors).
+- **Tests without Cloudflare**: `LOCAL_BPMN_TEST_TUNNEL=fake | rate-limited | rate-limited-once | fail`
+  in the CLI's environment swaps in a stand-in provider (`src/test-tunnel.js`) that opens nothing and
+  hands out a made-up `*.trycloudflare.com` URL; tests then send the Cloudflare headers to localhost
+  themselves. It can only be chosen at startup through the environment, never over HTTP.
+- Port fallback also treats a port as busy when another program listens on it on a wildcard address
+  (`0.0.0.0` / `::`): macOS lets our loopback binds succeed next to it, but the port is visibly taken.
+
+Known limits:
+
+- Only the tab opened from the printed URL (and its reloads) is the host. A new tab at
+  `http://localhost:PORT/` can edit but cannot share; open the printed URL again for that.
+- Anyone who can read the terminal output or the process list while the browser is launched sees the
+  secret; that is the same user on the same machine.
+- Stopping the CLI while a tunnel is still starting does not wait for it: the tunnel module kills
+  cloudflared on exit, and a partly downloaded binary leaves a temporary directory in `~/.local-bpmn/bin`
+  (`.cloudflared-*`) that is not cleaned up.

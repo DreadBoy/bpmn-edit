@@ -1,11 +1,33 @@
-// HTTP + WebSocket server: serves the editor shell from web/, the document via /api/file, and the
-// sync protocol on /ws (including changes made to the file on disk). Host secret and share routes
-// are added in later steps.
+// HTTP + WebSocket server: serves the editor shell from web/, the document via /api/file, the sync
+// protocol on /ws (including changes made to the file on disk) and, for the host only, /api/share.
+//
+// Who may do what (see src/security.js and PLAN.md "Security model"):
+// - Every request and WebSocket upgrade must name this server in its Host header (localhost /
+//   127.0.0.1 / [::1] with our port, or the active tunnel hostname) and, if it has an Origin, come
+//   from one of those; otherwise 421 / 403 (DNS rebinding, other web sites).
+// - Local requests (no Cloudflare header): the editor at `/`, `/api/file`, `/ws`. Host-only calls
+//   (`/api/share`) also need the host secret in the `X-Local-Bpmn-Host` header (403 otherwise); a
+//   WebSocket opened with `?host=<secret>` is the host's and receives 'share' messages.
+// - The same editor is served under `/s/<token>/` (assets, `api/file`, `ws` relative to it) while
+//   sharing is active with that token; `/s/<token>` redirects there.
+// - Remote requests (a `cf-connecting-ip` / `cf-ray` header, i.e. through the tunnel) only get
+//   `/s/<token>/…` with the current token, never a host-only route even with the host secret. Wrong
+//   token, no active share, or any other path: 404.
+// - Stopping the share rotates the token and disconnects the WebSockets opened with the old one.
+//
+// HTTP API (host only):
+//   GET    /api/share  -> 200 status
+//   POST   /api/share  -> starts sharing; waits until done: 200 status ('active', url) or 502 / 429
+//                         status ('error', error: { code: 'TUNNEL_FAILED' | 'TUNNEL_RATE_LIMITED', message })
+//   DELETE /api/share  -> stops sharing: 200 status ('idle')
+//   status = { state: 'idle' | 'starting' | 'active' | 'error', url?, progress?, error? } (src/share.js)
 //
 // WebSocket protocol (JSON text frames, each with a `type`):
-//   server -> client  { type: 'init', xml, version, name, path, clientId }
+//   server -> client  { type: 'init', xml, version, name, path?, clientId }
 //                                                               on connect; clientId ('c1', 'c2', …) is
-//                                                               unique for the server's lifetime
+//                                                               unique for the server's lifetime;
+//                                                               path (absolute, on the host) is left
+//                                                               out for sockets under /s/<token>/
 //   client -> server  { type: 'update', xml, baseVersion, overrides? }
 //                                                               full XML after an edit, based on the
 //                                                               version the client last received or
@@ -45,14 +67,26 @@
 //                                                               the client could not display that
 //                                                               version; if it came from disk, the file
 //                                                               is reported 'invalid' (nothing written)
+//   server -> client  { type: 'share', state, url?, progress?, error? }
+//                                                               host's sockets only: sharing status
+//                                                               (see /api/share), after 'init' and on
+//                                                               every change
+//   close 4001 'share-stopped'                                  collaborator socket whose link was
+//                                                               revoked (sharing stopped)
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import http from 'node:http';
+import net from 'node:net';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createFileStore } from './file.js';
+import {
+  HOST_SECRET_HEADER, HOST_SECRET_PARAM, hostAllowed, isRemoteRequest, newHostSecret, originAllowed, safeEqual,
+  splitSharePath,
+} from './security.js';
 import { Session, SessionError } from './session.js';
+import { ShareManager } from './share.js';
 
 export const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'web');
 
@@ -78,8 +112,21 @@ export const WS_PATH = '/ws';
 /** Largest accepted WebSocket message; bigger ones close the connection with 1009. */
 export const WS_MAX_PAYLOAD = 10 * 1024 * 1024;
 
+/**
+ * Sent with every response. no-referrer: neither the host secret (in the host's first URL) nor a
+ * session token (in a collaborator's URL) may leak to another site through Referer, e.g. when the
+ * bpmn.io watermark link is followed. The editor is never meant to be framed.
+ */
+const SECURITY_HEADERS = {
+  'Referrer-Policy': 'no-referrer',
+  'X-Content-Type-Options': 'nosniff',
+  'X-Frame-Options': 'DENY',
+  'Content-Security-Policy': "frame-ancestors 'none'",
+};
+
 function sendJson(res, status, body) {
   res.writeHead(status, {
+    ...SECURITY_HEADERS,
     'Content-Type': 'application/json; charset=utf-8',
     'Cache-Control': 'no-store',
   });
@@ -87,8 +134,14 @@ function sendJson(res, status, body) {
 }
 
 function sendText(res, status, text) {
-  res.writeHead(status, { 'Content-Type': 'text/plain; charset=utf-8' });
+  res.writeHead(status, { ...SECURITY_HEADERS, 'Content-Type': 'text/plain; charset=utf-8', 'Cache-Control': 'no-store' });
   res.end(text);
+}
+
+/** Refuses a WebSocket upgrade with a bare HTTP status. */
+function rejectUpgrade(socket, status, reason) {
+  socket.once('finish', () => socket.destroy());
+  socket.end(`HTTP/1.1 ${status} ${reason}\r\nConnection: close\r\nContent-Length: 0\r\n\r\n`);
 }
 
 /** Serves a file below WEB_ROOT; anything resolving outside it (or missing) is a 404. */
@@ -116,6 +169,7 @@ async function serveStatic(res, urlPath, method) {
   if (!info.isFile()) return sendText(res, 404, 'Not found');
 
   res.writeHead(200, {
+    ...SECURITY_HEADERS,
     'Content-Type': CONTENT_TYPES[extname(filePath).toLowerCase()] || 'application/octet-stream',
     'Content-Length': info.size,
     'Cache-Control': 'no-cache',
@@ -138,17 +192,45 @@ async function serveStatic(res, urlPath, method) {
  *   creates one backed by a file store (exposed as `server.session` / `server.store`)
  * @param {number} [options.port=3000]  preferred port; falls back to the next free one (0 = any)
  * @param {string} [options.host='localhost']  'localhost' (both loopbacks) or a single address
+ * @param {string} [options.hostSecret]  host secret (default: a new random one); see `hostUrl`
+ * @param {Function} [options.createTunnelProvider]  tunnel provider factory for sharing (default:
+ *   Cloudflare quick tunnel; tests pass a stand-in, see src/test-tunnel.js)
  */
-export function createServer({ filePath, session = null, port = 3000, host = 'localhost' }) {
+export function createServer({
+  filePath, session = null, port = 3000, host = 'localhost', hostSecret = newHostSecret(), createTunnelProvider,
+}) {
   const fileName = basename(filePath);
   const addresses = host === 'localhost' ? ['127.0.0.1', '::1'] : [host];
+  const share = new ShareManager({
+    getPort: () => self.port,
+    ...(createTunnelProvider ? { createProvider: createTunnelProvider } : {}),
+  });
 
-  // Exact-match API routes: "METHOD /path" -> handler. Everything else falls through to static files.
+  const isHostRequest = (req) => safeEqual(req.headers[HOST_SECRET_HEADER], hostSecret);
+  const shareStatusCode = (status) => {
+    if (status.state !== 'error') return 200;
+    return status.error.code === 'TUNNEL_RATE_LIMITED' ? 429 : 502;
+  };
+
+  // Exact-match API routes: "METHOD /path" -> handler(req, res, { shared }), for every caller that may
+  // reach the editor. `shared`: the request came in under /s/<token>/ (a collaborator).
+  // Collaborators never see where the file lives on the host's machine (user name, directory layout):
+  // they get the file name only, here, in 'init' and in error messages.
   const routes = {
-    'GET /api/file': async (req, res) => {
+    'GET /api/file': async (req, res, { shared = false } = {}) => {
       const { xml, version } = session.getState();
-      sendJson(res, 200, { name: fileName, path: filePath, xml, version });
+      sendJson(res, 200, { name: fileName, ...(shared ? {} : { path: filePath }), xml, version });
     },
+  };
+
+  // Host-only routes (local requests with the host secret). Not reachable under /s/<token>/.
+  const hostRoutes = {
+    'GET /api/share': async (req, res) => sendJson(res, 200, share.status()),
+    'POST /api/share': async (req, res) => {
+      const status = await share.start();
+      sendJson(res, shareStatusCode(status), status);
+    },
+    'DELETE /api/share': async (req, res) => sendJson(res, 200, await share.stop()),
   };
 
   const wss = new WebSocketServer({ noServer: true, maxPayload: WS_MAX_PAYLOAD });
@@ -156,6 +238,8 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
   const flushWaiters = new Map();
   /** Server-assigned id of each connection ('c1', 'c2', …), never reused while the server runs. */
   const clientIds = new WeakMap();
+  /** How each connection was opened: { role: 'host' | 'local' | 'collaborator', token? }. */
+  const clientAccess = new WeakMap();
   let lastClientNumber = 0;
 
   function send(ws, message) {
@@ -218,7 +302,8 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     }
   }
 
-  wss.on('connection', (ws) => {
+  wss.on('connection', (ws, req, access = { role: 'local' }) => {
+    clientAccess.set(ws, access);
     // Without a listener, protocol errors (e.g. an oversize frame -> close 1009) would crash the process.
     ws.on('error', () => {});
     ws.on('message', (data, isBinary) => {
@@ -234,29 +319,61 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     const clientId = `c${lastClientNumber}`;
     clientIds.set(ws, clientId);
     const { xml, version } = session.getState();
-    send(ws, { type: 'init', xml, version, name: fileName, path: filePath, clientId });
+    const shared = access.role === 'collaborator';
+    send(ws, { type: 'init', xml, version, name: fileName, ...(shared ? {} : { path: filePath }), clientId });
     const diskStatus = session.diskStatus;
     if (diskStatus.state !== 'ok') send(ws, { type: 'file-status', ...diskStatus });
+    if (access.role === 'host') send(ws, { type: 'share', ...share.status() });
   });
+
+  /** Host / Origin check shared by HTTP and WebSocket: null if fine, else [status, reason]. */
+  function checkHostAndOrigin(req) {
+    const allowed = { port: self.port, tunnelHost: share.tunnelHost };
+    if (!hostAllowed(req.headers.host, allowed)) return [421, 'Misdirected Request'];
+    if (!originAllowed(req.headers.origin, allowed)) return [403, 'Forbidden'];
+    return null;
+  }
 
   function onUpgrade(req, socket, head) {
     socket.on('error', () => {});
-    let pathname;
+    const refused = checkHostAndOrigin(req);
+    if (refused) return rejectUpgrade(socket, ...refused);
+    let url;
     try {
-      ({ pathname } = new URL(req.url, 'http://localhost'));
+      url = new URL(req.url, 'http://localhost');
     } catch {
-      pathname = null;
+      url = null;
     }
-    if (pathname !== WS_PATH || closing) {
-      socket.once('finish', () => socket.destroy());
-      socket.end('HTTP/1.1 404 Not Found\r\nConnection: close\r\nContent-Length: 0\r\n\r\n');
-      return;
+    let access = null;
+    if (url && !closing) {
+      const { token, rest } = splitSharePath(url.pathname);
+      if (token !== null) {
+        if (rest === WS_PATH && share.isValidToken(token)) access = { role: 'collaborator', token };
+      } else if (url.pathname === WS_PATH && !isRemoteRequest(req.headers)) {
+        const secret = url.searchParams.get(HOST_SECRET_PARAM);
+        access = { role: safeEqual(secret, hostSecret) ? 'host' : 'local' };
+      }
     }
-    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req));
+    if (!access) return rejectUpgrade(socket, 404, 'Not Found');
+    wss.handleUpgrade(req, socket, head, (ws) => wss.emit('connection', ws, req, access));
   }
 
+  share.on('status', (status) => {
+    for (const ws of wss.clients) if (clientAccess.get(ws)?.role === 'host') send(ws, { type: 'share', ...status });
+  });
+  share.on('revoked', (token) => {
+    for (const ws of wss.clients) {
+      if (clientAccess.get(ws)?.token === token) ws.close(4001, 'share-stopped');
+    }
+  });
+
   function onWriteError(err) {
-    broadcast({ type: 'error', code: 'write-failed', message: err.message });
+    // The message names the absolute path (and fs errors their temp file): host and local windows only.
+    const forCollaborators = `Could not save ${fileName} on the host's machine${err.code ? ` (${err.code})` : ''}`;
+    for (const ws of wss.clients) {
+      const shared = clientAccess.get(ws)?.role === 'collaborator';
+      send(ws, { type: 'error', code: 'write-failed', message: shared ? forCollaborators : err.message });
+    }
   }
 
   /**
@@ -289,7 +406,33 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
   let closePromises = null;
 
   async function handleRequest(req, res) {
-    const { pathname } = new URL(req.url, 'http://localhost');
+    const refused = checkHostAndOrigin(req);
+    if (refused) return sendText(res, refused[0], refused[0] === 421 ? 'Unknown host' : 'Forbidden origin');
+    const { pathname, search } = new URL(req.url, 'http://localhost');
+    const { token, rest } = splitSharePath(pathname);
+
+    if (token !== null) {
+      // A collaborator's link (also usable locally). Same 404 for every way of being wrong.
+      if (!share.isValidToken(token)) return sendText(res, 404, 'Not found');
+      if (rest === null) {
+        res.writeHead(302, { ...SECURITY_HEADERS, Location: `/s/${token}/${search}`, 'Cache-Control': 'no-store' });
+        return res.end();
+      }
+      const route = routes[`${req.method} ${rest}`];
+      if (route) return route(req, res, { shared: true });
+      if (rest.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
+      if (req.method !== 'GET' && req.method !== 'HEAD') return sendText(res, 405, 'Method not allowed');
+      return serveStatic(res, rest, req.method);
+    }
+
+    // Through the tunnel, only /s/<token>/ exists.
+    if (isRemoteRequest(req.headers)) return sendText(res, 404, 'Not found');
+
+    const hostRoute = hostRoutes[`${req.method} ${pathname}`];
+    if (hostRoute) {
+      if (!isHostRequest(req)) return sendJson(res, 403, { error: 'Only the host can do this' });
+      return hostRoute(req, res);
+    }
     const route = routes[`${req.method} ${pathname}`];
     if (route) return route(req, res);
     if (pathname.startsWith('/api/')) return sendJson(res, 404, { error: 'Not found' });
@@ -325,6 +468,9 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
         bound.push(server);
         actualPort = server.address().port; // port 0 -> reuse the OS-chosen port for the next address
       }
+      if (host === 'localhost' && await wildcardListenerOn(actualPort)) {
+        throw Object.assign(new Error(`port ${actualPort} is in use (another program listens on all addresses)`), { code: 'EADDRINUSE' });
+      }
     } catch (err) {
       await Promise.all(bound.map((s) => new Promise((r) => s.close(r))));
       throw err;
@@ -341,9 +487,16 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     wss,
     get session() { return session; },
     get store() { return session?.store ?? null; },
+    /** Sharing state (tunnel + session token). */
+    share,
+    /** The host secret; only ever part of `hostUrl`. */
+    hostSecret,
     requestedPort: port,
     port: undefined,
+    /** Base URL (no host powers). */
     url: undefined,
+    /** URL the host opens: base URL with the host secret. */
+    hostUrl: undefined,
 
     /** Starts listening; resolves to the actual port (may differ from the requested one). */
     async listen() {
@@ -363,6 +516,7 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
         try {
           self.port = await bindAll(candidate);
           self.url = `http://localhost:${self.port}/`;
+          self.hostUrl = `${self.url}?${HOST_SECRET_PARAM}=${hostSecret}`;
           return self.port;
         } catch (err) {
           if (err.code !== 'EADDRINUSE') throw err;
@@ -402,6 +556,7 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     /** Stops accepting connections, disconnects WebSocket clients and closes open connections. */
     async close() {
       self.stopAccepting();
+      await share.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise((resolveClose) => wss.close(() => resolveClose()));
       for (const server of httpServers) server.closeAllConnections();
@@ -420,6 +575,31 @@ function validOverrides(overrides) {
   return Array.isArray(overrides) && overrides.length <= 1000 && overrides.every((o) => o !== null
     && typeof o === 'object' && typeof o.id === 'string' && typeof o.name === 'string'
     && o.id.length <= 1000 && o.name.length <= 1000 && (o.kind === undefined || o.kind === 'connection'));
+}
+
+/**
+ * True if another program listens on `port` on a wildcard address (0.0.0.0 or ::). On macOS our
+ * loopback binds still succeed next to such a listener (they win for loopback connections), but the
+ * port is visibly taken: the other program answers on every other address, and on Linux the same
+ * binds would fail. Probed by trying to bind the wildcard addresses ourselves, which fails exactly
+ * when someone else holds them (our own loopback binds do not block it).
+ */
+export async function wildcardListenerOn(port) {
+  for (const options of [{ host: '0.0.0.0' }, { host: '::', ipv6Only: true }]) {
+    const probe = net.createServer();
+    try {
+      await new Promise((resolveProbe, reject) => {
+        probe.once('error', reject);
+        probe.listen({ port, ...options, exclusive: true }, resolveProbe);
+      });
+    } catch (err) {
+      if (err.code === 'EADDRINUSE') return true;
+      // No IPv6 (EAFNOSUPPORT / EADDRNOTAVAIL) or no permission: nothing to detect there.
+    } finally {
+      await new Promise((resolveClose) => (probe.listening ? probe.close(() => resolveClose()) : resolveClose()));
+    }
+  }
+  return false;
 }
 
 function listenOnce(server, port, host) {

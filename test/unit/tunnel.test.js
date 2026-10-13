@@ -165,6 +165,12 @@ describe('ensureCloudflared', () => {
       } else if (req.url === '/redirect/cloudflared-linux-arm64') {
         res.writeHead(302, { location: '/rel/cloudflared-linux-amd64' });
         res.end();
+      } else if (req.url === '/hang/cloudflared-linux-amd64') {
+        // never answers
+      } else if (req.url === '/stall/cloudflared-linux-amd64') {
+        // answers, sends part of the body, then nothing more
+        res.writeHead(200, { 'content-length': 1000 });
+        res.write('x'.repeat(100));
       } else if (req.url === '/broken/cloudflared-darwin-arm64.tgz') {
         res.writeHead(200);
         res.end('this is not a tarball');
@@ -177,6 +183,7 @@ describe('ensureCloudflared', () => {
     base = `http://127.0.0.1:${server.address().port}`;
   });
   after(async () => {
+    server.closeAllConnections();
     await new Promise((resolve) => server.close(resolve));
     await rm(workDir, { recursive: true, force: true });
   });
@@ -242,6 +249,23 @@ describe('ensureCloudflared', () => {
       },
     );
     assert.deepEqual(await readdir(join(home, 'bin')), []);
+  });
+
+  it('times out when the server does not answer, or the body stalls; nothing left in the cache', async () => {
+    for (const dir of ['hang', 'stall']) {
+      const home = await freshHome();
+      const started = Date.now();
+      await assert.rejects(
+        ensureCloudflared({ home, baseUrl: `${base}/${dir}`, usePath: false, platform: 'linux', arch: 'x64', stallMs: 300 }),
+        (err) => {
+          assert.match(err.message, new RegExp(`Failed to download cloudflared from .*/${dir}/cloudflared-linux-amd64: timed out \\(no data for 300 ms\\)`));
+          return true;
+        },
+        dir,
+      );
+      assert.ok(Date.now() - started < 5_000, dir);
+      assert.deepEqual(await readdir(join(home, 'bin')), [], dir);
+    }
   });
 
   it('honours LOCAL_BPMN_CLOUDFLARED_URL_BASE', async () => {

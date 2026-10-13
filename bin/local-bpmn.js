@@ -7,6 +7,7 @@ import open from 'open';
 import { createFileStore } from '../src/file.js';
 import { createServer } from '../src/server.js';
 import { Session } from '../src/session.js';
+import { testProviderFactory } from '../src/test-tunnel.js';
 
 const pkg = JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8'));
 
@@ -77,7 +78,20 @@ try {
   process.stderr.write(`local-bpmn: could not watch ${filePath} for changes: ${err.message}\n`);
 }
 
-const server = createServer({ filePath, session, port: options.port });
+// Test-only stand-in for the Cloudflare tunnel (see src/test-tunnel.js); set by the E2E tests.
+let createTunnelProvider;
+if (process.env.LOCAL_BPMN_TEST_TUNNEL) {
+  try {
+    createTunnelProvider = testProviderFactory(process.env.LOCAL_BPMN_TEST_TUNNEL, {
+      delayMs: Number(process.env.LOCAL_BPMN_TEST_TUNNEL_DELAY_MS ?? 600),
+    });
+  } catch (err) {
+    fail(err.message);
+  }
+  process.stderr.write(`local-bpmn: TEST MODE: sharing uses a fake tunnel (${process.env.LOCAL_BPMN_TEST_TUNNEL})\n`);
+}
+
+const server = createServer({ filePath, session, port: options.port, createTunnelProvider });
 let port;
 try {
   port = await server.listen();
@@ -88,31 +102,33 @@ try {
 if (port !== options.port) {
   process.stderr.write(`local-bpmn: port ${options.port} is in use, using ${port} instead\n`);
 }
-// Single stable line; tests and tooling parse it.
-process.stdout.write(`local-bpmn: editing ${filePath} at ${server.url}\n`);
+// Single stable line; tests and tooling parse it. The URL carries the host secret: whoever opens it
+// can share the session (the page moves the secret out of the address bar right away).
+process.stdout.write(`local-bpmn: editing ${filePath} at ${server.hostUrl}\n`);
 
 if (options.open) {
-  open(server.url).catch((err) => {
-    process.stderr.write(`local-bpmn: could not open browser (${err.message}); open ${server.url} manually\n`);
+  open(server.hostUrl).catch((err) => {
+    process.stderr.write(`local-bpmn: could not open browser (${err.message}); open ${server.hostUrl} manually\n`);
   });
 }
 
-// Shutdown: stop accepting, let open editors send their last edits, write everything to disk, exit 0.
-// A second signal skips waiting for the editors but still finishes the disk write; a third one
-// exits immediately (escape hatch if the disk hangs).
+// Shutdown: stop accepting, let open editors (collaborators too, through the tunnel) send their last
+// edits, stop the tunnel, write everything to disk, exit 0. A second signal skips waiting for the
+// editors but still stops the tunnel and finishes the disk write; a third one exits immediately
+// (escape hatch if the disk hangs; the tunnel module's exit hook still kills cloudflared).
 let signals = 0;
 async function shutdown() {
   signals += 1;
   if (signals === 3) process.exit(1);
   if (signals === 2) {
-    await store.flush();
+    await Promise.all([server.share.stop(), store.flush()]);
     process.exit(0);
   }
   if (signals > 1) return;
   server.stopAccepting();
   await server.drainClients(1000);
   await store.unwatch(); // our final write must not come back as an external change
-  await store.flush();
+  await Promise.all([server.share.stop(), store.flush()]);
   await server.close();
   process.exit(0);
 }

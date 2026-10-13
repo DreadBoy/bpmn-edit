@@ -51,12 +51,15 @@ export function runCli(args, { cwd = ROOT, timeoutMs = 10_000 } = {}) {
 
 /**
  * Starts the CLI on `file` (always with --no-open) and waits for the ready line.
- * Resolves to { url, port, child, stdout(), stderr(), stop() }. Always call stop() in teardown.
+ * Resolves to { url, baseUrl, port, child, stdout(), stderr(), stop() }. `url` is the printed URL,
+ * which carries the host secret; `baseUrl` is the same without it (no host powers). `env` is added to
+ * the CLI's environment. Always call stop() in teardown.
  */
-export function startCli(file, { port = randomPort(), args = [], cwd = ROOT, timeoutMs = 10_000 } = {}) {
+export function startCli(file, { port = randomPort(), args = [], cwd = ROOT, timeoutMs = 10_000, env = {} } = {}) {
   const child = spawn(process.execPath, [CLI, file, '--no-open', '--port', String(port), ...args], {
     cwd,
     stdio: ['ignore', 'pipe', 'pipe'],
+    env: { ...process.env, ...env },
   });
   let stdout = '';
   let stderr = '';
@@ -91,6 +94,8 @@ export function startCli(file, { port = randomPort(), args = [], cwd = ROOT, tim
         const url = match[2];
         resolveStart({
           url,
+          baseUrl: `${new URL(url).origin}/`,
+          hostSecret: new URL(url).searchParams.get('host'),
           port: Number(new URL(url).port),
           child,
           exited,
@@ -106,6 +111,13 @@ export function startCli(file, { port = randomPort(), args = [], cwd = ROOT, tim
     });
     child.on('error', reject);
   });
+}
+
+/** A token that differs from `token` in its last character only (never equal to it). */
+export function otherToken(token) {
+  const other = `${token.slice(0, -1)}${token.endsWith('A') ? 'B' : 'A'}`;
+  if (other === token) throw new Error('otherToken: same token');
+  return other;
 }
 
 /** Records console errors and uncaught page errors; returns the live array. */

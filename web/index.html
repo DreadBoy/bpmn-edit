@@ -3,6 +3,7 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="referrer" content="no-referrer">
   <title>local-bpmn</title>
   <link rel="icon" href="data:,">
   <link rel="stylesheet" href="vendor/bpmn-js/assets/diagram-js.css">
@@ -16,7 +17,22 @@
     <span id="file-name" title=""></span>
     <span id="notice" role="status" aria-live="polite" hidden></span>
     <span id="save-status" role="status" aria-live="polite" data-state="connecting">Connecting…</span>
+    <div id="share" hidden>
+      <button id="share-start" type="button" title="Start a public link collaborators can open">Share</button>
+      <span id="share-progress" role="status" aria-live="polite" hidden>
+        <span class="spinner" aria-hidden="true"></span><span id="share-progress-text">Starting tunnel…</span>
+      </span>
+      <span id="share-active" hidden>
+        <input id="share-url" type="text" readonly aria-label="Public link" title="Anyone with this link can view and edit the diagram">
+        <button id="share-copy" type="button">Copy</button>
+        <button id="share-stop" type="button">Stop sharing</button>
+      </span>
+    </div>
   </header>
+  <div id="share-error" role="alert" hidden>
+    <span id="share-error-text"></span>
+    <button id="share-error-close" type="button" aria-label="Dismiss">×</button>
+  </div>
   <main id="canvas"></main>
   <div id="error" role="alert" hidden></div>
   <div id="toast" role="status" aria-live="polite" hidden></div>

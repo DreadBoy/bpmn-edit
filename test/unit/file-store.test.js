@@ -41,7 +41,8 @@ describe('createFileStore', () => {
   });
 
   it('coalesces writes within the debounce window into one disk write of the latest content', async () => {
-    const store = createFileStore(file, { debounceMs: 40, log });
+    // A generous window, so five writes 5 ms apart stay inside it even on a loaded machine.
+    const store = createFileStore(file, { debounceMs: 200, log });
     await store.read();
     const writes = await countWrites(store);
     for (let i = 1; i <= 5; i++) {
@@ -50,7 +51,11 @@ describe('createFileStore', () => {
     }
     assert.equal(await readFile(file, 'utf8'), original, 'nothing written before the debounce elapsed');
     assert.ok(store.pending);
-    await delay(120);
+    // Wait for the write itself (no fixed sleep), then long enough for a second one to show up.
+    for (const start = Date.now(); writes.length === 0; await delay(10)) {
+      assert.ok(Date.now() - start < 5_000, 'the debounced write never happened');
+    }
+    await delay(400);
     assert.equal(writes.length, 1);
     assert.equal(await readFile(file, 'utf8'), variant(5));
     assert.equal(store.pending, false);

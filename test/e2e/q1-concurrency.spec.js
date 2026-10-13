@@ -72,7 +72,7 @@ async function gateUpdates(page) {
   const held = [];
   let holding = false;
   let server = null;
-  await page.routeWebSocket(/\/ws$/, (ws) => {
+  await page.routeWebSocket(/\/ws(\?|$)/, (ws) => {
     server = ws.connectToServer();
     ws.onMessage((message) => {
       if (holding && JSON.parse(String(message)).type === 'update') held.push(message);

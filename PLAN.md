@@ -96,7 +96,7 @@ cannot tell host and collaborator apart:
     on deselect/leave.
   - **E2E:** select a task in A → outlined in A's colour in B; deselect / close A → marker gone.
 
-- [ ] **S7. Share via public link**
+- [x] **S7. Share via public link** (verified 2026-10-13: real tunnel E2E, 3 verifier rounds, HAPPY)
   - Tunnel internals done & verified on branch `worktree-agent-acd048da3da9a5c58` (commit "Add cloudflared
     quick-tunnel module"); merge it first. Wiring notes: CLI SIGINT/SIGTERM must call `tunnel.stop()` (only an
     `exit` hook exists); surface `TUNNEL_RATE_LIMITED` in the Share UI (Cloudflare limits quick tunnels per IP —
@@ -135,6 +135,12 @@ cannot tell host and collaborator apart:
     reported, failures triaged into fix-now vs documented known issues.
 
 ## Backlog (small known issues, fold into a later step)
+
+- S7 residuals: only the tab opened from the printed URL is host (plain localhost tab can edit, not share);
+  Ctrl-C during tunnel startup SIGKILLs cloudflared via exit hook, interrupted download leaves `.cloudflared-*`
+  temp dir; reloaded host page re-shows last share error; failed Share logs 429/502 in console;
+  `scripts/measure-tunnel.js` must share via `/api/share` before Q3 can be re-measured; a few negative UI checks
+  use `waitForTimeout` before `toBeHidden()` (s7-share.spec.js:69/:200, s7-share-tunnel.spec.js:112).
 
 - Startup accepts a truncated file (`looksLikeBpmn` only); use `isCompleteBpmn` like the watcher. (S3)
 - Notice "showing the last good version" is wrong in a tab with nothing rendered. (S3)

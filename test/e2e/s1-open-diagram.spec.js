@@ -31,7 +31,8 @@ test.describe('S1: open a diagram in the browser', () => {
     fixture = await copyFixture('order.bpmn');
     const original = await readFile(fixture.file);
     cli = await startCli(fixture.file);
-    expect(cli.url).toMatch(/^http:\/\/localhost:\d+\/$/);
+    // The printed URL carries the host secret (256-bit base64url).
+    expect(cli.url).toMatch(/^http:\/\/localhost:\d+\/\?host=[A-Za-z0-9_-]{43}$/);
 
     const errors = collectPageErrors(page);
     const warnings = [];
