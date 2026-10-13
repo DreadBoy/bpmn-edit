@@ -7,7 +7,9 @@ import WebSocket from 'ws';
 import { createServer } from '../../src/server.js';
 import { createPresence } from '../../src/presence.js';
 import { Session } from '../../src/session.js';
-import { MAX_NAME_LENGTH, PALETTE, cleanName, isColor, randomName } from '../../web/presence-shared.js';
+import {
+  MAX_ID_LENGTH, MAX_NAME_LENGTH, MAX_SELECTION, PALETTE, cleanName, isColor, randomName,
+} from '../../web/presence-shared.js';
 
 const FIXTURE = new URL('../fixtures/order.bpmn', import.meta.url).pathname;
 
@@ -119,7 +121,7 @@ describe('presence over WebSocket', () => {
     assert.deepEqual((await a.next('presence')).users, [userA]);
 
     const { client: b, me: userB } = await joinSession(server.port, { name: 'Bea', color: 3 });
-    assert.deepEqual(userB, { id: userB.id, name: 'Bea', color: 3 });
+    assert.deepEqual(userB, { id: userB.id, name: 'Bea', color: 3, selection: [] });
     assert.notEqual(userB.id, userA.id);
     assert.deepEqual((await b.next('presence')).users, [userA, userB]);
     assert.deepEqual((await a.next('presence')).users, [userA, userB]);
@@ -176,6 +178,54 @@ describe('presence over WebSocket', () => {
     await silent.close();
     await delay(100);
     assert.deepEqual(a.inbox, [], 'a silent connection leaving is not announced');
+    await a.close();
+  });
+
+  it('selection is relayed to the others (not the sender) and kept for late joiners', async () => {
+    const { client: a, me: userA } = await joinSession(server.port, { name: 'Ann', color: 0 });
+    const { client: b } = await joinSession(server.port, { name: 'Ben', color: 1 });
+    await presenceWhere(a, (users) => users.length === 2);
+    await presenceWhere(b, (users) => users.length === 2);
+
+    a.send({ type: 'selection', ids: ['Task_CheckStock', 'Task_CheckStock', 'Flow_1'] });
+    assert.deepEqual(await b.next('selection'), { type: 'selection', userId: userA.id, ids: ['Task_CheckStock', 'Flow_1'] });
+    a.send({ type: 'selection', ids: ['Task_CheckStock', 'Flow_1'] }); // unchanged: not relayed again
+
+    // A late joiner gets everyone's current selection with the list.
+    const { client: c } = await joinSession(server.port, { name: 'Cy', color: 2 });
+    const users = await presenceWhere(c, (list) => list.length === 3);
+    assert.deepEqual(users.map((u) => [u.name, u.selection]), [['Ann', ['Task_CheckStock', 'Flow_1']], ['Ben', []], ['Cy', []]]);
+
+    // Invalid selections are ignored (no relay, no error); a valid one still goes through.
+    for (const ids of [null, 'Task_CheckStock', [1], [''], ['x'.repeat(MAX_ID_LENGTH + 1)], [{}]]) a.send({ type: 'selection', ids });
+    a.send({ type: 'selection', ids: [] });
+    assert.deepEqual(await b.next('selection'), { type: 'selection', userId: userA.id, ids: [] });
+    assert.deepEqual(await c.next('selection'), { type: 'selection', userId: userA.id, ids: [] });
+    await delay(100);
+    assert.deepEqual([...a.inbox, ...b.inbox, ...c.inbox].filter((m) => m.type === 'selection' || m.type === 'error'), []);
+
+    // Long selections are cut off.
+    const many = Array.from({ length: MAX_SELECTION + 10 }, (_, i) => `E_${i}`);
+    a.send({ type: 'selection', ids: many });
+    assert.deepEqual((await b.next('selection')).ids, many.slice(0, MAX_SELECTION));
+
+    // Leaving clears the selection for everyone (the user is gone from the list).
+    await a.close();
+    assert.deepEqual((await presenceWhere(b, (list) => list.length === 2)).map((u) => u.name), ['Ben', 'Cy']);
+    await b.close();
+    await c.close();
+  });
+
+  it('a selection before hello is ignored', async () => {
+    const silent = connect(server.port);
+    await silent.next('init');
+    const { client: a } = await joinSession(server.port);
+    await a.next('presence');
+    silent.send({ type: 'selection', ids: ['Task_CheckStock'] });
+    await delay(200);
+    assert.deepEqual(a.inbox, []);
+    assert.deepEqual(silent.inbox, []);
+    await silent.close();
     await a.close();
   });
 

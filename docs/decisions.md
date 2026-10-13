@@ -240,6 +240,18 @@ list.
   is a palette index, so no colour value from a client ever reaches CSS.
 - Invalid presence messages are ignored, not answered with `error`: the editor treats `error` as a
   failed save.
+- Selection (S6): a window sends `selection { ids }` 50 ms after its selection last changed and only
+  if it differs from what it sent last, so the clear-and-restore around every import sends nothing.
+  The host relays `selection { userId, ids }` to the others and keeps the latest one per user in the
+  `presence` list, so a window that joins later sees it at once. Other windows mark those elements
+  with `canvas.addMarker(id, 'remote-sel-<colour slot>')`; the CSS for these classes is generated
+  from the palette (shape outline, or the line of a connection, in the user's colour).
+- Markers are kept as a wanted state (user -> ids) and reconciled with the canvas after every
+  presence message, every import (importXML recreates all elements without markers) and every edit
+  (`elements.changed`: deletes, undo). Ids missing from the diagram are skipped and marked once they
+  appear (e.g. a task another window created and selected before its update arrived). A window
+  never marks its own selection. Two users with the same element selected each add their class;
+  where both apply, the later rule in the palette is the one drawn.
 
 ### Known limits
 
@@ -247,3 +259,5 @@ list.
   stays listed until the host notices; the keepalive planned in S8 will cover that.
 - Two windows in the same browser share `localStorage`, so they show the same name and colour.
 - Colours repeat once more than 8 users are connected.
+- A remote marker and this window's own selection on the same element share bpmn-js's outline, which
+  then shows the remote colour.

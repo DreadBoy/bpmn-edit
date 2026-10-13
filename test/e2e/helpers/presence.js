@@ -42,6 +42,33 @@ export async function renameSelf(page, text, key = 'Enter') {
   await expect(input).toHaveCount(0);
 }
 
+/** The remote selection marker classes (`remote-sel-<n>`) on an element's graphics in a window. */
+export function remoteMarkers(page, id) {
+  return page.locator(`.djs-element[data-element-id="${id}"]`).evaluateAll((els) => els
+    .flatMap((el) => [...el.classList].filter((c) => c.startsWith('remote-sel-'))).sort());
+}
+
+/** How an element's outline is drawn in a window: { visibility, stroke } (computed), or null if it does not exist. */
+export function outlineStyle(page, id) {
+  return page.evaluate((elementId) => {
+    const outline = document.querySelector(`.djs-element[data-element-id="${elementId}"] > .djs-outline`);
+    if (!outline) return null;
+    const style = getComputedStyle(outline);
+    return { visibility: style.visibility, stroke: style.stroke };
+  }, id);
+}
+
+/** Whether an element shows an outline in a window (bpmn-js only creates one when needed). */
+export async function outlineVisible(page, id) {
+  return (await outlineStyle(page, id))?.visibility === 'visible';
+}
+
+/** Computed stroke colour of a connection's line in a window. */
+export function connectionStroke(page, id) {
+  return page.locator(`.djs-connection[data-element-id="${id}"] .djs-visual > path`).first()
+    .evaluate((path) => getComputedStyle(path).stroke);
+}
+
 /** "rgb(r, g, b)" of a palette colour, as getComputedStyle reports it. */
 export function rgb(hex) {
   const n = Number.parseInt(hex.slice(1), 16);

@@ -1013,6 +1013,7 @@ async function handleMessage(message) {
       break;
     case 'welcome':
     case 'presence':
+    case 'selection':
       presence.handleMessage(message);
       break;
     case 'file-status':

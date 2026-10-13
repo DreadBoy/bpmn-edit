@@ -21,6 +21,10 @@ export const PALETTE = Object.freeze([
 /** Longest display name, in characters (code points). */
 export const MAX_NAME_LENGTH = 32;
 
+/** Most element ids one selection may have (more are cut off), and the longest id accepted. */
+export const MAX_SELECTION = 500;
+export const MAX_ID_LENGTH = 200;
+
 const ADJECTIVES = [
   'Brave', 'Calm', 'Clever', 'Curious', 'Daring', 'Eager', 'Gentle', 'Happy', 'Jolly', 'Keen', 'Lively',
   'Lucky', 'Merry', 'Nimble', 'Patient', 'Plucky', 'Quick', 'Quiet', 'Sunny', 'Swift', 'Thoughtful',
