@@ -147,7 +147,7 @@ test.describe('S7: share via public link (real Cloudflare tunnel)', () => {
         // Stop sharing: the collaborator is cut off, cloudflared exits, the old link stops working.
         await host.locator('#share-stop').click();
         await expect(host.locator('#share-start')).toBeVisible();
-        await expect(collab.locator('#error')).toHaveText('The host stopped sharing. This link no longer works.', { timeout: 10_000 });
+        await expect(collab.locator('#session-overlay-text')).toHaveText('The host stopped sharing. This link no longer works.', { timeout: 10_000 });
         await expect.poll(() => cloudflaredPids(cli.port), { timeout: 10_000 }).toEqual([]);
         await expect.poll(async () => {
           const res = await publicGet(`${origin}/s/${token}/`);

@@ -37,6 +37,17 @@
   <main id="canvas"></main>
   <div id="error" role="alert" hidden></div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
+  <div id="reconnecting" role="status" aria-live="polite" hidden>
+    <span class="spinner" aria-hidden="true"></span>Connection lost. Reconnecting…
+  </div>
+  <div id="session-overlay" role="alertdialog" aria-modal="true" aria-labelledby="session-overlay-title"
+       aria-describedby="session-overlay-text" hidden>
+    <div class="session-card">
+      <h2 id="session-overlay-title">Session ended</h2>
+      <p id="session-overlay-text"></p>
+      <button id="session-overlay-action" type="button" hidden>Reconnect</button>
+    </div>
+  </div>
 
   <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
   <script type="module" src="app.js"></script>

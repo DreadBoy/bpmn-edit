@@ -113,7 +113,7 @@ cannot tell host and collaborator apart:
     and the active tunnel hostname only). Also: a wildcard `*:3000` listener elsewhere doesn't trigger port
     fallback. Detect it and fall back.
 
-- [ ] **S8. Session ended / stop sharing / reconnect**
+- [x] **S8. Session ended / stop sharing / reconnect** (verified 2026-10-13, real tunnel idle 160 s OK)
   - From Q3 (v1 requirement): through the tunnel an idle WebSocket is cut after exactly ~125 s (close 1006).
     Server must send a keepalive (e.g. ping every 30 s) and the client must auto-reconnect + re-sync.
     **E2E:** a socket idle > 125 s through a *real* tunnel stays connected (or recovers transparently).
@@ -135,6 +135,11 @@ cannot tell host and collaborator apart:
     reported, failures triaged into fix-now vs documented known issues.
 
 ## Backlog (small known issues, fold into a later step)
+- S8 residuals: Share button enabled while reconnecting ("Failed to fetch"); dead share URL + controls still
+  visible behind "Session ended" overlay; user re-added at end of list if keepalive evicts before reconnect;
+  hidden tabs detect dead connection only after ~2 min (timer throttling); >10 MB update (1009) resent on every
+  reconnect; crashed host via tunnel ends via 10 s 530 rule; reconnect banner not layout-tested at narrow widths;
+  two negative checks use 1.5 s `waitForTimeout`.
 - S5/S6 residuals: half-open connections stay listed until S8 keepalive; same-profile tabs share name/colour;
   colour collisions possible (stored colour not deduped, >8 users repeat); own+remote selection on same element
   shows remote colour; two remotes on one element show one colour; other users' dots not keyboard-focusable;

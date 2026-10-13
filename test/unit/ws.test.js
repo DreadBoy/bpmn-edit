@@ -108,7 +108,7 @@ describe('WebSocket sync', () => {
     const c2 = connect(server.port);
     const init2 = await c2.next('init');
     assert.match(init2.clientId, /^c\d+$/);
-    assert.deepEqual(init2, { type: 'init', xml: variant(1), version: ack.version, name: 'order.bpmn', path: file, clientId: init2.clientId });
+    assert.deepEqual(init2, { type: 'init', xml: variant(1), version: ack.version, name: 'order.bpmn', path: file, clientId: init2.clientId, role: 'local' });
     c.ws.close();
     c2.ws.close();
   });

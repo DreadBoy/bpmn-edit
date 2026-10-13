@@ -23,11 +23,15 @@
 //   status = { state: 'idle' | 'starting' | 'active' | 'error', url?, progress?, error? } (src/share.js)
 //
 // WebSocket protocol (JSON text frames, each with a `type`):
-//   server -> client  { type: 'init', xml, version, name, path?, clientId }
+//   server -> client  { type: 'init', xml, version, name, path?, clientId, role }
 //                                                               on connect; clientId ('c1', 'c2', …) is
 //                                                               unique for the server's lifetime;
 //                                                               path (absolute, on the host) is left
-//                                                               out for sockets under /s/<token>/
+//                                                               out for sockets under /s/<token>/;
+//                                                               role: 'host' | 'local' | 'collaborator'
+//                                                               (how this socket was opened; a page
+//                                                               whose host secret is from an earlier
+//                                                               run of the CLI is 'local')
 //   client -> server  { type: 'update', xml, baseVersion, overrides? }
 //                                                               full XML after an edit, based on the
 //                                                               version the client last received or
@@ -75,8 +79,16 @@
 //                                                               the same for host, local and
 //                                                               collaborator sockets (no paths, no
 //                                                               secrets in them)
+//   client -> server  { type: 'ping' }                          heartbeat of the page (see
+//   server -> client  { type: 'pong' }                          web/connection-shared.js)
 //   close 4001 'share-stopped'                                  collaborator socket whose link was
 //                                                               revoked (sharing stopped)
+//   close 4002 'session-ended'                                  the host is shutting down (endSession)
+//
+// Keepalive: every `keepaliveMs` the server sends a WebSocket ping to every socket and terminates the
+// ones that did not answer the previous ping (nor sent anything) since. This keeps idle sockets
+// through the Cloudflare tunnel open (it cuts them after ~125 s idle) and drops connections that
+// died without closing (they would stay in the users list otherwise).
 import { createReadStream } from 'node:fs';
 import { stat } from 'node:fs/promises';
 import http from 'node:http';
@@ -84,6 +96,7 @@ import net from 'node:net';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
+import { CLOSE_SESSION_ENDED, CLOSE_SHARE_STOPPED, KEEPALIVE_MS } from '../web/connection-shared.js';
 import { createFileStore } from './file.js';
 import { createPresence } from './presence.js';
 import {
@@ -200,9 +213,11 @@ async function serveStatic(res, urlPath, method) {
  * @param {string} [options.hostSecret]  host secret (default: a new random one); see `hostUrl`
  * @param {Function} [options.createTunnelProvider]  tunnel provider factory for sharing (default:
  *   Cloudflare quick tunnel; tests pass a stand-in, see src/test-tunnel.js)
+ * @param {number} [options.keepaliveMs=KEEPALIVE_MS]  WebSocket ping interval (0 = no keepalive)
  */
 export function createServer({
   filePath, session = null, port = 3000, host = 'localhost', hostSecret = newHostSecret(), createTunnelProvider,
+  keepaliveMs = KEEPALIVE_MS,
 }) {
   const fileName = basename(filePath);
   const addresses = host === 'localhost' ? ['127.0.0.1', '::1'] : [host];
@@ -246,8 +261,31 @@ export function createServer({
   /** How each connection was opened: { role: 'host' | 'local' | 'collaborator', token? }. */
   const clientAccess = new WeakMap();
   let lastClientNumber = 0;
+  /** Connections that answered the last keepalive ping (or sent something) since it was sent. */
+  const alive = new WeakSet();
+  let keepaliveTimer = null;
   /** Connected users (names, colours); see src/presence.js for its messages. */
-  const presence = createPresence({ send });
+  const presence = createPresence({
+    send,
+    // A page reconnected while its old connection still looked open: that one is dead.
+    onReplaced: (stale) => stale.terminate(),
+  });
+
+  /** Pings every socket; terminates those that did not answer the previous ping. */
+  function keepalive() {
+    for (const ws of wss.clients) {
+      if (!alive.has(ws)) {
+        ws.terminate(); // 'close' follows: it leaves the users list
+        continue;
+      }
+      alive.delete(ws);
+      try {
+        ws.ping();
+      } catch {
+        ws.terminate();
+      }
+    }
+  }
 
   function send(ws, message) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));
@@ -273,8 +311,13 @@ export function createServer({
     if (message === null || typeof message !== 'object' || Array.isArray(message)) {
       return sendError(ws, 'bad-message', 'Messages must be JSON objects');
     }
-    if (presence.handles(message.type)) return presence.handleMessage(ws, message, clientIds.get(ws));
+    if (presence.handles(message.type)) {
+      const access = clientAccess.get(ws);
+      return presence.handleMessage(ws, message, clientIds.get(ws), `${access.role}:${access.token ?? ''}`);
+    }
     switch (message.type) {
+      case 'ping':
+        return send(ws, { type: 'pong' });
       case 'update': {
         const { xml, baseVersion, overrides } = message;
         if (typeof xml !== 'string' || !Number.isInteger(baseVersion) || baseVersion < 0) {
@@ -314,7 +357,10 @@ export function createServer({
     clientAccess.set(ws, access);
     // Without a listener, protocol errors (e.g. an oversize frame -> close 1009) would crash the process.
     ws.on('error', () => {});
+    alive.add(ws);
+    ws.on('pong', () => alive.add(ws));
     ws.on('message', (data, isBinary) => {
+      alive.add(ws);
       try {
         handleMessage(ws, data, isBinary);
       } catch (err) {
@@ -329,7 +375,9 @@ export function createServer({
     clientIds.set(ws, clientId);
     const { xml, version } = session.getState();
     const shared = access.role === 'collaborator';
-    send(ws, { type: 'init', xml, version, name: fileName, ...(shared ? {} : { path: filePath }), clientId });
+    send(ws, {
+      type: 'init', xml, version, name: fileName, ...(shared ? {} : { path: filePath }), clientId, role: access.role,
+    });
     const diskStatus = session.diskStatus;
     if (diskStatus.state !== 'ok') send(ws, { type: 'file-status', ...diskStatus });
     if (access.role === 'host') send(ws, { type: 'share', ...share.status() });
@@ -372,7 +420,7 @@ export function createServer({
   });
   share.on('revoked', (token) => {
     for (const ws of wss.clients) {
-      if (clientAccess.get(ws)?.token === token) ws.close(4001, 'share-stopped');
+      if (clientAccess.get(ws)?.token === token) ws.close(CLOSE_SHARE_STOPPED, 'share-stopped');
     }
   });
 
@@ -526,6 +574,10 @@ export function createServer({
           self.port = await bindAll(candidate);
           self.url = `http://localhost:${self.port}/`;
           self.hostUrl = `${self.url}?${HOST_SECRET_PARAM}=${hostSecret}`;
+          if (keepaliveMs > 0) {
+            keepaliveTimer = setInterval(keepalive, keepaliveMs);
+            keepaliveTimer.unref();
+          }
           return self.port;
         } catch (err) {
           if (err.code !== 'EADDRINUSE') throw err;
@@ -562,9 +614,38 @@ export function createServer({
       flushWaiters.clear();
     },
 
-    /** Stops accepting connections, disconnects WebSocket clients and closes open connections. */
-    async close() {
+    /**
+     * Tells every connected page that the session is over (close 4002 'session-ended', shown as
+     * "Session ended"; the page does not reconnect) and waits until they have closed, at most
+     * `timeoutMs`; the rest are terminated. Stops accepting new connections first. Call it before
+     * stopping the share, which would otherwise close collaborators with 4001 first.
+     */
+    async endSession(timeoutMs = 1000) {
       self.stopAccepting();
+      const open = [...wss.clients];
+      if (!open.length) return;
+      let timer;
+      await Promise.race([
+        Promise.all(open.map((ws) => new Promise((done) => {
+          if (ws.readyState === ws.CLOSED) return done();
+          ws.once('close', done);
+          try {
+            ws.close(CLOSE_SESSION_ENDED, 'session-ended');
+          } catch {
+            ws.terminate();
+          }
+        }))),
+        new Promise((done) => { timer = setTimeout(done, timeoutMs); }),
+      ]);
+      clearTimeout(timer);
+      for (const ws of wss.clients) ws.terminate();
+    },
+
+    /** Stops accepting connections, ends the session for WebSocket clients and closes open connections. */
+    async close() {
+      clearInterval(keepaliveTimer);
+      keepaliveTimer = null;
+      await self.endSession(500);
       await share.stop();
       for (const ws of wss.clients) ws.terminate();
       await new Promise((resolveClose) => wss.close(() => resolveClose()));

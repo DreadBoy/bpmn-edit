@@ -23,7 +23,22 @@
 // survives a reload); it is sent only to this server, on host-only calls and on the WebSocket
 // handshake. With a valid secret the host's socket receives 'share' messages, which show the Share
 // controls; without one (or as a collaborator) they never appear.
+//
+// Connection (S8; rules and numbers in web/connection-shared.js): a connection lost without a close
+// code from the host (network, tunnel, host process killed) shows "Reconnecting…" and is retried
+// with backoff. Edits made meanwhile are kept; on the new connection's 'init' the window re-syncs:
+// if the host's document is the one this window's edits are based on (or already contains the
+// update that was in flight), they are simply sent; otherwise the host's document is shown and the
+// edits are re-applied op by op, exactly as for a 'conflict'. The window gives up and shows "Session
+// ended" when the host closes with 4001 (sharing stopped) or 4002 (host shut down), when a probe of
+// `api/file` says the link is gone (404, or Cloudflare 530 for a while), or after the retry limit.
+// The page pings the host (heartbeat) to notice connections that die silently. A page whose host
+// secret is from an earlier run of the CLI reconnects as a plain local editor (the host says so in
+// 'init'); it can edit, not share.
 
+import {
+  CLOSE_SESSION_ENDED, CLOSE_SHARE_STOPPED, HEARTBEAT_MS, RECONNECT, probeVerdict, reconnectDelay, shouldGiveUp,
+} from './connection-shared.js';
 import { createPresence } from './presence.js';
 
 /** Edits are sent this long after the last change (coalesces bursts such as keyboard nudges). */
@@ -37,11 +52,20 @@ const TOAST_MS = 8000;
 
 const STATUS_TEXT = {
   connecting: 'Connecting…',
+  reconnecting: 'Reconnecting…',
   saved: 'Saved',
   saving: 'Saving…',
   disconnected: 'Disconnected',
   error: 'Not saved',
 };
+
+/**
+ * Connection timing; tests may shorten it by defining `window.localBpmnTestConnection` before the
+ * page runs ({ heartbeatMs, delays, jitter, giveUpAttempts, giveUpMs, tunnelGoneMs }).
+ */
+const testConnection = window.localBpmnTestConnection ?? {};
+const reconnectPolicy = { ...RECONNECT, ...testConnection };
+const heartbeatMs = testConnection.heartbeatMs ?? HEARTBEAT_MS;
 
 const fileNameEl = document.getElementById('file-name');
 const statusEl = document.getElementById('save-status');
@@ -58,11 +82,32 @@ const shareCopyEl = document.getElementById('share-copy');
 const shareStopEl = document.getElementById('share-stop');
 const shareErrorEl = document.getElementById('share-error');
 const shareErrorTextEl = document.getElementById('share-error-text');
+const reconnectingEl = document.getElementById('reconnecting');
+const overlayEl = document.getElementById('session-overlay');
+const overlayTitleEl = document.getElementById('session-overlay-title');
+const overlayTextEl = document.getElementById('session-overlay-text');
+const overlayActionEl = document.getElementById('session-overlay-action');
 
 /** Collaborator page (`/s/<token>/`): never has host powers. */
 const isCollaborator = location.pathname.startsWith('/s/');
 const HOST_SECRET_KEY = 'local-bpmn:host-secret';
-const hostSecret = takeHostSecret();
+let hostSecret = takeHostSecret();
+
+/** Forgets a host secret the host no longer accepts (it is from an earlier run of the CLI). */
+function dropHostSecret() {
+  hostSecret = null;
+  try {
+    sessionStorage.removeItem(HOST_SECRET_KEY);
+  } catch {
+    // storage blocked: nothing stored
+  }
+}
+
+/**
+ * Random id of this page, kept in memory only (a reload or another tab has a different one). Sent in
+ * 'hello', so the host can replace this page's old entry in the users list when it reconnects.
+ */
+const pageKey = [...crypto.getRandomValues(new Uint8Array(16))].map((b) => b.toString(16).padStart(2, '0')).join('');
 
 /**
  * Removes `?host=` from the address bar (so it is not bookmarked, shown or shared by accident) and
@@ -92,7 +137,7 @@ const dragging = modeler.get('dragging');
 const elementRegistry = modeler.get('elementRegistry');
 const popupMenu = modeler.get('popupMenu', false);
 const selection = modeler.get('selection');
-const presence = createPresence({ modeler, send: sendMessage, toolbar: document.getElementById('toolbar') });
+const presence = createPresence({ modeler, send: sendMessage, toolbar: document.getElementById('toolbar'), key: pageKey });
 
 let clientId = null;      // assigned by the host in 'init'
 
@@ -105,7 +150,15 @@ window.localBpmn = Object.freeze({
 
 let socket = null;
 let connected = false;
-let everConnected = false;
+let synced = false;       // 'init' of the current connection handled: updates may be sent
+let everSynced = false;   // an 'init' was handled on some connection
+let reconnect = null;     // while reconnecting: { attempts, since, tunnelGoneSince, timer }
+let ended = null;         // why the session is over ('share-stopped', 'ended', …), shown as an overlay
+let heartbeatTimer = null;
+let lastPingAt = null;    // when the last heartbeat ping was sent on this connection
+let lastReceivedAt = 0;   // when the last message arrived
+let fileIdentity = null;  // path (or name) of the file the first 'init' showed
+let syncedXml = null;     // the host's document at `version`, as far as this window knows
 let version = null;       // version of the document this window's edits are based on
 let importing = false;
 let rendered = false;
@@ -113,7 +166,7 @@ let dirty = false;        // edits made since the last send (or import)
 let sendTimer = null;     // pending debounced send
 let sendHeld = false;     // a send came due but has to wait (update in flight, or a rebase is due)
 let sending = false;      // serialising the document for a send
-let inflight = null;      // { edits } of the update sent and not yet answered by 'ack' / 'conflict'
+let inflight = null;      // { edits, xml } of the update sent and not yet answered by 'ack' / 'conflict'
 let mustRebase = false;   // the host refused our update: re-apply our edits on the newer document
 let unsent = false;       // edits made while disconnected
 let flushRequested = false; // the host is shutting down and waits for 'flushed'
@@ -153,9 +206,15 @@ function hasPendingSend() {
   return Boolean(dirty || sendTimer || sendHeld || sending || inflight);
 }
 
+/** Edits this window has that the host has not (known to have) accepted. */
+function hasUnsavedWork() {
+  return Boolean(hasPendingSend() || mustRebase || localEdits.length);
+}
+
 function renderStatus() {
   let state;
-  if (!connected) state = everConnected ? 'disconnected' : 'connecting';
+  if (ended) state = 'disconnected';
+  else if (!connected || !synced) state = everSynced ? 'reconnecting' : 'connecting';
   else if (lastError) state = 'error';
   else if (hasPendingSend() || mustRebase) state = 'saving';
   else state = 'saved';
@@ -163,9 +222,12 @@ function renderStatus() {
   statusEl.dataset.state = state;
   statusEl.textContent = STATUS_TEXT[state];
   if (state === 'error') statusEl.title = lastError.message;
-  else if (state === 'disconnected' && (unsent || hasPendingSend())) {
+  else if (state === 'disconnected' && (unsent || hasUnsavedWork())) {
     statusEl.title = 'Connection to local-bpmn lost; recent changes were not saved';
+  } else if (state === 'reconnecting' && hasUnsavedWork()) {
+    statusEl.title = 'Your changes are kept and saved once the connection is back';
   } else statusEl.removeAttribute('title');
+  reconnectingEl.hidden = state !== 'reconnecting';
 }
 
 const NOTICES = {
@@ -250,6 +312,13 @@ function sendNow() {
   clearTimeout(sendTimer);
   sendTimer = null;
   sendHeld = false;
+  if (!synced || !isOpen()) {
+    // Not connected (or not re-synced yet): sent after the next 'init' (see resync).
+    sendHeld = true;
+    unsent = true;
+    renderStatus();
+    return;
+  }
   if (inflight || sending) {
     sendHeld = true; // sent when the host has answered the update in flight
     renderStatus();
@@ -268,7 +337,7 @@ function sendNow() {
     const message = { type: 'update', xml, baseVersion };
     if (overrides.length) message.overrides = overrides;
     if (sendMessage(message)) {
-      inflight = { edits };
+      inflight = { edits, xml };
     } else {
       unsent = true;
       localEdits = [...edits, ...localEdits];
@@ -331,6 +400,7 @@ async function importDiagram(xml) {
   }
   resetLocalEdits(); // importing cleared the command stack
   hideError(); // a diagram is showing (again): earlier render errors are over
+  syncedXml = xml;
   if (!rendered) {
     canvas.zoom('fit-viewport', 'auto');
     rendered = true;
@@ -404,6 +474,7 @@ async function showRemoteDocument(message) {
     } catch {
       // Nothing better to show; the error notice below explains.
     }
+    syncedXml = null; // what is showing is this window's, not known to be the host's
     canvas.viewbox({ x, y, width, height });
     // From disk, the host answers the report with an 'invalid' file status (shown as a notice);
     // anything else has no such indicator, so show the error.
@@ -746,8 +817,10 @@ function applyOp(op) {
       const from = [];
       for (const entry of op.from) {
         const shape = get(entry.id);
+        const at = (x, y) => Math.abs(shape.x - x) <= 0.5 && Math.abs(shape.y - y) <= 0.5;
         if (!shape) problems.push({ reason: 'deleted', name: entry.name });
-        else if (Math.abs(shape.x - entry.x) > 0.5 || Math.abs(shape.y - entry.y) > 0.5) problems.push({ reason: 'changed', name: entry.name });
+        else if (at(entry.x + op.delta.x, entry.y + op.delta.y)) continue; // already there (e.g. accepted before a reconnect)
+        else if (!at(entry.x, entry.y)) problems.push({ reason: 'changed', name: entry.name });
         else {
           shapes.push(shape);
           from.push(entry);
@@ -1002,23 +1075,41 @@ function notifyOverrides(overrides) {
 
 async function handleMessage(message) {
   switch (message.type) {
-    case 'init':
+    case 'init': {
+      const identity = message.path || message.name || null;
+      if (fileIdentity !== null && identity !== fileIdentity) {
+        // A different local-bpmn now runs on this address (restarted on another file): never mix
+        // this window's document into it.
+        endSession('other-file', message.name);
+        break;
+      }
+      fileIdentity = identity;
       if (message.name) {
         fileNameEl.textContent = message.name;
         fileNameEl.title = message.path || message.name;
         document.title = `${message.name} — local-bpmn`;
       }
       clientId = message.clientId ?? null;
-      try {
-        await importDiagram(message.xml);
-        version = message.version;
-      } catch (err) {
-        showError(`Could not render ${message.name || 'the diagram'}: ${err.message}`);
-        reportImportFailure({ origin: 'disk', version: message.version }, err); // the host checks the origin
+      checkRole(message.role, everSynced);
+      synced = true;
+      everSynced = true;
+      clearReconnect();
+      if (!rendered) {
+        try {
+          await importDiagram(message.xml);
+          version = message.version;
+        } catch (err) {
+          showError(`Could not render ${message.name || 'the diagram'}: ${err.message}`);
+          reportImportFailure({ origin: 'disk', version: message.version }, err); // the host checks the origin
+        }
+        break;
       }
+      await resync(message);
       break;
+    }
     case 'ack':
       rememberChanges(inflight?.edits ?? []);
+      if (inflight) syncedXml = inflight.xml;
       inflight = null;
       advanceVersion(message.version);
       lastError = null;
@@ -1164,6 +1255,193 @@ shareCopyEl.addEventListener('click', async () => {
 shareUrlEl.addEventListener('focus', () => shareUrlEl.select());
 document.getElementById('share-error-close').addEventListener('click', hideShareError);
 
+// --- Connection: reconnect, re-sync, session ended ----------------------------------------------
+
+/**
+ * After 'init': if this tab presented a host secret but the host did not accept it, the secret is
+ * from an earlier run of the CLI (restarted). The tab stays a plain local editor: no Share controls.
+ */
+function checkRole(role, reconnected) {
+  if (isCollaborator || !hostSecret || role === undefined || role === 'host') return;
+  dropHostSecret();
+  shareEl.hidden = true;
+  hideShareError();
+  if (reconnected) {
+    showToast('info', 'local-bpmn was restarted. This tab can still edit; to share, open the link printed in the terminal.');
+  }
+}
+
+/**
+ * New connection after a drop: bring this window in line with the host's document (`message` is the
+ * new 'init') without losing edits the host has not accepted:
+ * - the host has exactly the document these edits are based on (nobody edited meanwhile), or the
+ *   update in flight was accepted: keep the document showing and send what is left;
+ * - otherwise show the host's document and re-apply the edits op by op (rebaseLocalEdits), as after
+ *   a 'conflict'; ops already in the document are no-ops, edits that cannot be re-applied are
+ *   reported, deleted elements stay deleted.
+ * Version numbers start again after a restart of the host, so the old version is forgotten.
+ */
+async function resync(message) {
+  flushRequested = false;
+  lastError = null;
+  deferredUpdate = null;
+  const sent = inflight;
+  if (inflight) {
+    localEdits = [...inflight.edits, ...localEdits];
+    inflight = null;
+  }
+  version = null;
+  if (!mustRebase && message.xml === syncedXml) {
+    version = message.version; // nothing changed at the host: our edits (if any) apply as they are
+  } else if (!mustRebase && sent && message.xml === sent.xml) {
+    // The update in flight had been accepted (its 'ack' was lost with the connection).
+    localEdits = localEdits.slice(sent.edits.length);
+    rememberChanges(sent.edits);
+    syncedXml = sent.xml;
+    version = message.version;
+  } else if (!localEdits.length && !dirty && !mustRebase && !interactionActive()) {
+    await showRemoteDocument(message);
+  } else {
+    if (localEdits.length) mustRebase = true;
+    deferredUpdate = { type: 'remote-update', xml: message.xml, version: message.version, origin: 'host' };
+  }
+  if (version !== null && (dirty || localEdits.length)) {
+    dirty = true;
+    sendHeld = true;
+  }
+  unsent = false;
+  await settleNow();
+}
+
+/** Starts or continues reconnecting after the connection was lost; `failed`: an attempt failed. */
+async function reconnectLater(failed) {
+  if (ended) return;
+  const state = reconnect ?? (reconnect = { attempts: 0, since: Date.now(), tunnelGoneSince: null, timer: null });
+  renderStatus();
+  if (failed) {
+    state.attempts += 1;
+    const verdict = probeVerdict(await probeStatus());
+    if (ended || reconnect !== state) return;
+    if (verdict === 'gone') return endSession('link-gone');
+    if (verdict === 'tunnel-gone') state.tunnelGoneSince ??= Date.now();
+    else state.tunnelGoneSince = null;
+    if (shouldGiveUp(state, Date.now(), reconnectPolicy)) return endSession('unreachable');
+  }
+  clearTimeout(state.timer);
+  state.timer = setTimeout(() => {
+    state.timer = null;
+    if (!ended && reconnect === state) connect();
+  }, reconnectDelay(state.attempts + 1, reconnectPolicy));
+}
+
+function clearReconnect() {
+  if (reconnect) clearTimeout(reconnect.timer);
+  reconnect = null;
+}
+
+/** HTTP status of this page's `api/file` (null if unreachable): tells a dead link from a network problem. */
+async function probeStatus() {
+  try {
+    const response = await fetch('api/file', { cache: 'no-store', signal: AbortSignal.timeout(5000) });
+    response.body?.cancel().catch(() => {});
+    return response.status;
+  } catch {
+    return null;
+  }
+}
+
+const ENDED_TEXT = {
+  'share-stopped': { title: 'Sharing stopped', text: 'The host stopped sharing. This link no longer works.' },
+  ended: {
+    title: 'Session ended',
+    text: 'The host closed this session.',
+    local: 'local-bpmn was stopped. Run it again and open the link it prints, or reconnect once it runs again.',
+  },
+  'link-gone': { title: 'Session ended', text: 'This link no longer works. Ask the host for a new link.' },
+  unreachable: { title: 'Session ended', text: 'Lost the connection to the host and could not reconnect.' },
+  'other-file': { title: 'Session ended', text: 'local-bpmn now edits another file here.' },
+};
+
+/**
+ * The session is over for this window: stop reconnecting, close the connection and say so in an
+ * overlay (the diagram stays visible behind it). Local windows (not collaborators) can try to
+ * reconnect from there, e.g. after the host restarted local-bpmn.
+ */
+function endSession(reason, detail) {
+  if (ended) return;
+  ended = reason;
+  clearReconnect();
+  stopHeartbeat();
+  if (socket) {
+    const old = socket;
+    socket = null;
+    old.close();
+  }
+  connected = false;
+  synced = false;
+  presence.onClose();
+  const copy = ENDED_TEXT[reason] ?? ENDED_TEXT.unreachable;
+  overlayEl.dataset.reason = reason;
+  overlayTitleEl.textContent = copy.title;
+  let text = (!isCollaborator && copy.local) || copy.text;
+  if (reason === 'other-file' && detail) text = `local-bpmn now edits ${detail} here.`;
+  if (hasUnsavedWork() || unsent) text += ' Your latest changes could not be saved.';
+  overlayTextEl.textContent = text;
+  const canRetry = reason === 'unreachable' || (reason === 'ended' && !isCollaborator);
+  overlayActionEl.hidden = !canRetry;
+  overlayActionEl.textContent = reason === 'ended' ? 'Reconnect' : 'Try again';
+  overlayEl.hidden = false;
+  hideError();
+  renderStatus();
+  if (canRetry) overlayActionEl.focus();
+}
+
+overlayActionEl.addEventListener('click', () => {
+  overlayEl.hidden = true;
+  delete overlayEl.dataset.reason;
+  ended = null;
+  reconnect = { attempts: 0, since: Date.now(), tunnelGoneSince: null, timer: null };
+  renderStatus();
+  connect();
+});
+
+function startHeartbeat() {
+  stopHeartbeat();
+  lastPingAt = null;
+  heartbeatTimer = setInterval(() => {
+    if (!isOpen()) return;
+    if (lastPingAt !== null && lastReceivedAt < lastPingAt) {
+      // Nothing (not even the 'pong') since the last ping: the connection is dead without a close.
+      console.warn('local-bpmn: no answer from the host; reconnecting');
+      const old = socket;
+      socket = null;
+      old.close();
+      connectionLost(false);
+      return;
+    }
+    lastPingAt = Date.now();
+    sendMessage({ type: 'ping' });
+  }, heartbeatMs);
+}
+
+function stopHeartbeat() {
+  clearInterval(heartbeatTimer);
+  heartbeatTimer = null;
+}
+
+/** The current connection is gone; `code` is its close code (or null). */
+function connectionLost(failedAttempt, code = null) {
+  const wasSynced = synced;
+  connected = false;
+  synced = false;
+  stopHeartbeat();
+  presence.onClose();
+  if (code === CLOSE_SHARE_STOPPED) return endSession('share-stopped');
+  if (code === CLOSE_SESSION_ENDED) return endSession('ended');
+  reconnectLater(failedAttempt || !wasSynced);
+  return undefined;
+}
+
 /** WebSocket URL next to this page (`/ws` or `/s/<token>/ws`), with the host secret if any. */
 function socketUrl() {
   const url = new URL('ws', location.href);
@@ -1174,29 +1452,34 @@ function socketUrl() {
 }
 
 function connect() {
-  socket = new WebSocket(socketUrl());
-  socket.addEventListener('open', () => {
+  const ws = new WebSocket(socketUrl());
+  socket = ws;
+  let opened = false;
+  ws.addEventListener('open', () => {
+    if (socket !== ws) return;
+    opened = true;
     connected = true;
-    everConnected = true;
+    lastReceivedAt = Date.now();
+    startHeartbeat();
     renderStatus();
     presence.onOpen();
   });
-  socket.addEventListener('message', (event) => {
+  ws.addEventListener('message', (event) => {
+    if (socket !== ws) return; // a connection given up on
+    lastReceivedAt = Date.now();
     let message;
     try {
       message = JSON.parse(event.data);
     } catch {
       return;
     }
+    if (message?.type === 'pong') return;
     enqueue(() => handleMessage(message)); // in order: init imports asynchronously
   });
-  socket.addEventListener('close', (event) => {
-    const wasConnected = connected;
-    connected = false;
-    renderStatus();
-    presence.onClose();
-    if (event.code === 4001) showError('The host stopped sharing. This link no longer works.');
-    else if (!wasConnected && !rendered) showError('Could not connect to the local-bpmn server.');
+  ws.addEventListener('close', (event) => {
+    if (socket !== ws) return;
+    socket = null;
+    connectionLost(!opened, event.code);
   });
 }
 

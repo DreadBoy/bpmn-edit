@@ -91,7 +91,16 @@ if (process.env.LOCAL_BPMN_TEST_TUNNEL) {
   process.stderr.write(`local-bpmn: TEST MODE: sharing uses a fake tunnel (${process.env.LOCAL_BPMN_TEST_TUNNEL})\n`);
 }
 
-const server = createServer({ filePath, session, port: options.port, createTunnelProvider });
+// WebSocket keepalive interval; hidden, tests shorten it (default: see web/connection-shared.js).
+let keepaliveMs;
+if (process.env.LOCAL_BPMN_KEEPALIVE_MS !== undefined) {
+  keepaliveMs = Number(process.env.LOCAL_BPMN_KEEPALIVE_MS);
+  if (!/^\d+$/.test(process.env.LOCAL_BPMN_KEEPALIVE_MS) || (keepaliveMs !== 0 && keepaliveMs < 50)) {
+    fail('LOCAL_BPMN_KEEPALIVE_MS must be 0 (off) or an integer of at least 50');
+  }
+}
+
+const server = createServer({ filePath, session, port: options.port, createTunnelProvider, keepaliveMs });
 let port;
 try {
   port = await server.listen();
@@ -113,20 +122,23 @@ if (options.open) {
 }
 
 // Shutdown: stop accepting, let open editors (collaborators too, through the tunnel) send their last
-// edits, stop the tunnel, write everything to disk, exit 0. A second signal skips waiting for the
-// editors but still stops the tunnel and finishes the disk write; a third one exits immediately
-// (escape hatch if the disk hangs; the tunnel module's exit hook still kills cloudflared).
+// edits, tell them the session ended (close 4002: "Session ended", no reconnect; before the tunnel
+// stops, so collaborators get it too), stop the tunnel, write everything to disk, exit 0. A second
+// signal skips waiting for the editors but still stops the tunnel and finishes the disk write; a
+// third one exits immediately (escape hatch if the disk hangs; the tunnel module's exit hook still
+// kills cloudflared).
 let signals = 0;
 async function shutdown() {
   signals += 1;
   if (signals === 3) process.exit(1);
   if (signals === 2) {
-    await Promise.all([server.share.stop(), store.flush()]);
+    await Promise.all([server.endSession(200).then(() => server.share.stop()), store.flush()]);
     process.exit(0);
   }
   if (signals > 1) return;
   server.stopAccepting();
   await server.drainClients(1000);
+  await server.endSession(1000);
   await store.unwatch(); // our final write must not come back as an external change
   await Promise.all([server.share.stop(), store.flush()]);
   await server.close();

@@ -327,7 +327,8 @@ list.
 ### Known limits
 
 - A window is removed when its socket closes. A connection that dies without closing (network loss)
-  stays listed until the host notices; the keepalive planned in S8 will cover that.
+  stayed listed until the host noticed; since S8 the keepalive removes it within 30–60 s, and a page
+  that reconnects takes over its old entry at once (see S8).
 - Two windows in the same browser share `localStorage`, so they show the same name and colour.
 - Colours repeat once more than 8 users are connected.
 - A remote marker and this window's own selection on the same element share bpmn-js's outline, which
@@ -379,3 +380,108 @@ Known limits:
 - Stopping the CLI while a tunnel is still starting does not wait for it: the tunnel module kills
   cloudflared on exit, and a partly downloaded binary leaves a temporary directory in `~/.local-bpmn/bin`
   (`.cloudflared-*`) that is not cleaned up.
+
+## S8: keepalive, reconnect and the end of a session
+
+Implemented in `src/server.js` (keepalive, close codes, `role` in `init`, `endSession`), `src/presence.js`
+(replacing a reconnected page's entry), `bin/local-bpmn.js` (shutdown order), `web/app.js` (reconnect,
+re-sync, overlay) and `web/connection-shared.js` (the numbers below, shared by host and page).
+
+### Keepalive
+
+- The host sends a WebSocket ping to every socket every **30 s** and terminates a socket that has not
+  answered the previous ping (pong, or any message) by the next tick, so a dead connection is gone after
+  30–60 s. That also removes connections that died without closing from the users list (backlog item from
+  S5/S6). `LOCAL_BPMN_KEEPALIVE_MS` (hidden, for tests; 0 = off) changes the interval.
+- Why 30 s: Cloudflare cuts an idle WebSocket through the quick tunnel after ~125 s (Q3); 30 s leaves room
+  for a lost ping and slow networks while adding one small frame per socket and half minute.
+- The page also sends `{ type: 'ping' }` every 30 s and expects the `pong` (or any message) before the
+  next one; otherwise it drops the connection and reconnects. Browsers do not show WebSocket pings to the
+  page, so this is the only way it notices a connection that died silently (Wi-Fi change, sleep, a
+  dead tunnel path). Tested with a connection that stops delivering in both directions.
+- Real tunnel (`test/e2e/s8-keepalive-tunnel.spec.js`, 2026-10-13, one quick tunnel, default timings):
+  a collaborator page opened through the public link stayed idle for **150.0 s** (beyond the 125 s cut)
+  on its **first** WebSocket (open 150.4 s, no reconnect, status "Saved"), then renamed a task; the
+  host window showed it and it reached disk. A bare WebSocket client on the same link that sent nothing
+  at all and only answered the host's pings (5 pings) was **still open after 150.0 s** too: WebSocket
+  ping frames alone keep the tunnel's connection open, so the page's heartbeat is not needed for that,
+  only for noticing silent deaths. Before S8 the same idle socket was cut after 125.08–125.12 s every
+  time (Q3).
+
+### Close codes
+
+| Code | Sent when | Page shows | Reconnects |
+|---|---|---|---|
+| 4001 `share-stopped` | Stop sharing (S7), to collaborators of that link | overlay "Sharing stopped" — "The host stopped sharing. This link no longer works." | no |
+| 4002 `session-ended` | host Ctrl-C / SIGTERM, after the editors flushed their edits and before the tunnel stops | overlay "Session ended"; collaborators "The host closed this session.", local windows a hint to run local-bpmn again plus a **Reconnect** button | no (only on Reconnect) |
+| anything else (1006, 1001, …) | network, tunnel, killed host process | "Reconnecting…" banner, status "Reconnecting…" | yes |
+
+The shutdown order matters: the host now calls `endSession()` (4002 to every socket, waits up to 1 s for
+the close handshakes) before stopping the share, which would otherwise close collaborators with 4001 and
+they would read "Sharing stopped" instead of "Session ended".
+
+### Backoff and giving up
+
+- Attempts after a drop wait 0.5, 1, 2, 4, 8 s, then 10 s each, ±20 % jitter.
+- After every failed attempt the page fetches its own `api/file` (relative to the page, so through the
+  tunnel for collaborators): **404** (token revoked, or a restarted host that has no such link) ends the
+  session at once ("This link no longer works. Ask the host for a new link."); **530** (Cloudflare has no
+  tunnel for that hostname, see Q3) for **10 s** in a row ends it too (a cloudflared reconnect can cause a
+  short 530). Anything else (no answer, 200, 502) keeps retrying.
+- Otherwise the page gives up once **at least 8 attempts failed and at least 60 s passed** since the drop
+  (with the schedule above: after about a minute), "Lost the connection to the host and could not
+  reconnect.", with a **Try again** button. Both conditions, so a laptop waking from a long sleep still
+  gets its attempts.
+- Once given up (or closed with 4001/4002) the page opens no further connection by itself; the E2E tests
+  count the page's WebSockets after the overlay.
+- If edits could not be saved, the overlay says so ("Your latest changes could not be saved.").
+
+### Re-sync after a reconnect
+
+The new connection's `init` carries the host's current document. The page keeps every edit the host has
+not acknowledged (the update in flight when the connection was lost, edits waiting behind it, edits made
+while disconnected) and then:
+
+1. the host's document is the one these edits are based on (nobody changed anything meanwhile): the
+   current document is sent as it is (also keeps edits that have no op capture, e.g. resize);
+2. the host's document is exactly the update that was in flight (accepted, the ack was lost): that update
+   counts as acknowledged, the rest is sent;
+3. otherwise: the host's document is shown and the edits are re-applied op by op, the same rebase as on
+   a `conflict` (Q1). Ops already contained in the document are no-ops (label already set, element already
+   created / deleted, and now also a shape already at the moved-to position), so an accepted update is
+   not reported as a conflict. Elements others deleted stay deleted; edits of them are reported, as in Q1.
+
+Versions restart at 1 when the host restarts, so the page forgets its version and takes the one from
+`init`. A page whose file has changed identity (another file served on the same port) ends the session
+instead of mixing documents.
+
+Presence: each page has a random key (16 bytes, in memory only: a reload or a second tab gets another)
+that it sends with `hello`. When a connection says `hello` with a key that an entry of another
+connection already has (same role and token), it takes over that entry in place (same position, name and
+colour, new id) and the host terminates the old connection. So a reconnect never shows a ghost or a
+duplicate, even before the keepalive would notice the old connection. The key is never sent to anyone.
+
+### Host restart
+
+- Ctrl-C: every window shows "Session ended" (above). The host's and local windows offer **Reconnect**.
+- After a restart on the same port (Ctrl-C then start again, or the process killed and started again while
+  the tab is still retrying), the host's tab reconnects and keeps its edits, but **as a plain local
+  editor**: its host secret belongs to the old run, so the host does not accept it (`init` now says
+  `role: 'local'`). The page forgets the stale secret, hides Share and says "local-bpmn was restarted. This
+  tab can still edit; to share, open the link printed in the terminal." A stale secret never grants host
+  rights (it is compared with the new run's secret only; there is nothing persisted).
+- Collaborators of the old run cannot get back in: the old token does not exist in the new run (404 on the
+  probe; through the real tunnel the old hostname answers 530). They see "Session ended".
+
+### Known limits
+
+- The page's heartbeat runs on timers, which browsers throttle in background tabs (at most once a minute
+  after a while), so a silently dead connection of a hidden tab may take ~2 minutes to be noticed.
+- An update refused while the page was away is rebased like any conflict, so the Q1 limits apply
+  (unsupported commands that race someone else's edit are dropped, with a notice).
+- If the user changed the same label after their accepted update and someone else changed it again during
+  the outage, the re-applied (already accepted) label is reported as a conflict, though nothing is lost.
+- An oversized update (> 10 MB, closed with 1009) would be retried on every reconnect; with the size limit
+  far above real diagrams this is left as is.
+- Old collaborator links after a host restart through the real tunnel are ended by the 530 rule (10 s)
+  rather than at once.

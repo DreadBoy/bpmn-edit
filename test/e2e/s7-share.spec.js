@@ -222,7 +222,8 @@ test.describe('S7: share via public link (stand-in tunnel)', () => {
         await ui.stop.click();
         await expect(ui.start).toBeVisible();
         await expect(ui.url).toBeHidden();
-        await expect(collab.locator('#error')).toHaveText('The host stopped sharing. This link no longer works.');
+        await expect(collab.locator('#session-overlay')).toBeVisible();
+        await expect(collab.locator('#session-overlay-text')).toHaveText('The host stopped sharing. This link no longer works.');
         await expect(status(collab)).toHaveText('Disconnected');
         expect((await collab.goto(`${cli.baseUrl}s/${token}/`)).status()).toBe(404);
         // The host keeps editing.

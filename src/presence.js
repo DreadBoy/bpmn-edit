@@ -5,10 +5,18 @@
 //
 // Protocol (JSON text frames on the same /ws socket as the sync protocol in src/server.js). Only
 // connections that sent 'hello' take part: the others never receive presence messages.
-//   client -> server  { type: 'hello', name?, color? }   join, with the name and colour the browser has
+//   client -> server  { type: 'hello', name?, color?, key? }
+//                                                        join, with the name and colour the browser has
 //                                                        stored; a missing or invalid name is replaced by
 //                                                        a random one, a missing or invalid colour by the
 //                                                        least used one. Sent again, it updates both.
+//                                                        key: random id of the page (kept in memory, so
+//                                                        a reload or a second tab has another one); a
+//                                                        reconnecting page sends the same key, and an
+//                                                        entry with that key on another connection (a
+//                                                        connection that died without closing) is taken
+//                                                        over in place and that connection dropped.
+//                                                        Never sent to anyone.
 //   server -> client  { type: 'welcome', user }          to the sender only: its own entry (as in
 //                                                        'presence'; id = the clientId of 'init')
 //   server -> client  { type: 'presence', users }        to every joined client, on each join, leave and
@@ -23,6 +31,7 @@
 // selection has at most MAX_SELECTION distinct ids of at most MAX_ID_LENGTH characters. Invalid
 // presence messages are ignored rather than answered with 'error', which the editor treats as a failed
 // save.
+import { CLIENT_KEY_RE } from '../web/connection-shared.js';
 import {
   MAX_ID_LENGTH, MAX_SELECTION, PALETTE, cleanName, isColor, randomName,
 } from '../web/presence-shared.js';
@@ -32,11 +41,13 @@ const MESSAGE_TYPES = new Set(['hello', 'rename', 'selection']);
 /**
  * @param {object} options
  * @param {(ws: object, message: object) => void} options.send  sends a message to one connection
+ * @param {(ws: object) => void} [options.onReplaced]  a reconnected page took over the entry of `ws`
+ *   (see 'hello' key); the caller should drop that connection
  * @param {() => number} [options.random=Math.random]  random source for names and colours (tests)
  */
-export function createPresence({ send, random = Math.random }) {
-  /** Joined connections, in join order: ws -> { id, name, color, selection }. */
-  const users = new Map();
+export function createPresence({ send, onReplaced = () => {}, random = Math.random }) {
+  /** Joined connections, in join order: ws -> { id, name, color, selection, key }. */
+  let users = new Map();
 
   const entry = ({ id, name, color, selection }) => ({ id, name, color, selection: [...selection] });
 
@@ -54,12 +65,28 @@ export function createPresence({ send, random = Math.random }) {
     return candidates[Math.floor(random() * candidates.length) % candidates.length];
   }
 
-  function hello(ws, message, id) {
-    const existing = users.get(ws);
-    const user = existing ?? { id: String(id), selection: [] };
+  /** The connection whose entry has `key`, other than `ws`, or null. */
+  function connectionWithKey(key, ws) {
+    for (const [other, user] of users) if (other !== ws && user.key === key) return other;
+    return null;
+  }
+
+  function hello(ws, message, id, scope) {
+    let existing = users.get(ws);
+    const key = !existing && typeof message.key === 'string' && CLIENT_KEY_RE.test(message.key)
+      ? `${scope ?? ''}|${message.key}` : null;
+    const stale = key ? connectionWithKey(key, ws) : null;
+    if (stale) {
+      // The same page again, on a new connection: keep its place in the list, drop the old one.
+      existing = users.get(stale);
+      existing.id = String(id);
+      users = new Map([...users].map(([conn, user]) => (conn === stale ? [ws, user] : [conn, user])));
+    }
+    const user = existing ?? { id: String(id), selection: [], key };
     user.name = cleanName(message.name) || existing?.name || randomName(random);
     user.color = isColor(message.color) ? message.color : existing?.color ?? leastUsedColor();
     users.set(ws, user);
+    if (stale) onReplaced(stale);
     send(ws, { type: 'welcome', user: entry(user) });
     broadcastPresence();
   }
@@ -90,9 +117,12 @@ export function createPresence({ send, random = Math.random }) {
       return MESSAGE_TYPES.has(type);
     },
 
-    /** Handles a presence message from `ws`; `id` is the connection's clientId. */
-    handleMessage(ws, message, id) {
-      if (message.type === 'hello') hello(ws, message, id);
+    /**
+     * Handles a presence message from `ws`; `id` is the connection's clientId, `scope` how it was
+     * opened (a 'hello' key only takes over entries of the same scope).
+     */
+    handleMessage(ws, message, id, scope = '') {
+      if (message.type === 'hello') hello(ws, message, id, scope);
       else if (message.type === 'rename') rename(ws, message);
       else if (message.type === 'selection') select(ws, message);
     },

@@ -243,7 +243,7 @@ test.describe('S5: connected-users list', () => {
 
       // Stop sharing: the collaborator's socket is closed and it leaves the host's list.
       await host.page.locator('#share-stop').click();
-      await expect(page.locator('#error')).toHaveText('The host stopped sharing. This link no longer works.');
+      await expect(page.locator('#session-overlay-text')).toHaveText('The host stopped sharing. This link no longer works.');
       await expectUserNames(host.page, [hostName], { timeout: VISIBLE_MS });
       expect(host.errors).toEqual([]);
       expect(collab.errors).toEqual([]);

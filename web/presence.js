@@ -58,8 +58,10 @@ function store({ name, color }) {
  * @param {object} options.modeler  the bpmn-js modeler
  * @param {(message: object) => boolean} options.send  sends a message to the host (false if not connected)
  * @param {HTMLElement} options.toolbar  the list is added to it, before the save status
+ * @param {string} [options.key]  random id of this page, sent in 'hello' so that after a reconnect
+ *   the host replaces this page's old entry instead of listing it twice (see src/presence.js)
  */
-export function createPresence({ modeler, send, toolbar }) {
+export function createPresence({ modeler, send, toolbar, key }) {
   const canvas = modeler.get('canvas');
   const elementRegistry = modeler.get('elementRegistry');
   const selection = modeler.get('selection');
@@ -334,7 +336,7 @@ export function createPresence({ modeler, send, toolbar }) {
     /** The connection to the host is open: join the session. */
     onOpen() {
       const stored = loadStored();
-      send({ type: 'hello', name: me?.name ?? stored.name, color: me?.color ?? stored.color });
+      send({ type: 'hello', name: me?.name ?? stored.name, color: me?.color ?? stored.color, ...(key ? { key } : {}) });
       sentSelection = null; // the host knows nothing of this connection's selection yet
     },
 
