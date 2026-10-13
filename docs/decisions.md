@@ -485,3 +485,20 @@ duplicate, even before the keepalive would notice the old connection. The key is
   far above real diagrams this is left as is.
 - Old collaborator links after a host restart through the real tunnel are ended by the 530 rule (10 s)
   rather than at once.
+
+## S9: what the npm package contains
+
+- `files` in `package.json` whitelists `bin/`, `src/`, `web/` (including `web/vendor/bpmn-js/` with its
+  `LICENSE`), `README.md` and `LICENSE` (npm adds `package.json`). Tests, fixtures, `scripts/`, `docs/`,
+  `test-results/` and local tool directories are not shipped: 32 files, ~376 kB packed, ~1.2 MB unpacked
+  (`npm pack --dry-run`), most of it the vendored bpmn-js build and its font.
+- `src/test-tunnel.js` (the stand-in tunnel provider for tests, S7) **is shipped**. `bin/local-bpmn.js`
+  imports it statically, so leaving it out would break the installed CLI at startup. Making the import
+  dynamic so the file could be dropped was not worth it: it is 2.4 kB, opens no network connection, and is
+  used only when `LOCAL_BPMN_TEST_TUNNEL` is set in the CLI's environment (never over HTTP), in which case
+  the CLI says "TEST MODE" on stderr. Shipping it also means the E2E suite runs exactly the code users get.
+- Hidden, environment-only knobs that ship but are not in the README: `LOCAL_BPMN_CLOUDFLARED_URL_BASE`
+  (where `cloudflared` is downloaded from; default: the latest GitHub release), `LOCAL_BPMN_KEEPALIVE_MS`,
+  `LOCAL_BPMN_TEST_TUNNEL`, plus the hidden `--write-delay` option.
+- Q3 wrap-up: the README states that every Share and every restart gives a new link and that persistent
+  links are out of scope for v1 (see Q3 above).

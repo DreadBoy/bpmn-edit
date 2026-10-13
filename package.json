@@ -7,9 +7,11 @@
     "local-bpmn": "bin/local-bpmn.js"
   },
   "files": [
-    "bin",
-    "src",
-    "web"
+    "bin/",
+    "src/",
+    "web/",
+    "README.md",
+    "LICENSE"
   ],
   "engines": {
     "node": ">=20.19"
@@ -26,6 +28,7 @@
     "editor",
     "collaboration"
   ],
+  "author": "Matic Leva",
   "license": "MIT",
   "dependencies": {
     "chokidar": "^5.0.0",

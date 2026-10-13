@@ -122,7 +122,7 @@ cannot tell host and collaborator apart:
   - **E2E:** collaborator window via the public link; Stop sharing → overlay, reload of old link fails;
     re-share gives a new link that works; Ctrl-C the CLI → overlay in collaborator; restart scenario for reconnect.
 
-- [ ] **S9. Ship it: `npx local-bpmn`**
+- [x] **S9. Ship it: `npx local-bpmn`** (verified 2026-10-13: tarball install + npx, fresh cloudflared download, real share)
   - README (usage, sharing, security notes, bpmn.io license/watermark). LICENSE. `files` whitelist.
   - **E2E:** `npm pack`; install the tarball into a fresh temp dir; `npx local-bpmn flows/order.bpmn` from a fresh
     git repo opens the browser editor (use `--no-open` + Playwright), edit → on disk, Share → public link works.
@@ -135,6 +135,9 @@ cannot tell host and collaborator apart:
     reported, failures triaged into fix-now vs documented known issues.
 
 ## Backlog (small known issues, fold into a later step)
+- S9 residuals: README race text must be updated when Q2 lands, formatting-churn paragraph after Q4-impl;
+  downloaded cloudflared not checksum-verified (documented); full-XML per edit (~107 KB on 304 elements) not in
+  README; not published to npm (name `local-bpmn` free as of 2026-10-13).
 - S8 residuals: Share button enabled while reconnecting ("Failed to fetch"); dead share URL + controls still
   visible behind "Session ended" overlay; user re-added at end of list if keepalive evicts before reconnect;
   hidden tabs detect dead connection only after ~2 min (timer throttling); >10 MB update (1009) resent on every
@@ -213,7 +216,7 @@ implement the decision if it changes anything. These steps are as mandatory as t
     edit. Decide whether to preserve original formatting (e.g. keep the original header / attribute order) and
     implement if the noise exceeds a handful of lines. Record in `docs/decisions.md`.
 
-- [ ] **Q3. Persistent session links across restarts** (after S8)
+- [x] **Q3. Persistent session links across restarts** (decided: out of scope v1; decisions.md + README note done)
   - **Measured** (branch `worktree-agent-a32e37182302fa0cd`, `docs/q3-tunnel-measurements.md`, verified):
     startup ~7 s to first 200; HTTP stable 31 min; new hostname every share; old URL → 530/1033 immediately;
     named tunnels need a Cloudflare account + own domain. **Recommendation: out of scope for v1**; README must say
