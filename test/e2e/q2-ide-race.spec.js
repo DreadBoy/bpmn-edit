@@ -141,6 +141,34 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     });
   }
 
+  test('a slow save on disk that finishes after the host replaced the half-written file: the edit is re-applied on it', async ({ browser }) => {
+    await start();
+    const [A, B] = await open(browser);
+    const errors = [...collectPageErrors(A), ...collectPageErrors(B)];
+    const original = await disk();
+    const ideCopy = renameInXml(original, 'Task_CheckStock', 'Check stock levels');
+
+    await writeFile(fixture.file, ideCopy.slice(0, ideCopy.length / 2)); // the IDE has written half
+    await expect(A.locator('#notice')).toHaveAttribute('data-kind', 'invalid', { timeout: 2000 });
+    await renameInBrowser(A, 'Ship parcel');
+    // Replacing a broken file is allowed: the host writes the edit over it...
+    await expect.poll(async () => nameInXml(await disk(), 'Task_ShipOrder'), { timeout: 2000 }).toBe('Ship parcel');
+    // ...then the IDE finishes its save from its own copy (without the edit).
+    await writeFile(fixture.file, ideCopy);
+
+    await expect.poll(async () => {
+      const xml = await disk();
+      return [nameInXml(xml, 'Task_ShipOrder'), nameInXml(xml, 'Task_CheckStock')];
+    }, { timeout: 4000 }).toEqual(['Ship parcel', 'Check stock levels']);
+    for (const page of [A, B]) {
+      await expect(status(page)).toHaveAttribute('data-state', 'saved');
+      expect(await windowNames(page, IDS)).toEqual({ Task_ShipOrder: 'Ship parcel', Task_CheckStock: 'Check stock levels' });
+    }
+    await expect(toast(A)).toHaveAttribute('data-kind', 'merged');
+    expect(await asideFiles(fixture.dir)).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
   test('a save on disk replacing the unwritten edit of a window that has closed: the edit is kept next to the file', async ({ browser }) => {
     await start({ writeDelay: 2000 });
     const [A, B] = await open(browser);

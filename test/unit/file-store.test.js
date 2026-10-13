@@ -421,6 +421,48 @@ describe('createFileStore watching', () => {
     });
   }
 
+  it('a write over an invalid file is confirmed only after confirmMs; a valid save before that replaces it (discarded)', async () => {
+    await start({ debounceMs: 0, settleMs: 50, confirmMs: 400 });
+    const saved = [];
+    store.on('saved', ({ xml }) => saved.push(xml));
+    const reported = next('external-invalid');
+    await writeFile(file, original.slice(0, 200)); // a slow save, half done
+    await reported;
+    store.write(variant(1));
+    await next('written');
+    assert.equal(await readFile(file, 'utf8'), variant(1));
+    assert.deepEqual(saved, [], 'not confirmed yet');
+    const changed = next('external-change');
+    await writeFile(file, variant(2)); // the other program finishes its save from its own copy
+    assert.deepEqual(await changed, { xml: variant(2), discarded: true });
+    await delay(500);
+    assert.deepEqual(saved, []);
+
+    // Left alone: confirmed after confirmMs.
+    const again = next('external-invalid');
+    await writeFile(file, original.slice(0, 300));
+    await again;
+    store.write(variant(3));
+    await next('written');
+    await delay(500);
+    assert.deepEqual(saved, [variant(3)]);
+  });
+
+  it('does not replace an invalid file that is still changing (waits until it settles)', async () => {
+    await start({ debounceMs: 0, settleMs: 300 });
+    const reported = next('external-invalid');
+    await writeFile(file, original.slice(0, 200));
+    await reported;
+    await writeFile(file, ''); // truncated by another program that is about to write again
+    store.write(variant(1));
+    await delay(100);
+    assert.equal(await readFile(file, 'utf8'), '', 'held back while the file changes');
+    await writeFile(file, variant(2));
+    const changed = await next('external-change');
+    assert.deepEqual(changed, { xml: variant(2), discarded: true });
+    assert.equal(await readFile(file, 'utf8'), variant(2));
+  });
+
   it('still replaces a file that is still invalid', async () => {
     await start({ debounceMs: 0, settleMs: 100 });
     const reported = next('external-invalid');

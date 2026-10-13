@@ -185,19 +185,21 @@ function sameStat(a, b) {
  * reported like any other ('external-change', with `discarded: true` as the pending write is
  * dropped: the session has those edits re-applied on top of it). During flush() (shutdown) nobody
  * can re-apply them any more: the file keeps the version on disk and ours is saved next to it
- * ('kept-aside').
+ * ('kept-aside'). A write that replaced a missing or invalid file is only 'saved' once the file has
+ * kept it for `confirmMs` (another program may be finishing a slow save from its own copy); a valid
+ * save arriving before that is reported as replacing it (`discarded: true`) too.
  *
  * Events: 'written' ({ xml, hash, mtimeMs, size }), 'write-error' (Error),
- *   'saved' ({ xml }) `xml` is on disk now (written, or already there),
+ *   'saved' ({ xml }) `xml` is on disk now (written, or already there) and confirmed,
  *   'external-change' ({ xml, discarded? }) valid new content on disk; `discarded: true` if a
- *     pending write of ours was dropped because of it,
+ *     pending or unconfirmed write of ours was dropped or replaced because of it,
  *   'kept-aside' ({ path, xml }) during flush() the file had changed on disk: it was left alone and
  *     the content we were about to write was saved to `path` instead,
  *   'external-missing' the file was deleted (emitted once until it reappears),
  *   'external-invalid' ({ message }) the file is not (or not yet) a complete BPMN document,
  *   'disk-ok' the file is valid again after 'external-missing' / 'external-invalid'.
  */
-export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = defaultLog } = {}) {
+export function createFileStore(path, { debounceMs = 250, settleMs = 150, confirmMs = 2000, log = defaultLog } = {}) {
   const store = new EventEmitter();
   let targetPath = path;     // resolved through symlinks by read()
   let diskXml = null;        // what we believe is on disk (last read or written)
@@ -219,13 +221,14 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
   let flushing = 0;          // flush() calls running: a change on disk then keeps both versions
   let checkingNow = false;   // checkNow() is running (shutdown)
   const savingAside = new Set(); // keepAside() calls still running (flush() waits for them)
+  let provisional = null;    // { xml, timer } our writes over a missing/invalid file, not confirmed yet
   let unclaimedXml = null;   // write checkNow() dropped for a change on disk; saved aside by flush()
                              // unless new content is written meanwhile (the edits were re-applied)
 
   /**
    * Content another program wrote over what we last read or wrote, or null if the file still holds
-   * diskXml. If the file was missing or invalid when last seen (diskXml null), only complete BPMN
-   * counts as a change: a file that is still missing or invalid is replaced by our write.
+   * diskXml. If the file was missing or invalid when last seen (diskXml null), a file that is still
+   * missing, or still holds exactly the invalid content reported, is replaced by our write.
    */
   async function externalContent() {
     let info;
@@ -239,9 +242,11 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
       throw err;
     }
     if (diskXml === null) {
-      // The file was missing or invalid when last seen: replacing it is fine while it still is, but
-      // a complete document saved there since is a change like any other.
-      return isCompleteBpmn(xml) ? xml : null;
+      // The file was missing or invalid when last seen: replacing it is fine while it still is
+      // exactly that (the broken content reported after it settled), but a complete document saved
+      // there since is a change like any other, and anything else means another program is still
+      // writing it (e.g. truncated, not yet rewritten): wait until it settles.
+      return diskState === 'invalid' && xml === invalidXml ? null : xml;
     }
     if (xml === diskXml) {
       diskStat = info; // e.g. touched, or rewritten with the same content
@@ -352,14 +357,44 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
     return true;
   }
 
+  /**
+   * Our write replaced a missing or invalid file: another program may be in the middle of saving it
+   * (e.g. a slow, non-atomic IDE save) and finish from its own copy. Until the file has kept our
+   * content for `confirmMs`, what we wrote counts as not saved: a valid save arriving meanwhile is
+   * reported as replacing it (`discarded`), so its edits are re-applied on top (Q2).
+   */
+  function confirmLater(xml) {
+    if (provisional) clearTimeout(provisional.timer);
+    const timer = setTimeout(confirmProvisional, confirmMs);
+    timer.unref?.();
+    provisional = { xml, timer };
+  }
+
+  function confirmProvisional() {
+    const { xml } = provisional;
+    provisional = null;
+    if (xml === diskXml) store.emit('saved', { xml });
+  }
+
+  /** Ends the unconfirmed state (see confirmLater); returns the unconfirmed content, or null. */
+  function dropProvisional() {
+    if (!provisional) return null;
+    clearTimeout(provisional.timer);
+    const { xml } = provisional;
+    provisional = null;
+    return xml;
+  }
+
   async function writeOne(xml) {
     if (xml === diskXml) {
-      store.emit('saved', { xml });
+      if (provisional) provisional.xml = xml;
+      else store.emit('saved', { xml });
       return;
     }
     writeSeq += 1;
     inFlightXml = xml;
     try {
+      const replacesUnknown = diskXml === null; // the file was missing or invalid
       const result = await writeAtomically(xml);
       if (result.external !== undefined) {
         await onBlockedWrite(xml, result.external);
@@ -369,7 +404,9 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
       diskStat = result.stat;
       lastWrite = { xml, hash: sha256(xml), mtimeMs: result.stat.mtimeMs, size: result.stat.size };
       store.emit('written', lastWrite);
-      store.emit('saved', { xml });
+      if (replacesUnknown) confirmLater(xml);
+      else if (provisional) provisional.xml = xml; // still unconfirmed, like the write before it
+      else store.emit('saved', { xml });
       setDiskOk(); // e.g. our write recreated a deleted file
     } catch (err) {
       const error = new Error(`Could not write ${path}: ${err.message}`, { cause: err });
@@ -455,6 +492,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
       if (err.code === 'ENOENT' || err.code === 'ENOTDIR') {
         diskXml = null; // whatever we write next must go to disk
         invalidXml = null;
+        if (provisional) confirmLater(provisional.xml); // another program is still at it: wait longer
         if (diskState !== 'missing') {
           diskState = 'missing';
           store.emit('external-missing');
@@ -473,6 +511,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
     }
     if (!isCompleteBpmn(xml)) {
       diskXml = null; // the file is not what we last wrote or read; our next write must replace it
+      if (provisional) confirmLater(provisional.xml); // another program is still at it: wait longer
       if (diskState !== 'invalid' || xml !== invalidXml) {
         diskState = 'invalid';
         invalidXml = xml;
@@ -488,9 +527,11 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
     diskStat = info;
     // The external change reached us before our pending (not yet started or held back) write: the
     // change on disk is the newer base; the session has that write's edits re-applied on top of it.
+    // So has an unconfirmed write over a missing or invalid file (see confirmLater).
     const pending = pendingXml;
-    const discarded = dropPendingWrite();
-    if (discarded && checkingNow) unclaimedXml = pending;
+    const unconfirmed = dropProvisional();
+    const discarded = dropPendingWrite() || unconfirmed !== null;
+    if (discarded && checkingNow) unclaimedXml = pending ?? unconfirmed;
     blockedByDisk = false;
     setDiskOk();
     store.emit('external-change', discarded ? { xml, discarded: true } : { xml });

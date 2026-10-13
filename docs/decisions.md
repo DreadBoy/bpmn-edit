@@ -272,8 +272,16 @@ How it works:
   content. If another program changed it, the temp file is discarded, the write is held back and the
   change is reported after the usual settle delay, exactly like a change the watcher found first.
   If the file was invalid or missing when last seen, the host may still replace it while it stays
-  invalid or missing (as before), but a complete BPMN document found there counts as a change made
-  on disk (no stat shortcut in that state).
+  missing or holds exactly the broken content reported after it settled (as before). Anything else
+  holds the write back: a complete BPMN document counts as a change made on disk, other content
+  means another program is still writing (e.g. truncated and about to be rewritten), so the host
+  waits until the file settles (no stat shortcut in that state).
+- Slow saves (`src/file.js`, `confirmMs`, 2 s): a write that replaced a missing or invalid file is
+  not reported as saved until the file has kept it for 2 s (another missing/invalid observation
+  restarts the wait). If a valid save arrives meanwhile (an IDE finishing a slow save from its own
+  copy, without the browser edit), it is treated like a change that replaced a pending write: the
+  edits are re-applied on top of it in their windows (merged toast), or kept aside if their window
+  has closed.
 - Unwritten accepted edits: when a change on disk replaces a pending write, the session marks the
   disk version with `discardedAfter` (the last version that is on disk). The host also tells the
   windows when versions are on disk (`saved`), so each window keeps the edits of its acknowledged
@@ -304,16 +312,28 @@ overwritten (`core.autocrlf=input`); browser edit right after an IDE save; same 
 wins, conflict toast with the exact text, file not overwritten later); Ctrl-C right after an IDE save
 (both kept, exit 0); Ctrl-C with no window left (file keeps the save, edit kept aside, untracked in
 `git status`); a valid save just before the host write after the file was invalid, and after it was
-deleted (both kept); a save replacing the unwritten edit of a window that closed (edit kept aside,
-file keeps the save). The two S3 tests that asserted last-write-wins now assert that both changes are
+deleted (both kept); a slow save that finishes after the host wrote a browser edit over the
+half-written file (both kept, merged toast); a save replacing the unwritten edit of a window that
+closed (edit kept aside, file keeps the save). The two S3 tests that asserted last-write-wins now assert that both changes are
 kept.
 
 ### Known limits
 
 - The pre-write check and the rename are two steps: a save landing in the microseconds between them is
   still overwritten. The watcher then reads our content and reports nothing.
-- An IDE that is still writing (non-atomic, slow) when the host checks is "invalid" content; as
-  before, the host's next write replaces an invalid file. At shutdown such a file is replaced as well.
+- A broken file that has been quiet for the settle delay (150 ms) is replaced by the next browser
+  edit, as before. If the program that broke it finishes its save more than 2 s later (`confirmMs`),
+  that save replaces the browser edit like any save of a stale copy: every window reloads it ("Reloaded
+  from disk") but nobody is told the edit is gone. At shutdown a file still being written is left
+  alone and the editor's version is kept aside.
+- A save that is valid for less than the settle delay before the same program breaks the file
+  again is never seen by the host. When the host then replaces the broken file it writes its last
+  known valid version plus the browser edits, so `git diff` briefly lacks that short-lived save
+  until the program saves again (seen in 1 of 10 rapid "invalid/valid" flip trials; the final file
+  had everything).
+- With edits in two windows, a window re-applying an op on an element another window created (and
+  has not re-created yet on top of the change on disk) is told the element was "deleted on disk";
+  the wording is wrong in that case (inferred from the code, not reproduced).
 - Edits of a window that closed after its update was accepted but before it was written are not
   merged: the file keeps the change on disk and the unsaved document (all windows' unsaved edits) is
   kept aside, reported on stderr only (no window of its author is left to show a toast).

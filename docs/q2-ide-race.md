@@ -88,7 +88,9 @@ See `docs/decisions.md`, Q2, for the policy. Same spec, same trial counts, final
   others (offsets 54, 68, 116 ms) the edit was re-applied on top and the window said so.
 - d: the shutdown now checks the file before the final write; the change was found in all 10 trials,
   the window re-applied its edit and both changes were written before exit (exit code 0).
-- No host stderr warnings in any trial (nothing was overwritten or kept aside).
+- Nothing was overwritten or kept aside in any trial. (Since round 2 the stderr line about edits
+  being re-applied starts with `warning:`; in the round-3 re-run it appeared in a 9/15, c 15/15 and
+  d 10/10, i.e. whenever accepted edits were re-applied.)
 
 An intermediate run (before shutdown re-checked the file) had a-c identical and d at 0/10 merged,
 10/10 "disk change kept, browser version saved next to it" (`order.local-bpmn-unsaved-<time>.bpmn`):
@@ -112,3 +114,40 @@ the editing window. Both cases are in `test/e2e/q2-ide-race.spec.js`.
 Also changed in that round: unsaved edits of a window that has closed are kept next to the file when
 a change on disk replaces them during the session (before: stderr only), and every Q2 stderr line
 starts with `warning:`.
+
+## Round 3: slow save finishing after the host replaced the half-written file
+
+The round-2 check found one more silent loss. An IDE writes half the file (invalid) and it stays
+like that for longer than the settle delay. A browser edit is made and the host writes it over the
+broken file (allowed). The IDE then finishes its save from its own copy, which lacks the edit. The
+edit disappeared from disk and from every window, which showed only "Reloaded from disk".
+
+Fix (`src/file.js`):
+
+- A write over a missing or invalid file stays unconfirmed for 2 s (`confirmMs`; another
+  missing/invalid observation restarts the wait). A valid save arriving meanwhile is treated as
+  replacing it: the edits are re-applied on top in their windows (merged toast), or kept aside if
+  their window has closed.
+- An invalid file is replaced only while it holds exactly the broken content reported after it
+  settled. A file that changed again (e.g. truncated by an in-place save about to rewrite it) holds
+  the write back until it settles. Without this, the first re-run lost an IDE save once: the host's
+  rename landed between the IDE's truncate and its write, so the IDE wrote into the replaced file.
+
+Verifier scripts (10 trials each; `run2.mjs invSlow`, `run3.mjs flips` with `FLIPMODE`):
+
+| Run | Before (round 2 code) | After |
+|---|---|---|
+| invSlow (400–900 ms pause) | 2/10 ok | 10/10 ok |
+| flips, slow (150–350 ms pauses) | 2/10 ok | 9/10 ok, 0 losses |
+| flips, fresh (IDE re-reads before finishing) | 6/10 ok | 10/10 ok |
+| flips, fast (3–20 ms pauses) | 10/10 ok | 10/10 ok |
+
+The one remaining "slow" flag is not a loss. The IDE made the file valid for about 60 ms, less than
+the settle delay, then broke it again, so the host never saw that version. The host's write over
+the broken file lacked it until the IDE's next save; the final file had every change. This is
+listed as a known limit in `docs/decisions.md`.
+
+The measurement spec above, re-run after this round: a–d 15/15, 15/15, 15/15 and 10/10 with both
+changes on disk, no silent loss, nothing kept aside. New E2E case in
+`test/e2e/q2-ide-race.spec.js`: half-written file, browser edit written over it, then the IDE
+finishes its save; both changes are kept and window A shows the merged toast.
