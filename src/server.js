@@ -71,6 +71,10 @@
 //                                                               host's sockets only: sharing status
 //                                                               (see /api/share), after 'init' and on
 //                                                               every change
+//   presence messages ('hello', 'welcome', 'presence', 'rename', 'selection'): see src/presence.js;
+//                                                               the same for host, local and
+//                                                               collaborator sockets (no paths, no
+//                                                               secrets in them)
 //   close 4001 'share-stopped'                                  collaborator socket whose link was
 //                                                               revoked (sharing stopped)
 import { createReadStream } from 'node:fs';
@@ -81,6 +85,7 @@ import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createFileStore } from './file.js';
+import { createPresence } from './presence.js';
 import {
   HOST_SECRET_HEADER, HOST_SECRET_PARAM, hostAllowed, isRemoteRequest, newHostSecret, originAllowed, safeEqual,
   splitSharePath,
@@ -241,6 +246,8 @@ export function createServer({
   /** How each connection was opened: { role: 'host' | 'local' | 'collaborator', token? }. */
   const clientAccess = new WeakMap();
   let lastClientNumber = 0;
+  /** Connected users (names, colours); see src/presence.js for its messages. */
+  const presence = createPresence({ send });
 
   function send(ws, message) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));
@@ -266,6 +273,7 @@ export function createServer({
     if (message === null || typeof message !== 'object' || Array.isArray(message)) {
       return sendError(ws, 'bad-message', 'Messages must be JSON objects');
     }
+    if (presence.handles(message.type)) return presence.handleMessage(ws, message, clientIds.get(ws));
     switch (message.type) {
       case 'update': {
         const { xml, baseVersion, overrides } = message;
@@ -315,6 +323,7 @@ export function createServer({
       }
     });
     ws.on('close', () => flushWaiters.get(ws)?.());
+    ws.on('close', () => presence.leave(ws));
     lastClientNumber += 1;
     const clientId = `c${lastClientNumber}`;
     clientIds.set(ws, clientId);

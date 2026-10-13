@@ -273,6 +273,66 @@ tunnel stays connected (or recovers transparently). S7 wires sharing up without 
 - Quick tunnels allow at most 200 in-flight requests and no Server-Sent Events (local-bpmn uses neither).
 - The 125 s cut is attributed to Cloudflare's proxy read timeout by the matching number only.
 
+## S5/S6: presence protocol
+
+### Decision
+
+Presence (who is connected, and from S6 what each window has selected) uses its own message types on
+the existing `/ws` socket and never touches the sync messages. Server side it lives in
+`src/presence.js`, client side in `web/presence.js`; `src/server.js` and `web/app.js` only forward
+messages to it. Palette, name rules and the name generator are in `web/presence-shared.js`, loaded by
+both the host and the page, so the colour shown in the list and the selection outline come from one
+list.
+
+- A window joins with `hello { name?, color? }` (what its browser has in `localStorage`). The host
+  replaces a missing or invalid name with a random friendly one ("Curious Otter") and a missing or
+  invalid colour with the least used palette slot, answers `welcome { user }` and broadcasts
+  `presence { users }` (the full list, join order) on every join, leave (socket `close`) and `rename`.
+  The page stores what it was given, so a reload keeps the name and colour.
+- Only connections that said `hello` take part: the user id is the `clientId` from `init`, and other
+  clients (tests, older pages) see no presence messages at all.
+- Names are cleaned on both sides with the same function (invisible and bidi control characters
+  removed, whitespace collapsed, at most 32 characters) and rendered with `textContent` only. A colour
+  is a palette index, so no colour value from a client ever reaches CSS.
+- The list takes the toolbar's free space between the file name and the save status / Share controls
+  and never squeezes names: when they do not fit, the others are shown as colour dots, then the own
+  name is hidden ("(you)" stays), then the last users fold into a "+N" entry. The own entry is one
+  button (dot, name, "(you)") in every state, so Tab / Enter / Space rename it at any width; after a
+  rename started from the keyboard, focus returns to it. "+N" is focusable too (its accessible name
+  lists the folded users). The list sits before the status in the markup, so the tab order matches
+  the screen.
+  Every full name stays in a tooltip. While the own name is being edited, the share link box is
+  hidden and the file name narrowed so the field gets at least 120px; Copy and Stop sharing stay.
+  Below 720px the link box is not shown at all (Copy copies the link, its tooltip shows it), so the
+  toolbar fits down to 640px.
+- Invalid presence messages are ignored, not answered with `error`: the editor treats `error` as a
+  failed save.
+- Collaborators under `/s/<token>/` (S7) take part like any other window: their socket is the same
+  `/ws` connection, opened relative to the page. A presence entry is `{ id, name, color, selection }`
+  only (clientId, cleaned name, palette index, element ids), so it carries neither the host's file path
+  nor the host secret or session token.
+- Selection (S6): a window sends `selection { ids }` 50 ms after its selection last changed and only
+  if it differs from what it sent last, so the clear-and-restore around every import sends nothing.
+  The host relays `selection { userId, ids }` to the others and keeps the latest one per user in the
+  `presence` list, so a window that joins later sees it at once. Other windows mark those elements
+  with `canvas.addMarker(id, 'remote-sel-<colour slot>')`; the CSS for these classes is generated
+  from the palette (shape outline, or the line of a connection, in the user's colour).
+- Markers are kept as a wanted state (user -> ids) and reconciled with the canvas after every
+  presence message, every import (importXML recreates all elements without markers) and every edit
+  (`elements.changed`: deletes, undo). Ids missing from the diagram are skipped and marked once they
+  appear (e.g. a task another window created and selected before its update arrived). A window
+  never marks its own selection. Two users with the same element selected each add their class;
+  where both apply, the later rule in the palette is the one drawn.
+
+### Known limits
+
+- A window is removed when its socket closes. A connection that dies without closing (network loss)
+  stays listed until the host notices; the keepalive planned in S8 will cover that.
+- Two windows in the same browser share `localStorage`, so they show the same name and colour.
+- Colours repeat once more than 8 users are connected.
+- A remote marker and this window's own selection on the same element share bpmn-js's outline, which
+  then shows the remote colour.
+
 ## S7: who may share, and how the secrets are kept
 
 How the security model of `PLAN.md` is implemented (`src/security.js`, `src/server.js`, `web/app.js`):

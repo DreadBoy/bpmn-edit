@@ -25,11 +25,16 @@ body {
 }
 
 #toolbar .brand {
+  flex: none;
+  white-space: nowrap;
   font-weight: 600;
   color: #57606a;
 }
 
 #file-name {
+  flex: 0 1 auto;
+  min-width: 4em;
+  max-width: 40%;
   font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -59,6 +64,7 @@ body {
 #notice:not([hidden]) + #save-status { margin-left: 0; }
 
 #save-status {
+  flex: none;
   margin-left: auto;
   display: inline-flex;
   align-items: center;
@@ -83,12 +89,17 @@ body {
 #save-status[data-state="disconnected"] { color: #57606a; }
 #save-status[data-state="error"] { color: #cf222e; }
 
+/* The Share controls give way before anything overflows: the link box shrinks (down to 80px) and the
+   progress text is cut with an ellipsis; the buttons themselves never shrink. */
 #share {
   display: flex;
   align-items: center;
   gap: 8px;
-  flex: none;
+  flex: 0 1 auto;
+  min-width: 0;
 }
+
+#share button { flex: none; }
 
 #share[hidden],
 #share [hidden],
@@ -120,6 +131,8 @@ body {
 
 #share-progress,
 #share-active {
+  flex: 0 1 auto;
+  min-width: 0;
   display: inline-flex;
   align-items: center;
   gap: 8px;
@@ -139,9 +152,23 @@ body {
 
 @keyframes share-spin { to { transform: rotate(360deg); } }
 
+/* Narrow windows (720px and less) show no link box: Copy copies the link, its tooltip shows it. Above
+   that the box shrinks as needed (see #share), so the toolbar never overflows. */
+@media (max-width: 720px) {
+  #share-url { display: none; }
+}
+
+#share-progress-text {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 #share-url {
-  width: 360px;
-  max-width: 32vw;
+  flex: 0 1 auto;
+  box-sizing: border-box;
+  width: clamp(140px, 26vw, 360px);
+  min-width: 80px;
   height: 26px;
   padding: 0 8px;
   border: 1px solid #d0d7de;

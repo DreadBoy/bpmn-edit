@@ -24,6 +24,8 @@
 // handshake. With a valid secret the host's socket receives 'share' messages, which show the Share
 // controls; without one (or as a collaborator) they never appear.
 
+import { createPresence } from './presence.js';
+
 /** Edits are sent this long after the last change (coalesces bursts such as keyboard nudges). */
 const SEND_DELAY_MS = 300;
 
@@ -90,6 +92,7 @@ const dragging = modeler.get('dragging');
 const elementRegistry = modeler.get('elementRegistry');
 const popupMenu = modeler.get('popupMenu', false);
 const selection = modeler.get('selection');
+const presence = createPresence({ modeler, send: sendMessage, toolbar: document.getElementById('toolbar') });
 
 let clientId = null;      // assigned by the host in 'init'
 
@@ -1050,6 +1053,11 @@ async function handleMessage(message) {
     case 'remote-update':
       await applyRemoteUpdate(message);
       break;
+    case 'welcome':
+    case 'presence':
+    case 'selection':
+      presence.handleMessage(message);
+      break;
     case 'file-status':
       fileStatus = { state: message.state, message: message.message };
       if (fileStatus.state !== 'ok') {
@@ -1113,6 +1121,7 @@ function renderShare(status) {
   if (status.state === 'active' && shareUrlEl.value !== status.url) {
     shareUrlEl.value = status.url;
     shareCopyEl.textContent = 'Copy';
+    shareCopyEl.title = `Copy the public link: ${status.url}`; // the link box is hidden in narrow windows
   }
   if (status.state === 'error') showShareError(status.error?.message || 'Sharing failed.');
   else if (status.state !== 'idle') hideShareError();
@@ -1170,6 +1179,7 @@ function connect() {
     connected = true;
     everConnected = true;
     renderStatus();
+    presence.onOpen();
   });
   socket.addEventListener('message', (event) => {
     let message;
@@ -1184,6 +1194,7 @@ function connect() {
     const wasConnected = connected;
     connected = false;
     renderStatus();
+    presence.onClose();
     if (event.code === 4001) showError('The host stopped sharing. This link no longer works.');
     else if (!wasConnected && !rendered) showError('Could not connect to the local-bpmn server.');
   });

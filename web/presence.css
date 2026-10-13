@@ -1,0 +1,113 @@
+/* Connected-users list (web/presence.js). It takes the toolbar's free space between the file name
+   and the save status (right-aligned, so it sits next to the status), and web/presence.js fits the
+   entries into it: entries never shrink, they collapse to dots and a "+N" entry instead. */
+
+#users {
+  flex: 1 1 0;
+  display: flex;
+  align-items: center;
+  justify-content: safe flex-end; /* should it still overflow, the own entry (first) stays visible */
+  gap: 10px;
+  min-width: 80px; /* the narrowest state, own dot + "+N", always fits (focus ring included) */
+  margin: 0;
+  padding: 4px 12px 4px 3px; /* room for focus outlines (overflow is hidden) */
+  border-right: 1px solid #d0d7de;
+  list-style: none;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+#users:empty { display: none; }
+
+#users .user {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  white-space: nowrap;
+}
+
+#users .user[hidden] { display: none; }
+
+/* Not enough room: the others as dots only, then also this window's own name ("(you)" stays). */
+#users[data-compact] .user:not([data-self]) .user-name,
+#users[data-compact="all"] .user-self .user-name,
+#users[data-compact="dots"] .user-self .user-name,
+#users[data-compact="dots"] .user-self .user-you { display: none; }
+
+/* While renaming (web/presence.js sets data-renaming on the toolbar), the share link box and the
+   file name make room for the name field; Copy and Stop sharing stay. */
+#toolbar[data-renaming] #share-url { display: none; }
+#toolbar[data-renaming] #file-name { max-width: 8em; min-width: 3em; }
+
+/* Still not enough room: the others are all hidden and the name field shrinks, down to 120px. */
+#users[data-squeeze] .user[data-self] { flex: 1 1 0; min-width: calc(120px + 15px); }
+#users[data-squeeze] .user-name-input { flex: 1 1 0; width: auto; min-width: 120px; }
+#users[data-squeeze] .user[data-self] .user-you { display: none; }
+
+#users .user-more {
+  flex: none;
+  padding: 0 6px;
+  border-radius: 9px;
+  background: #eaeef2;
+  color: #57606a;
+  line-height: 18px;
+  white-space: nowrap;
+  cursor: default;
+}
+
+#users .user-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+#users .user-name {
+  display: block;
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1f2328;
+}
+
+/* The own entry is one button (dot, name, "(you)"): click, Enter or Space to rename. */
+#users button.user-self {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 1px 3px;
+  margin: 0;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  color: inherit;
+  font: inherit;
+  white-space: nowrap;
+  cursor: text;
+}
+
+#users button.user-self:hover:not(.just-renamed),
+#users button.user-self:focus-visible {
+  border-color: #d0d7de;
+  background: #fff;
+}
+
+#users button.user-self:focus-visible,
+#users .user-more:focus-visible {
+  outline: 2px solid #0969da;
+  outline-offset: 1px;
+}
+
+#users .user-name-input {
+  box-sizing: border-box;
+  width: 13em;
+  padding: 1px 4px;
+  border: 1px solid #0969da;
+  border-radius: 4px;
+  font: inherit;
+}
+
+#users .user-you {
+  color: #57606a;
+}
