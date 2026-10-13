@@ -87,11 +87,11 @@ cannot tell host and collaborator apart:
   - **E2E:** two (and three) browser contexts on the host URL; create/move/delete in A → appears in B and C and
     on disk; edits from B reach A. Note observed latency/conflict behaviour (open question: full-XML vs ops).
 
-- [ ] **S5. Connected-users list**
+- [x] **S5. Connected-users list** (verified 2026-10-13, incl. collaborators via share link)
   - Random friendly name + colour per client, editable (stored in `localStorage`); join/leave broadcast.
   - **E2E:** two windows both show 2 users; renaming in A updates B; closing A removes it from B.
 
-- [ ] **S6. Remote selection highlighting**
+- [x] **S6. Remote selection highlighting** (verified 2026-10-13)
   - `selection.changed` → send ids; others `canvas.addMarker(id, 'remote-sel-<n>')` with per-user colour; cleared
     on deselect/leave.
   - **E2E:** select a task in A → outlined in A's colour in B; deselect / close A → marker gone.
@@ -135,6 +135,11 @@ cannot tell host and collaborator apart:
     reported, failures triaged into fix-now vs documented known issues.
 
 ## Backlog (small known issues, fold into a later step)
+- S5/S6 residuals: half-open connections stay listed until S8 keepalive; same-profile tabs share name/colour;
+  colour collisions possible (stored colour not deduped, >8 users repeat); own+remote selection on same element
+  shows remote colour; two remotes on one element show one colour; other users' dots not keyboard-focusable;
+  narrow-toolbar truncations (share progress text at ~640px, file name 721–760px while sharing); Shift+Tab out of
+  rename field may land on body.
 
 - S7 residuals: only the tab opened from the printed URL is host (plain localhost tab can edit, not share);
   Ctrl-C during tunnel startup SIGKILLs cloudflared via exit hook, interrupted download leaves `.cloudflared-*`
