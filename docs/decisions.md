@@ -277,18 +277,34 @@ How it works:
   means another program is still writing (e.g. truncated and about to be rewritten), so the host
   waits until the file settles (no stat shortcut in that state).
 - Slow saves (`src/file.js`, `confirmMs`, 2 s): a write that replaced a missing or invalid file is
-  not reported as saved until the file has held our content for 2 s. The wait restarts with every
-  further write of ours and with every missing/invalid observation, and if the file does not hold
-  our content when it ends (the other program broke it again), the write stays unconfirmed for as
-  long as that lasts (the windows keep the "not valid BPMN" notice). If a valid save arrives while
+  not reported as saved until the file has held our content for 2 s, counted from that first write
+  (further writes of ours do not restart it: under continuous editing the wait would never end), and
+  restarted by every missing/invalid observation. The file is read when the wait ends; if it does
+  not hold our content (the other program broke it again), the write stays unconfirmed for as long
+  as that lasts (the windows keep the "not valid BPMN" notice). If a valid save arrives while
   unconfirmed (an IDE finishing a slow save from its own copy, without the browser edit), it is
   treated like a change that replaced a pending write: the edits are re-applied on top of it in their
-  windows (merged toast), or kept aside if their window has closed. If the host shuts down while
-  unconfirmed and the file does not hold our content, flush() keeps it aside (side file + stderr).
+  windows (merged toast), or kept aside if their window has closed. The windows show "Saved" as soon
+  as the host accepted an edit, also while such a write is unconfirmed; the UI does not distinguish
+  this (rare) state.
+- Shutdown while a write is unconfirmed: `flush()` always keeps a copy of it aside (side file +
+  stderr), whether or not the file holds it at that moment, because the other program may finish its
+  save after we exit (the verifier's "IDE finishes after exit": before 8/8 lost silently, also with a
+  second edit still waiting for its write). Chosen over waiting out the rest of the 2 s at shutdown:
+  waiting delays Ctrl-C and still loses the edit if the program finishes after the wait (which is
+  what happens when it finishes after exit). The cost is a side file nobody needed when no other
+  program was involved, only when Ctrl-C comes within 2 s of replacing a broken or deleted file. A
+  normal Ctrl-C is neither delayed nor leaves a side file (E2E asserted).
 - Re-applying is idempotent (`web/app.js`): a label already at its new text, a created element or
   connection already there, a deleted element already gone, and (new) a moved shape already at its
-  target position count as applied, with no toast. Before, a change on disk that already contained a
-  move (an IDE that reloaded the host's write) gave a false "changed on disk" conflict toast.
+  target position count as applied. Before, a change on disk that already contained a move (an IDE
+  that reloaded the host's write) gave a false "changed on disk" conflict toast. The "merged" toast
+  is shown only if something was actually re-applied, so a change on disk that already contains the
+  window's edits (moves, appends, connects, deletes, labels) shows no toast at all.
+- Merged toasts: they are correct but frequent in long sessions with an IDE saving often (the
+  verifier counted 3–5 per window per minute with clean IDE saves of other elements). They could be
+  rate-limited or folded into the "Reloaded from disk" notice; left as is for v1 (tunable in
+  `reportDiskMerge`, `web/app.js`).
 - Replacing the file: right before the rename, the store re-stats the file synchronously and checks
   again if it changed while being checked, so the remaining gap is the rename call itself.
 - Unwritten accepted edits: when a change on disk replaces a pending write, the session marks the
@@ -323,8 +339,10 @@ wins, conflict toast with the exact text, file not overwritten later); Ctrl-C ri
 `git status`); a valid save just before the host write after the file was invalid, and after it was
 deleted (both kept); a slow save that finishes after the host wrote a browser edit over the
 half-written file (both kept, merged toast); Ctrl-C after the slow save broke the file again (file
-left alone, edit kept aside); a save that already contains a move made over a broken file (no false
-conflict toast); a save replacing the unwritten edit of a window that
+left alone, edit kept aside); Ctrl-C within 2 s of replacing a half-written file with the IDE
+finishing after exit, with and without a second edit waiting for its write (edits kept aside, no
+shutdown delay); a normal Ctrl-C (under 1 s, no side file, no warning); a save that already contains
+a move made over a broken file (no false conflict toast); a save replacing the unwritten edit of a window that
 closed (edit kept aside, file keeps the save). The two S3 tests that asserted last-write-wins now assert that both changes are
 kept.
 
@@ -340,7 +358,10 @@ kept.
   afterwards finishes its save from its own copy, that save replaces the browser edit like any save of
   a stale copy: every window reloads it ("Reloaded from disk") but nobody is told the edit is gone
   (verifier: 4/4 with the IDE finishing 2.5 s after the host's write). While the file stays broken
-  (or is broken again) the write is not confirmed, so that case is merged or kept aside.
+  (or is broken again) the write is not confirmed, so that case is merged or kept aside. In short:
+  an IDE finishing a save later than `confirmMs` after our first write over its broken file, with the
+  file left alone meanwhile, is not detected during the session; at shutdown within that window the
+  edit is kept aside.
 - A save that is valid for less than the settle delay plus the watcher's latency (about 150 ms plus
   a few ms to tens of ms) before the same program breaks the file
   again is never seen by the host. When the host then replaces the broken file it writes its last

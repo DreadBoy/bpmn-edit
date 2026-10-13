@@ -193,6 +193,55 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     expect(cli.stderr()).toContain(`the editor's version was saved to ${join(fixture.dir, aside[0])}`);
   });
 
+  for (const pendingEdit of [false, true]) {
+    test(`Ctrl-C soon after the host replaced a half-written file, the IDE finishing after exit${pendingEdit ? ' (and a second edit still waiting for its write)' : ''}: nothing is lost`, async ({ browser }) => {
+      await start();
+      const [A] = await open(browser, 1);
+      const original = await disk();
+      const ideCopy = renameInXml(original, 'Task_CheckStock', 'Check stock levels');
+
+      await writeFile(fixture.file, ideCopy.slice(0, ideCopy.length / 2));
+      await expect(A.locator('#notice')).toHaveAttribute('data-kind', 'invalid', { timeout: 2000 });
+      await renameInBrowser(A, 'Ship parcel');
+      await expect.poll(async () => nameInXml(await disk(), 'Task_ShipOrder'), { timeout: 2000 }).toBe('Ship parcel');
+      if (pendingEdit) {
+        // Accepted, still in the host's write debounce when the signal arrives: written by the flush.
+        const before = Date.now();
+        await typeLabel(A, 'Task_CancelOrder', 'Cancel and refund');
+        await ackAfter(A, before);
+      } else {
+        await delay(300);
+      }
+      const t0 = Date.now();
+      cli.child.kill('SIGINT');
+      expect(await cli.exited).toEqual({ code: 0, signal: null });
+      expect(Date.now() - t0).toBeLessThan(1500); // no waiting
+      await delay(100);
+      await writeFile(fixture.file, ideCopy); // the IDE finishes from its own copy, after the host exited
+
+      const aside = await asideFiles(fixture.dir);
+      expect(aside).toHaveLength(1);
+      const kept = await readFile(join(fixture.dir, aside[0]), 'utf8');
+      expect(nameInXml(kept, 'Task_ShipOrder')).toBe('Ship parcel');
+      if (pendingEdit) expect(nameInXml(kept, 'Task_CancelOrder')).toBe('Cancel and refund');
+      expect(cli.stderr()).toContain(`also saved to ${join(fixture.dir, aside[0])}`);
+      expect(nameInXml(await disk(), 'Task_CheckStock')).toBe('Check stock levels');
+    });
+  }
+
+  test('a normal Ctrl-C is not delayed and keeps nothing aside', async ({ browser }) => {
+    await start({ writeDelay: 2000 });
+    const [A] = await open(browser, 1);
+    await renameInBrowser(A, 'Ship parcel');
+    const t0 = Date.now();
+    cli.child.kill('SIGINT');
+    expect(await cli.exited).toEqual({ code: 0, signal: null });
+    expect(Date.now() - t0).toBeLessThan(1000);
+    expect(nameInXml(await disk(), 'Task_ShipOrder')).toBe('Ship parcel');
+    expect(await asideFiles(fixture.dir)).toEqual([]);
+    expect(cli.stderr()).not.toContain('warning');
+  });
+
   test('a save on disk that already contains the edit (IDE reloaded it) does not report a false conflict', async ({ browser }) => {
     await start();
     const [A, B] = await open(browser);

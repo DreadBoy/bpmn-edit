@@ -189,3 +189,34 @@ short-lived-save transient (known limit, final file complete), no losses.
 New E2E cases: Ctrl-C after the slow save broke the file again (file left alone, edit kept aside,
 stderr names it), and a save that already contains a move made over a broken file (no conflict or
 dropped toast, move and rename both on disk).
+
+## Round 5: Ctrl-C inside the unconfirmed window, IDE finishing after exit
+
+The round-4 check (verifier script `c2r4/run5.mjs`) found one more silent loss. The IDE leaves the
+file half-written; window A's edit is written over it (unconfirmed); Ctrl-C 0.1–1.2 s later; after
+the host has exited, the IDE finishes its save from its own copy. Exit 0, no stderr, no side file,
+A's edit gone (8/8). Variant with a second accepted edit still waiting for its write at Ctrl-C: the
+shutdown wrote it over the unconfirmed write, saw the file hold it, kept nothing, and both edits were
+lost (8/8).
+
+Fix: at shutdown an unconfirmed write is always kept aside (side file + stderr "…was replaced by the
+editor less than 2 s ago while it was broken or missing … also saved to …"), whether or not the file
+holds it. Waiting out the rest of the 2 s at shutdown was considered and rejected: it delays Ctrl-C
+and still loses the edit when the IDE finishes after the wait, which is exactly this scenario. Also:
+the confirm wait no longer restarts with each write (with continuous editing it never ended, and
+every Ctrl-C then kept a spurious copy: the verifier's `brokenEditsCtrlC` flagged 4/4 until this was
+changed), the file is read again when the wait ends, and the "merged" toast is only shown when
+something was actually re-applied.
+
+| Verifier run | Before | After |
+|---|---|---|
+| `run5.mjs ctrlCAfterExit` | 0/8 ok | 8/8 ok (edit in side file) |
+| `run5.mjs ctrlCPendingAfterExit` | 0/8 ok | 8/8 ok (both edits in side file) |
+| `run5.mjs brokenEditsCtrlC` / `brokenEdits` | ok | 4/4, 3/3 (no spurious side file) |
+| `run5.mjs reBreakCtrlC` / `twoWinInvCtrlC` | ok | 4/4, 4/4 |
+| `run5.mjs freshAppend` / `freshConnect` / `freshDelete` / `sameContent` | ok, merged toast shown | 4/4 each, no toast |
+| `run4.mjs ctrlCInv` / `freshMove`, `run2.mjs invSlow` | ok | 6/6 each (freshMove: no toast) |
+
+New E2E cases: Ctrl-C soon after the host replaced a half-written file with the IDE finishing after
+exit, with and without a second edit waiting for its write (side file holds the edits, stderr names
+it, exit within 1.5 s), and a normal Ctrl-C (under 1 s, no side file, no warning).

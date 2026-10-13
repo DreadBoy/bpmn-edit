@@ -942,7 +942,8 @@ function reportDiskMerge(edits, problems) {
     showToast('conflict', sentences.length > 1 ? `${sentences[0]} (+${sentences.length - 1} more)` : sentences[0], sentences);
     return;
   }
-  if (edits.length) showToast('merged', 'The file was changed on disk; your edits were applied on top of that change');
+  // dirty: something was re-applied (an edit the change on disk already contained needs no notice).
+  if (edits.length && dirty) showToast('merged', 'The file was changed on disk; your edits were applied on top of that change');
 }
 
 /** Fetches the host's current document (used if a newer one is needed but was not received). */

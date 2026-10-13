@@ -365,17 +365,23 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
   }
 
   /** Saves `xml` next to the file instead of writing it (see 'kept-aside'); resolves to success. */
-  async function keepAside(xml) {
+  async function keepAside(xml, { unconfirmed = false } = {}) {
     let aside;
     try {
       aside = await saveAside(xml);
     } catch (err) {
       log(`local-bpmn: warning: ${path} changed on disk, but the editor's version could not be saved next to it `
-        + `(${err.message}); writing it to the file instead\n`);
+        + `(${err.message})${unconfirmed ? '' : '; writing it to the file instead'}\n`);
       return false;
     }
-    log(`local-bpmn: warning: ${path} changed on disk while the editor's last changes were being saved; `
-      + `the file keeps the version on disk, the editor's version was saved to ${aside}\n`);
+    if (unconfirmed) {
+      log(`local-bpmn: warning: ${path} was replaced by the editor less than ${Math.ceil(confirmMs / 1000)} s ago while it `
+        + 'was broken or missing (another program may still be saving it); in case that program finishes '
+        + `its save from an older copy, the editor's version was also saved to ${aside}\n`);
+    } else {
+      log(`local-bpmn: warning: ${path} changed on disk while the editor's last changes were being saved; `
+        + `the file keeps the version on disk, the editor's version was saved to ${aside}\n`);
+    }
     store.emit('kept-aside', { path: aside, xml });
     return true;
   }
@@ -393,14 +399,22 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     provisional = { xml, timer };
   }
 
-  function confirmProvisional() {
-    provisional.timer = null;
-    const { xml } = provisional;
-    // Only once the file holds our content: if the other program broke it again meanwhile, our
-    // write stays unconfirmed until its save arrives (re-applied on top), or flush() keeps it aside.
-    if (xml !== diskXml) return;
+  async function confirmProvisional() {
+    const entry = provisional;
+    entry.timer = null;
+    entry.confirming = true;
+    // Only once the file really holds our content (read it: a save that just landed may not have
+    // been reported yet). Otherwise our write stays unconfirmed until that save is reported
+    // (re-applied on top), or flush() keeps it aside.
+    const current = await readFile(targetPath, 'utf8').catch(() => null);
+    entry.confirming = false;
+    if (provisional !== entry) return; // superseded meanwhile
+    if (current !== entry.xml || entry.xml !== diskXml) {
+      if (current !== entry.xml && watcher && !settleTimer) settleTimer = setTimeout(runCheck, settleMs);
+      return;
+    }
     provisional = null;
-    store.emit('saved', { xml });
+    store.emit('saved', { xml: entry.xml });
   }
 
   /** Ends the unconfirmed state (see confirmLater); returns the unconfirmed content, or null. */
@@ -432,7 +446,9 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       lastWrite = { xml, hash: sha256(xml), mtimeMs: result.stat.mtimeMs, size: result.stat.size };
       store.emit('written', lastWrite);
       if (replacesUnknown) confirmLater(xml);
-      else if (provisional) confirmLater(xml); // still unconfirmed, like the write before it: wait again
+      // Still unconfirmed, like the write before it. The wait is not restarted: under continuous
+      // editing it would never end (and every Ctrl-C would keep a copy aside).
+      else if (provisional) provisional.xml = xml;
       else store.emit('saved', { xml });
       setDiskOk(); // e.g. our write recreated a deleted file
     } catch (err) {
@@ -648,12 +664,13 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
           if (!active) break;
           await active;
         }
-        // An unconfirmed write over a broken file (see confirmLater) that the file no longer holds
-        // (another program broke or replaced it again, and nobody re-applied it): keep it aside.
+        // A write over a broken file that is still unconfirmed (see confirmLater): the program that
+        // was saving it may finish after we exit, from a copy without these edits. Keep a copy aside
+        // whether or not the file holds it right now (Q2: never lose it silently; no shutdown delay).
         if (provisional) {
           const current = await readFile(targetPath, 'utf8').catch(() => null);
           const unconfirmed = dropProvisional();
-          if (current !== unconfirmed) await keepAside(unconfirmed);
+          await keepAside(unconfirmed, { unconfirmed: current === unconfirmed });
         }
       } finally {
         flushing -= 1;

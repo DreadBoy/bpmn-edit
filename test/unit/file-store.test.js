@@ -471,6 +471,25 @@ describe('createFileStore watching', () => {
     assert.equal(await readFile(asides[0].path, 'utf8'), variant(1));
   });
 
+  it('flush() also keeps aside an unconfirmed write the file still holds (the other program may finish later)', async () => {
+    await start({ debounceMs: 0, settleMs: 50, confirmMs: 5000 });
+    const asides = [];
+    store.on('kept-aside', (a) => asides.push(a));
+    const reported = next('external-invalid');
+    await writeFile(file, original.slice(0, 200));
+    await reported;
+    store.write(variant(1));
+    await next('written');
+    await store.unwatch();
+    const started = Date.now();
+    await store.flush();
+    assert.ok(Date.now() - started < 1000, 'no waiting');
+    assert.equal(await readFile(file, 'utf8'), variant(1));
+    assert.equal(asides.length, 1);
+    assert.equal(await readFile(asides[0].path, 'utf8'), variant(1));
+    assert.match(logs.at(-1), /replaced by the editor less than 5 s ago .* also saved to .*local-bpmn-unsaved/);
+  });
+
   it('does not replace an invalid file that is still changing (waits until it settles)', async () => {
     await start({ debounceMs: 0, settleMs: 300 });
     const reported = next('external-invalid');
