@@ -17,6 +17,8 @@
 // Only one update is in flight at a time. A document from someone else that arrives while the user
 // is in the middle of an edit (label editor open, drag, popup menu) is held back until it is done.
 
+import { createPresence } from './presence.js';
+
 /** Edits are sent this long after the last change (coalesces bursts such as keyboard nudges). */
 const SEND_DELAY_MS = 300;
 
@@ -48,6 +50,7 @@ const dragging = modeler.get('dragging');
 const elementRegistry = modeler.get('elementRegistry');
 const popupMenu = modeler.get('popupMenu', false);
 const selection = modeler.get('selection');
+const presence = createPresence({ modeler, send: sendMessage, toolbar: document.getElementById('toolbar') });
 
 let clientId = null;      // assigned by the host in 'init'
 
@@ -1008,6 +1011,10 @@ async function handleMessage(message) {
     case 'remote-update':
       await applyRemoteUpdate(message);
       break;
+    case 'welcome':
+    case 'presence':
+      presence.handleMessage(message);
+      break;
     case 'file-status':
       fileStatus = { state: message.state, message: message.message };
       if (fileStatus.state !== 'ok') {
@@ -1029,6 +1036,7 @@ function connect() {
     connected = true;
     everConnected = true;
     renderStatus();
+    presence.onOpen();
   });
   socket.addEventListener('message', (event) => {
     let message;
@@ -1043,6 +1051,7 @@ function connect() {
     const wasConnected = connected;
     connected = false;
     renderStatus();
+    presence.onClose();
     if (!wasConnected && !rendered) showError('Could not connect to the local-bpmn server.');
   });
 }

@@ -216,3 +216,34 @@ Why this and not the alternatives:
 - The client relies on diagram-js internals (`commandStack._currentExecution`, `_stack`, `_stackIdx`)
   to find root commands and undone edits; if they change, every edit is treated as unsupported (safe,
   but concurrent edits are then dropped with a toast instead of merged).
+
+## S5/S6: presence protocol
+
+### Decision
+
+Presence (who is connected, and from S6 what each window has selected) uses its own message types on
+the existing `/ws` socket and never touches the sync messages. Server side it lives in
+`src/presence.js`, client side in `web/presence.js`; `src/server.js` and `web/app.js` only forward
+messages to it. Palette, name rules and the name generator are in `web/presence-shared.js`, loaded by
+both the host and the page, so the colour shown in the list and the selection outline come from one
+list.
+
+- A window joins with `hello { name?, color? }` (what its browser has in `localStorage`). The host
+  replaces a missing or invalid name with a random friendly one ("Curious Otter") and a missing or
+  invalid colour with the least used palette slot, answers `welcome { user }` and broadcasts
+  `presence { users }` (the full list, join order) on every join, leave (socket `close`) and `rename`.
+  The page stores what it was given, so a reload keeps the name and colour.
+- Only connections that said `hello` take part: the user id is the `clientId` from `init`, and other
+  clients (tests, older pages) see no presence messages at all.
+- Names are cleaned on both sides with the same function (invisible and bidi control characters
+  removed, whitespace collapsed, at most 32 characters) and rendered with `textContent` only. A colour
+  is a palette index, so no colour value from a client ever reaches CSS.
+- Invalid presence messages are ignored, not answered with `error`: the editor treats `error` as a
+  failed save.
+
+### Known limits
+
+- A window is removed when its socket closes. A connection that dies without closing (network loss)
+  stays listed until the host notices; the keepalive planned in S8 will cover that.
+- Two windows in the same browser share `localStorage`, so they show the same name and colour.
+- Colours repeat once more than 8 users are connected.

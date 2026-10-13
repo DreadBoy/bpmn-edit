@@ -52,6 +52,7 @@ import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
 import { createFileStore } from './file.js';
+import { createPresence } from './presence.js';
 import { Session, SessionError } from './session.js';
 
 export const WEB_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', 'web');
@@ -157,6 +158,8 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
   /** Server-assigned id of each connection ('c1', 'c2', …), never reused while the server runs. */
   const clientIds = new WeakMap();
   let lastClientNumber = 0;
+  /** Connected users (names, colours); see src/presence.js for its messages. */
+  const presence = createPresence({ send });
 
   function send(ws, message) {
     if (ws.readyState === ws.OPEN) ws.send(JSON.stringify(message));
@@ -182,6 +185,7 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     if (message === null || typeof message !== 'object' || Array.isArray(message)) {
       return sendError(ws, 'bad-message', 'Messages must be JSON objects');
     }
+    if (presence.handles(message.type)) return presence.handleMessage(ws, message, clientIds.get(ws));
     switch (message.type) {
       case 'update': {
         const { xml, baseVersion, overrides } = message;
@@ -230,6 +234,7 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
       }
     });
     ws.on('close', () => flushWaiters.get(ws)?.());
+    ws.on('close', () => presence.leave(ws));
     lastClientNumber += 1;
     const clientId = `c${lastClientNumber}`;
     clientIds.set(ws, clientId);

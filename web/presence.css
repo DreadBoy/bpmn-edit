@@ -1,0 +1,68 @@
+/* Connected-users list (web/presence.js), at the end of the toolbar. */
+
+#users {
+  flex: 0 1 auto;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  max-width: 45vw;
+  margin: 0;
+  padding: 0 0 0 12px;
+  border-left: 1px solid #d0d7de;
+  list-style: none;
+  overflow: hidden;
+  font-size: 12px;
+}
+
+#users:empty { display: none; }
+
+#users .user {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+#users .user-dot {
+  flex: none;
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+#users .user-name {
+  max-width: 14em;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: #1f2328;
+}
+
+#users button.user-name {
+  padding: 1px 4px;
+  margin: 0 -4px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  background: none;
+  font: inherit;
+  cursor: text;
+}
+
+#users button.user-name:hover,
+#users button.user-name:focus-visible {
+  border-color: #d0d7de;
+  background: #fff;
+}
+
+#users .user-name-input {
+  width: 12em;
+  padding: 1px 4px;
+  border: 1px solid #0969da;
+  border-radius: 4px;
+  font: inherit;
+}
+
+#users .user-you {
+  color: #57606a;
+}
