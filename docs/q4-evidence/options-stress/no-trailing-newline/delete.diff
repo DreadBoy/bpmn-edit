@@ -1,0 +1,87 @@
+diff --git before after
+index 19c4dd5..62afeaf 100644
+--- before
++++ after
+@@ -2,15 +2,8 @@
+ <bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" id="Definitions_Order" targetNamespace="http://bpmn.io/schema/bpmn" xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0" xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0">
+   <bpmn:process id="Process_Order" name="Order process" isExecutable="false">
+     <bpmn:startEvent id="StartEvent_OrderReceived" name="Order received">
+-      <bpmn:outgoing>Flow_ToCheckStock</bpmn:outgoing>
+     </bpmn:startEvent>
+-    <bpmn:task id="Task_CheckStock" name="Check stock">
+-      <bpmn:incoming>Flow_ToCheckStock</bpmn:incoming>
+-      <bpmn:outgoing>Flow_ToGateway</bpmn:outgoing>
+-      <bpmn:outgoing>Flow_080e0y2</bpmn:outgoing>
+-    </bpmn:task>
+     <bpmn:exclusiveGateway id="Gateway_InStock" name="In stock?">
+-      <bpmn:incoming>Flow_ToGateway</bpmn:incoming>
+       <bpmn:outgoing>Flow_Yes</bpmn:outgoing>
+       <bpmn:outgoing>Flow_No</bpmn:outgoing>
+     </bpmn:exclusiveGateway>
+@@ -24,16 +17,12 @@
+     <bpmn:endEvent id="EndEvent_OrderCancelled" name="Order cancelled">
+       <bpmn:incoming>Flow_ToCancelled</bpmn:incoming>
+     </bpmn:endEvent>
+-    <bpmn:sequenceFlow id="Flow_ToCheckStock" sourceRef="StartEvent_OrderReceived" targetRef="Task_CheckStock" />
+-    <bpmn:sequenceFlow id="Flow_ToGateway" sourceRef="Task_CheckStock" targetRef="Gateway_InStock" />
+     <bpmn:sequenceFlow id="Flow_Yes" name="yes" sourceRef="Gateway_InStock" targetRef="Task_ShipOrder" />
+     <bpmn:sequenceFlow id="Flow_No" name="no" sourceRef="Gateway_InStock" targetRef="Task_CancelOrder" />
+     <bpmn:sequenceFlow id="Flow_ToShipped" sourceRef="Task_ShipOrder" targetRef="EndEvent_OrderShipped" />
+     <bpmn:sequenceFlow id="Flow_ToCancelled" sourceRef="Task_CancelOrder" targetRef="EndEvent_OrderCancelled" />
+     <bpmn:task id="Activity_0vgjglj">
+-      <bpmn:incoming>Flow_080e0y2</bpmn:incoming>
+     </bpmn:task>
+-    <bpmn:sequenceFlow id="Flow_080e0y2" sourceRef="Task_CheckStock" targetRef="Activity_0vgjglj" />
+     <bpmn:userTask id="Task_ShipOrder" name="Ship order">
+       <bpmn:incoming>Flow_Yes</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+@@ -41,7 +30,6 @@
+     <bpmn:textAnnotation id="TextAnnotation_0eywss3">
+       <bpmn:text>Note – Änderung</bpmn:text>
+     </bpmn:textAnnotation>
+-    <bpmn:association id="Association_1rem2c6" associationDirection="None" sourceRef="Task_CheckStock" targetRef="TextAnnotation_0eywss3" />
+   </bpmn:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_Order">
+     <bpmndi:BPMNPlane id="BPMNPlane_Order" bpmnElement="Process_Order">
+@@ -51,9 +39,6 @@
+           <dc:Bounds x="133" y="225" width="74" height="14" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Task_CheckStock_di" bpmnElement="Task_CheckStock" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+-        <dc:Bounds x="240" y="160" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Gateway_InStock_di" bpmnElement="Gateway_InStock" isMarkerVisible="true">
+         <dc:Bounds x="395" y="175" width="50" height="50" />
+         <bpmndi:BPMNLabel>
+@@ -81,18 +66,6 @@
+       <bpmndi:BPMNShape id="Activity_0kffzxb_di" bpmnElement="Task_ShipOrder">
+         <dc:Bounds x="500" y="60" width="100" height="80" />
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNEdge id="Association_1rem2c6_di" bpmnElement="Association_1rem2c6">
+-        <di:waypoint x="290" y="160" />
+-        <di:waypoint x="290" y="103" />
+-      </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_ToCheckStock_di" bpmnElement="Flow_ToCheckStock">
+-        <di:waypoint x="188" y="200" />
+-        <di:waypoint x="240" y="200" />
+-      </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_ToGateway_di" bpmnElement="Flow_ToGateway">
+-        <di:waypoint x="340" y="200" />
+-        <di:waypoint x="395" y="200" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_Yes_di" bpmnElement="Flow_Yes">
+         <di:waypoint x="420" y="175" />
+         <di:waypoint x="420" y="100" />
+@@ -117,12 +90,6 @@
+         <di:waypoint x="600" y="300" />
+         <di:waypoint x="662" y="300" />
+       </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_080e0y2_di" bpmnElement="Flow_080e0y2">
+-        <di:waypoint x="290" y="240" />
+-        <di:waypoint x="290" y="280" />
+-        <di:waypoint x="350" y="280" />
+-        <di:waypoint x="350" y="320" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNShape id="TextAnnotation_0eywss3_di" bpmnElement="TextAnnotation_0eywss3">
+         <dc:Bounds x="240" y="60" width="100" height="43" />
+         <bpmndi:BPMNLabel />

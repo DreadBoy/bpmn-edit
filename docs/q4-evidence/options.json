@@ -1,0 +1,2496 @@
+{
+  "note": "churnLines = lines changed vs the ideal one-attribute edit; save3MoveTotalLines = whole diff of a 40 px move; editMismatches = 3-way check, changes disk->written must equal changes bpmn-js made base->out (must be 0); informationLossVsOriginal = categories of lost information compared with the original file.",
+  "results": [
+    {
+      "fixture": "bizagi-export.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 156,
+            "editLines": 2,
+            "churnLines": 154,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {
+              "XML declaration changed": 1,
+              "number formatting changed": 14,
+              "attribute added": 2
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 52,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            17,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 150,
+            "editLines": 2,
+            "churnLines": 148,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {
+              "number formatting changed": 14,
+              "attribute added": 2
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 52,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            16,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {}
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 16,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            2,
+            2,
+            2
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 6,
+            "editLines": 2,
+            "churnLines": 4,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {
+              "attribute added": 2
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 16,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            2,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {}
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 52,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 26,
+            "editLines": 2,
+            "churnLines": 24,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {
+              "XML declaration changed": 1,
+              "number formatting changed": 14,
+              "attribute added": 2
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 52,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            17,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "bpmnio-demo-export.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 900,
+            "editLines": 2,
+            "churnLines": 898,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "bpmn-js DI migration: collapsed sub-process content moved": 4,
+              "edit side effect: BPMNLabel element added": 1,
+              "bpmn-js DI migration: diagram added for collapsed sub-process": 7
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            25,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 900,
+            "editLines": 2,
+            "churnLines": 898,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "bpmn-js DI migration: collapsed sub-process content moved": 4,
+              "edit side effect: BPMNLabel element added": 1,
+              "bpmn-js DI migration: diagram added for collapsed sub-process": 7
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            25,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            25,
+            25,
+            25
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 38,
+            "editLines": 2,
+            "churnLines": 36,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "bpmn-js DI migration: collapsed sub-process content moved": 4,
+              "edit side effect: BPMNLabel element added": 1,
+              "bpmn-js DI migration: diagram added for collapsed sub-process": 7
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            25,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 900,
+            "editLines": 2,
+            "churnLines": 898,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "bpmn-js DI migration: collapsed sub-process content moved": 4,
+              "edit side effect: BPMNLabel element added": 1,
+              "bpmn-js DI migration: diagram added for collapsed sub-process": 7
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            25,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "camunda7-loan-approval.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 41,
+            "editLines": 2,
+            "churnLines": 39,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 37,
+            "editLines": 2,
+            "churnLines": 35,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 39,
+            "editLines": 2,
+            "churnLines": 37,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "camunda7-modeler.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 127,
+            "editLines": 2,
+            "churnLines": 127,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 125,
+            "editLines": 2,
+            "churnLines": 125,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 127,
+            "editLines": 2,
+            "churnLines": 127,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "camunda8-modeler.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 145,
+            "editLines": 2,
+            "churnLines": 143,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 20,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 143,
+            "editLines": 2,
+            "churnLines": 141,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 20,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 14,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 14,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 20,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 143,
+            "editLines": 2,
+            "churnLines": 141,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 20,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "comments-nonascii.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 16,
+            "editLines": 2,
+            "churnLines": 14,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "comment dropped": 3,
+              "processing instruction dropped": 2,
+              "CDATA section turned into escaped text": 1,
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 14,
+          "informationLossVsOriginal": [
+            "comment dropped",
+            "processing instruction dropped",
+            "comment dropped",
+            "comment dropped",
+            "processing instruction dropped"
+          ],
+          "editMismatches": [
+            6,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 12,
+            "editLines": 2,
+            "churnLines": 10,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "comment dropped": 2,
+              "CDATA section turned into escaped text": 1,
+              "processing instruction dropped": 1,
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 14,
+          "informationLossVsOriginal": [
+            "comment dropped",
+            "comment dropped",
+            "processing instruction dropped"
+          ],
+          "editMismatches": [
+            4,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 8,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 8,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 14,
+          "informationLossVsOriginal": [
+            "comment dropped",
+            "processing instruction dropped",
+            "comment dropped",
+            "comment dropped",
+            "processing instruction dropped"
+          ],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 10,
+            "editLines": 2,
+            "churnLines": 8,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "comment dropped": 3,
+              "processing instruction dropped": 2,
+              "CDATA section turned into escaped text": 1,
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 14,
+          "informationLossVsOriginal": [
+            "comment dropped",
+            "processing instruction dropped",
+            "comment dropped",
+            "comment dropped",
+            "processing instruction dropped"
+          ],
+          "editMismatches": [
+            6,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "crlf.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 213,
+            "editLines": 2,
+            "churnLines": 213,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "doctype.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 10,
+            "editLines": 2,
+            "churnLines": 8,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "XML declaration changed": 1,
+              "DOCTYPE dropped": 1,
+              "text content changed": 1,
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [
+            "DOCTYPE dropped",
+            "text content changed"
+          ],
+          "editMismatches": [
+            3,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 5,
+            "editLines": 2,
+            "churnLines": 3,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "text content changed": 1,
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [
+            "text content changed"
+          ],
+          "editMismatches": [
+            1,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            1,
+            1,
+            1
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            1,
+            1,
+            1
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [
+            "DOCTYPE dropped",
+            "text content changed"
+          ],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 10,
+            "editLines": 2,
+            "churnLines": 8,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "XML declaration changed": 1,
+              "DOCTYPE dropped": 1,
+              "text content changed": 1,
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [
+            "DOCTYPE dropped",
+            "text content changed"
+          ],
+          "editMismatches": [
+            3,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "hand-4space.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 305,
+            "editLines": 2,
+            "churnLines": 305,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 202,
+            "editLines": 2,
+            "churnLines": 202,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "hand-tabs.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 305,
+            "editLines": 2,
+            "churnLines": 305,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 204,
+            "editLines": 2,
+            "churnLines": 204,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "no-trailing-newline.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 5,
+            "editLines": 2,
+            "churnLines": 3,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 6,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1,
+            "sideEffectBpmnLabel": 1,
+            "semanticByCategory": {
+              "edit side effect: BPMNLabel element added": 1
+            }
+          },
+          "save2": {
+            "totalLines": 3,
+            "editLines": 2,
+            "churnLines": 1
+          },
+          "save3MoveTotalLines": 12,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    },
+    {
+      "fixture": "signavio-export.bpmn",
+      "options": {
+        "a-accept": {
+          "save1": {
+            "totalLines": 431,
+            "editLines": 2,
+            "churnLines": 431,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {
+              "BPMN attribute dropped (default value)": 13,
+              "number formatting changed": 82
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 18,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            95,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "b-preserve-header-style": {
+          "save1": {
+            "totalLines": 188,
+            "editLines": 2,
+            "churnLines": 188,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {
+              "BPMN attribute dropped (default value)": 13,
+              "number formatting changed": 82
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 18,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            95,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c-minimal-diff": {
+          "save1": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {}
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 10,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "c2-minimal-diff-node-base": {
+          "save1": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {}
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 10,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d1-normalise-once": {
+          "save1": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {}
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 18,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            0,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        },
+        "d2-xmllint-both-sides": {
+          "save1": {
+            "totalLines": 136,
+            "editLines": 2,
+            "churnLines": 136,
+            "sideEffectBpmnLabel": 0,
+            "semanticByCategory": {
+              "BPMN attribute dropped (default value)": 13,
+              "number formatting changed": 82
+            }
+          },
+          "save2": {
+            "totalLines": 2,
+            "editLines": 2,
+            "churnLines": 0
+          },
+          "save3MoveTotalLines": 18,
+          "informationLossVsOriginal": [],
+          "editMismatches": [
+            95,
+            0,
+            0
+          ],
+          "differencesFromBpmnJsOutput": [
+            0,
+            0,
+            0
+          ],
+          "fallbacks": [
+            null,
+            null,
+            null
+          ]
+        }
+      }
+    }
+  ]
+}

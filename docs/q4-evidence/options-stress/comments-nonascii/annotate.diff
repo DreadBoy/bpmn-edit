@@ -1,0 +1,37 @@
+diff --git before after
+index 520f269..0e4974e 100644
+--- before
++++ after
+@@ -51,6 +51,10 @@
+       <bpmn:incoming>Flow_1rv1sf5</bpmn:incoming>
+     </bpmn:task>
+     <bpmn:sequenceFlow id="Flow_1rv1sf5" sourceRef="Task_CheckStock" targetRef="Activity_0pyn6v7" />
++    <bpmn:textAnnotation id="TextAnnotation_0axp8l1">
++      <bpmn:text>Note – Änderung</bpmn:text>
++    </bpmn:textAnnotation>
++    <bpmn:association id="Association_1x0jk5f" associationDirection="None" sourceRef="Task_CheckStock" targetRef="TextAnnotation_0axp8l1" />
+   </bpmn:process>
+   <bpmndi:BPMNDiagram id="BPMNDiagram_Order">
+     <bpmndi:BPMNPlane id="BPMNPlane_Order" bpmnElement="Process_Order">
+@@ -90,6 +94,10 @@
+       <bpmndi:BPMNShape id="Activity_0pyn6v7_di" bpmnElement="Activity_0pyn6v7">
+         <dc:Bounds x="300" y="320" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNEdge id="Association_1x0jk5f_di" bpmnElement="Association_1x0jk5f">
++        <di:waypoint x="290" y="160" />
++        <di:waypoint x="290" y="103" />
++      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_ToCheckStock_di" bpmnElement="Flow_ToCheckStock">
+         <di:waypoint x="188" y="200" />
+         <di:waypoint x="240" y="200" />
+@@ -128,6 +136,10 @@
+         <di:waypoint x="350" y="280" />
+         <di:waypoint x="350" y="320" />
+       </bpmndi:BPMNEdge>
++      <bpmndi:BPMNShape id="TextAnnotation_0axp8l1_di" bpmnElement="TextAnnotation_0axp8l1">
++        <dc:Bounds x="240" y="60" width="100" height="43" />
++        <bpmndi:BPMNLabel />
++      </bpmndi:BPMNShape>
+     </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+ </bpmn:definitions>

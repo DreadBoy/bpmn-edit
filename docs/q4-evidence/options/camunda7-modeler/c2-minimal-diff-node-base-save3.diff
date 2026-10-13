@@ -1,0 +1,31 @@
+diff --git before after
+index 5669d87..2de0751 100644
+--- before
++++ after
+@@ -96,7 +96,7 @@
+         <di:waypoint x="675" y="227" />
+       </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_1p1pk8c_di" bpmnElement="Flow_1p1pk8c">
+-        <di:waypoint x="580" y="120" />
++        <di:waypoint x="620" y="120" />
+         <di:waypoint x="700" y="120" />
+         <di:waypoint x="700" y="202" />
+       </bpmndi:BPMNEdge>
+@@ -120,7 +120,7 @@
+       </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_04zxo8z_di" bpmnElement="Flow_04zxo8z">
+         <di:waypoint x="398" y="120" />
+-        <di:waypoint x="480" y="120" />
++        <di:waypoint x="520" y="120" />
+       </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_1u1g5am_di" bpmnElement="Flow_1u1g5am">
+         <di:waypoint x="398" y="227" />
+@@ -137,7 +137,7 @@
+         <dc:Bounds x="265" y="202" width="50" height="50" />
+       </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Activity_0fevdvq_di" bpmnElement="Activity_09yexpb">
+-        <dc:Bounds x="480" y="80" width="100" height="80" />
++        <dc:Bounds x="520" y="80" width="100" height="80" />
+         <bpmndi:BPMNLabel />
+       </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Activity_0aala7l_di" bpmnElement="Activity_1navjv9">

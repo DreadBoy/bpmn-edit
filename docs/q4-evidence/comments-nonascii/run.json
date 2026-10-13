@@ -1,0 +1,10 @@
+{
+  "fixture": "comments-nonascii.bpmn",
+  "ok": true,
+  "taskA": "Task_CheckStock",
+  "taskB": "Task_ShipOrder",
+  "oldNameA": "Preveri zalogo (Lager prüfen)",
+  "oldNameB": "Odpošlji naročilo 📦",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

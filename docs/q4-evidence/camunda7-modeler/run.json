@@ -1,0 +1,10 @@
+{
+  "fixture": "camunda7-modeler.bpmn",
+  "ok": true,
+  "taskA": "Activity_09yexpb",
+  "taskB": "Activity_1navjv9",
+  "oldNameA": "1",
+  "oldNameB": "2",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

@@ -1,0 +1,16 @@
+b48fb68 save 3: move task A
+
+ comments-nonascii.bpmn | 14 +++++++-------
+ 1 file changed, 7 insertions(+), 7 deletions(-)
+7e82c86 save 2: rename task B
+
+ comments-nonascii.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+f919789 save 1: rename task A
+
+ comments-nonascii.bpmn | 16 +++++-----------
+ 1 file changed, 5 insertions(+), 11 deletions(-)
+11159fe original
+
+ comments-nonascii.bpmn | 119 +++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 119 insertions(+)

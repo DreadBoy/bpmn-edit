@@ -1,0 +1,16 @@
+f03b64d save 3: move task A
+
+ hand-tabs.bpmn | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+597db58 save 2: rename task B
+
+ hand-tabs.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+d709f68 save 1: rename task A
+
+ hand-tabs.bpmn | 305 ++++++++++++++++++++-------------------------------------
+ 1 file changed, 105 insertions(+), 200 deletions(-)
+56512f5 original
+
+ hand-tabs.bpmn | 202 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 202 insertions(+)

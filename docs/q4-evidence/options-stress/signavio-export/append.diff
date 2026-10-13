@@ -1,0 +1,46 @@
+diff --git before after
+index 5c21349..7d5170c 100644
+--- before
++++ after
+@@ -14,6 +14,7 @@
+          </extensionElements>
+          <incoming>sid-6F611B9A-FD78-435D-936D-6B67F123C9D6</incoming>
+          <outgoing>sid-D84DD080-9128-42BB-BCC9-BD5148D97547</outgoing>
++         <outgoing>Flow_0u9px3z</outgoing>
+       </task>
+       <task completionQuantity="1" id="sid-28CA9418-A686-4DD4-9576-2611515C414F" isForCompensation="false" name="Task 2" startQuantity="1">
+          <extensionElements>
+@@ -112,6 +113,10 @@
+             <signavio:signavioMetaData metaKey="bordercolor" metaValue="#000000"/>
+          </extensionElements>
+       </sequenceFlow>
++      <task id="Activity_1evzj12">
++         <incoming>Flow_0u9px3z</incoming>
++      </task>
++      <sequenceFlow id="Flow_0u9px3z" sourceRef="sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C" targetRef="Activity_1evzj12" />
+    </process>
+    <bpmndi:BPMNDiagram id="sid-fd1165b7-1eeb-490d-afe9-a4dde6cb9fe4">
+       <bpmndi:BPMNPlane bpmnElement="sid-ea50cd9d-549f-452f-8fe6-7c0c7a496586" id="sid-597f2a68-01b5-44d9-b25e-4bc180d4da5e">
+@@ -163,6 +168,9 @@
+                <omgdc:Bounds height="24.0" width="75.5999984741211" x="709.5" y="388.5"/>
+             </bpmndi:BPMNLabel>
+          </bpmndi:BPMNShape>
++         <bpmndi:BPMNShape id="Activity_1evzj12_di" bpmnElement="Activity_1evzj12">
++            <omgdc:Bounds x="285" y="430" width="100" height="80" />
++         </bpmndi:BPMNShape>
+          <bpmndi:BPMNEdge bpmnElement="sid-D84DD080-9128-42BB-BCC9-BD5148D97547" id="sid-D84DD080-9128-42BB-BCC9-BD5148D97547_gui">
+             <omgdi:waypoint x="325.0" y="310.15197568389056"/>
+             <omgdi:waypoint x="419.0" y="310.43768996960483"/>
+@@ -205,6 +213,12 @@
+             <omgdi:waypoint x="150.0" y="310.0"/>
+             <omgdi:waypoint x="225.0" y="310.0"/>
+          </bpmndi:BPMNEdge>
++         <bpmndi:BPMNEdge id="Flow_0u9px3z_di" bpmnElement="Flow_0u9px3z">
++            <omgdi:waypoint x="275" y="350" />
++            <omgdi:waypoint x="275" y="390" />
++            <omgdi:waypoint x="335" y="390" />
++            <omgdi:waypoint x="335" y="430" />
++         </bpmndi:BPMNEdge>
+       </bpmndi:BPMNPlane>
+       <bpmndi:BPMNLabelStyle id="sid-dc3ba873-47b5-4027-8306-93aeab017ac3">
+          <omgdc:Font isBold="false" isItalic="false" isStrikeThrough="false" isUnderline="false" name="Arial" size="11.0"/>

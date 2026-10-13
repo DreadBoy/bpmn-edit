@@ -1,0 +1,28 @@
+diff --git before after
+index f93d210..f23f44c 100644
+--- before
++++ after
+@@ -80,7 +80,7 @@
+ 			</bpmndi:BPMNShape>
+ 			<bpmndi:BPMNShape id='Task_CheckStock_di'
+ 				bpmnElement='Task_CheckStock'>
+-				<dc:Bounds x='240'
++				<dc:Bounds x='280'
+ 					y='160'
+ 					width='100'
+ 					height='80' />
+@@ -145,12 +145,12 @@
+ 				bpmnElement='Flow_ToCheckStock'>
+ 				<di:waypoint x='188'
+ 					y='200' />
+-				<di:waypoint x='240'
++				<di:waypoint x='280'
+ 					y='200' />
+ 			</bpmndi:BPMNEdge>
+ 			<bpmndi:BPMNEdge id='Flow_ToGateway_di'
+ 				bpmnElement='Flow_ToGateway'>
+-				<di:waypoint x='340'
++				<di:waypoint x='380'
+ 					y='200' />
+ 				<di:waypoint x='395'
+ 					y='200' />

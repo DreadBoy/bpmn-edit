@@ -1,0 +1,37 @@
+diff --git before after
+index 112a9ae..c8e6d3c 100644
+--- before
++++ after
+@@ -118,6 +118,10 @@
+       <bpmn:incoming>Flow_0zuvb23</bpmn:incoming>
+     </bpmn:task>
+     <bpmn:sequenceFlow id="Flow_0zuvb23" sourceRef="Activity_1kpg3ok" targetRef="Activity_0csmb9b" />
++    <bpmn:textAnnotation id="TextAnnotation_100idkp">
++      <bpmn:text>Note – Änderung</bpmn:text>
++    </bpmn:textAnnotation>
++    <bpmn:association id="Association_1yimjm9" associationDirection="None" sourceRef="Activity_1kpg3ok" targetRef="TextAnnotation_100idkp" />
+   </bpmn:process>
+   <bpmn:error id="Error_0gyjhl0" name="ErrorInData" errorCode="ErrorInData" />
+   <bpmn:error id="Error_0df5ic3" name="FailedToCreateRecord" errorCode="FailedToCreateRecord" />
+@@ -134,6 +138,10 @@
+         <di:waypoint x="380" y="560" />
+         <di:waypoint x="380" y="597" />
+       </bpmndi:BPMNEdge>
++      <bpmndi:BPMNShape id="TextAnnotation_100idkp_di" bpmnElement="TextAnnotation_100idkp">
++        <dc:Bounds x="270" y="337" width="100" height="43" />
++        <bpmndi:BPMNLabel />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="Flow_1vt6ezk_di" bpmnElement="Flow_1vt6ezk" bioc:stroke="#000000" color:border-color="#000000">
+         <di:waypoint x="1410" y="490" />
+         <di:waypoint x="1460" y="490" />
+@@ -190,6 +198,10 @@
+       <bpmndi:BPMNShape id="Activity_0pr0kv0_di" bpmnElement="Activity_1kpg3ok" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+         <dc:Bounds x="270" y="437" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNEdge id="Association_1yimjm9_di" bpmnElement="Association_1yimjm9">
++        <di:waypoint x="320" y="437" />
++        <di:waypoint x="320" y="380" />
++      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNShape id="Activity_17oxyev_di" bpmnElement="Activity_17oxyev" isExpanded="true" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="730" y="340" width="680" height="300" />
+       </bpmndi:BPMNShape>

@@ -1,0 +1,16 @@
+264ffe2 save 3: move task A
+
+ camunda7-modeler.bpmn | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+2b635dd save 2: rename task B
+
+ camunda7-modeler.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+2ce7931 save 1: rename task A
+
+ camunda7-modeler.bpmn | 127 +++++++++++++++++++++++++-------------------------
+ 1 file changed, 64 insertions(+), 63 deletions(-)
+45af152 original
+
+ camunda7-modeler.bpmn | 168 ++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 168 insertions(+)

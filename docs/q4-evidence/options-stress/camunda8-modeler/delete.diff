@@ -1,0 +1,111 @@
+diff --git before after
+index d2de6c5..3dcf719 100644
+--- before
++++ after
+@@ -6,23 +6,13 @@
+       <zeebe:userTaskForm id="userTaskForm_2l1dohk"></zeebe:userTaskForm>
+     </bpmn:extensionElements>
+     <bpmn:startEvent id="StartEvent_1" name="Process Customer Data">
+-      <bpmn:outgoing>Flow_0rfbpf0</bpmn:outgoing>
+     </bpmn:startEvent>
+-    <bpmn:sequenceFlow id="Flow_0rfbpf0" sourceRef="StartEvent_1" targetRef="Activity_1kpg3ok" />
+-    <bpmn:boundaryEvent id="Event_05j9v3i" name="Error Detected" attachedToRef="Activity_1kpg3ok">
+-      <bpmn:outgoing>Flow_1may791</bpmn:outgoing>
+-      <bpmn:errorEventDefinition id="ErrorEventDefinition_0srs30c" errorRef="Error_0gyjhl0" />
+-    </bpmn:boundaryEvent>
+-    <bpmn:sequenceFlow id="Flow_1may791" sourceRef="Event_05j9v3i" targetRef="Activity_0kzg0nb" />
+-    <bpmn:sequenceFlow id="Flow_0o6zxl7" sourceRef="Activity_1kpg3ok" targetRef="Gateway_1n3fnvz" />
+     <bpmn:exclusiveGateway id="Gateway_1n3fnvz">
+-      <bpmn:incoming>Flow_0o6zxl7</bpmn:incoming>
+       <bpmn:incoming>Flow_0krdbvt</bpmn:incoming>
+       <bpmn:outgoing>Flow_17nttda</bpmn:outgoing>
+     </bpmn:exclusiveGateway>
+     <bpmn:sequenceFlow id="Flow_0krdbvt" sourceRef="Activity_0kzg0nb" targetRef="Gateway_1n3fnvz" />
+     <bpmn:userTask id="Activity_0kzg0nb" name="View and Correct Error">
+-      <bpmn:incoming>Flow_1may791</bpmn:incoming>
+       <bpmn:outgoing>Flow_0krdbvt</bpmn:outgoing>
+     </bpmn:userTask>
+     <bpmn:subProcess id="Activity_17oxyev" name="Process Data">
+@@ -103,22 +93,11 @@
+       <bpmn:incoming>Flow_188kodm</bpmn:incoming>
+       <bpmn:outgoing>Flow_18w8ool</bpmn:outgoing>
+     </bpmn:businessRuleTask>
+-    <bpmn:userTask id="Activity_1kpg3ok" name="Verify Data is Correct">
+-      <bpmn:extensionElements>
+-        <zeebe:formDefinition formKey="camunda-forms:bpmn:userTaskForm_2l1dohk" />
+-      </bpmn:extensionElements>
+-      <bpmn:incoming>Flow_0rfbpf0</bpmn:incoming>
+-      <bpmn:outgoing>Flow_0o6zxl7</bpmn:outgoing>
+-      <bpmn:outgoing>Flow_0zuvb23</bpmn:outgoing>
+-    </bpmn:userTask>
+     <bpmn:task id="Activity_0csmb9b">
+-      <bpmn:incoming>Flow_0zuvb23</bpmn:incoming>
+     </bpmn:task>
+-    <bpmn:sequenceFlow id="Flow_0zuvb23" sourceRef="Activity_1kpg3ok" targetRef="Activity_0csmb9b" />
+     <bpmn:textAnnotation id="TextAnnotation_100idkp">
+       <bpmn:text>Note – Änderung</bpmn:text>
+     </bpmn:textAnnotation>
+-    <bpmn:association id="Association_1yimjm9" associationDirection="None" sourceRef="Activity_1kpg3ok" targetRef="TextAnnotation_100idkp" />
+   </bpmn:process>
+   <bpmn:error id="Error_0gyjhl0" name="ErrorInData" errorCode="ErrorInData" />
+   <bpmn:error id="Error_0df5ic3" name="FailedToCreateRecord" errorCode="FailedToCreateRecord" />
+@@ -129,12 +108,6 @@
+         <di:waypoint x="1560" y="490" />
+         <di:waypoint x="1632" y="490" />
+       </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_0zuvb23_di" bpmnElement="Flow_0zuvb23">
+-        <di:waypoint x="320" y="517" />
+-        <di:waypoint x="320" y="560" />
+-        <di:waypoint x="380" y="560" />
+-        <di:waypoint x="380" y="597" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNShape id="TextAnnotation_100idkp_di" bpmnElement="TextAnnotation_100idkp">
+         <dc:Bounds x="270" y="337" width="100" height="43" />
+         <bpmndi:BPMNLabel />
+@@ -161,19 +134,6 @@
+         <di:waypoint x="580" y="600" />
+         <di:waypoint x="580" y="502" />
+       </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_0o6zxl7_di" bpmnElement="Flow_0o6zxl7" bioc:stroke="#000000" color:border-color="#000000">
+-        <di:waypoint x="370" y="477" />
+-        <di:waypoint x="555" y="477" />
+-      </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_1may791_di" bpmnElement="Flow_1may791" bioc:stroke="#000000" color:border-color="#000000">
+-        <di:waypoint x="340" y="535" />
+-        <di:waypoint x="340" y="600" />
+-        <di:waypoint x="410" y="600" />
+-      </bpmndi:BPMNEdge>
+-      <bpmndi:BPMNEdge id="Flow_0rfbpf0_di" bpmnElement="Flow_0rfbpf0" bioc:stroke="#000000" color:border-color="#000000">
+-        <di:waypoint x="215" y="477" />
+-        <di:waypoint x="270" y="477" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNShape id="_BPMNShape_StartEvent_2" bpmnElement="StartEvent_1" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="179" y="459" width="36" height="36" />
+         <bpmndi:BPMNLabel>
+@@ -192,13 +152,6 @@
+       <bpmndi:BPMNShape id="Activity_1luk15l_di" bpmnElement="Activity_0h20swu" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="890" y="220" width="100" height="80" />
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Activity_0pr0kv0_di" bpmnElement="Activity_1kpg3ok" bioc:stroke="#0d4372" bioc:fill="#bbdefb" color:background-color="#bbdefb" color:border-color="#0d4372">
+-        <dc:Bounds x="270" y="437" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+-      <bpmndi:BPMNEdge id="Association_1yimjm9_di" bpmnElement="Association_1yimjm9">
+-        <di:waypoint x="320" y="437" />
+-        <di:waypoint x="320" y="380" />
+-      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNShape id="Activity_17oxyev_di" bpmnElement="Activity_17oxyev" isExpanded="true" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="730" y="340" width="680" height="300" />
+       </bpmndi:BPMNShape>
+@@ -280,12 +233,6 @@
+           <dc:Bounds x="776" y="365" width="88" height="27" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Event_1m8k3en_di" bpmnElement="Event_05j9v3i" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+-        <dc:Bounds x="322" y="499" width="36" height="36" />
+-        <bpmndi:BPMNLabel>
+-          <dc:Bounds x="254" y="533" width="72" height="14" />
+-        </bpmndi:BPMNLabel>
+-      </bpmndi:BPMNShape>
+     </bpmndi:BPMNPlane>
+   </bpmndi:BPMNDiagram>
+ </bpmn:definitions>

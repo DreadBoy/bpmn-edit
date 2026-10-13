@@ -1,0 +1,21 @@
+diff --git before after
+index 7e6d933..563756a 100644
+--- before
++++ after
+@@ -13,7 +13,7 @@
+ 			<bpmn:outgoing>Flow_ToCheckStock</bpmn:outgoing>
+ 		</bpmn:startEvent>
+ 		<bpmn:task id='Task_CheckStock'
+-			name='Check stock'>
++			name='Q4 first rename'>
+ 			<bpmn:incoming>Flow_ToCheckStock</bpmn:incoming>
+ 			<bpmn:outgoing>Flow_ToGateway</bpmn:outgoing>
+ 		</bpmn:task>
+@@ -84,6 +84,7 @@
+ 					y='160'
+ 					width='100'
+ 					height='80' />
++				<bpmndi:BPMNLabel />
+ 			</bpmndi:BPMNShape>
+ 			<bpmndi:BPMNShape id='Gateway_InStock_di'
+ 				bpmnElement='Gateway_InStock'

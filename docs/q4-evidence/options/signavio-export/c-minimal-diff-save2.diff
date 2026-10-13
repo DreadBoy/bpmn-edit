@@ -1,0 +1,13 @@
+diff --git before after
+index e215591..4d6978c 100644
+--- before
++++ after
+@@ -15,7 +15,7 @@
+          <incoming>sid-6F611B9A-FD78-435D-936D-6B67F123C9D6</incoming>
+          <outgoing>sid-D84DD080-9128-42BB-BCC9-BD5148D97547</outgoing>
+       </task>
+-      <task completionQuantity="1" id="sid-28CA9418-A686-4DD4-9576-2611515C414F" isForCompensation="false" name="Task 2" startQuantity="1">
++      <task completionQuantity="1" id="sid-28CA9418-A686-4DD4-9576-2611515C414F" isForCompensation="false" name="Q4 zweite Änderung" startQuantity="1">
+          <extensionElements>
+             <signavio:signavioMetaData metaKey="bgcolor" metaValue="#ffffcc"/>
+             <signavio:signavioMetaData metaKey="bordercolor" metaValue="#000000"/>

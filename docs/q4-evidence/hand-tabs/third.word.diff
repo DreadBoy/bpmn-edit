@@ -1,0 +1,32 @@
+diff --git a/hand-tabs.bpmn b/hand-tabs.bpmn
+index 31e7dcf..6a5dd96 100644
+--- a/hand-tabs.bpmn
++++ b/hand-tabs.bpmn
+@@ -42,10 +42,6 @@
+          <dc:Bounds x="133" y="225" width="74" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+[-      <bpmndi:BPMNShape id="Task_CheckStock_di" bpmnElement="Task_CheckStock">-]
+[-        <dc:Bounds x="240" y="160" width="100" height="80" />-]
+[-        <bpmndi:BPMNLabel />-]
+[-      </bpmndi:BPMNShape>-]
+      <bpmndi:BPMNShape id="Gateway_InStock_di" bpmnElement="Gateway_InStock" isMarkerVisible="true">
+        <dc:Bounds x="395" y="175" width="50" height="50" />
+        <bpmndi:BPMNLabel>
+@@ -71,12 +67,16 @@
+          <dc:Bounds x="641" y="325" width="79" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      {+<bpmndi:BPMNShape id="Task_CheckStock_di" bpmnElement="Task_CheckStock">+}
+{+        <dc:Bounds x="280" y="160" width="100" height="80" />+}
+{+        <bpmndi:BPMNLabel />+}
+{+      </bpmndi:BPMNShape>+}
+      <bpmndi:BPMNEdge id="Flow_ToCheckStock_di" bpmnElement="Flow_ToCheckStock">
+        <di:waypoint x="188" y="200" />
+        <di:waypoint [-x="240"-]{+x="280"+} y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToGateway_di" bpmnElement="Flow_ToGateway">
+        <di:waypoint [-x="340"-]{+x="380"+} y="200" />
+        <di:waypoint x="395" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_Yes_di" bpmnElement="Flow_Yes">

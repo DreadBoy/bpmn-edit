@@ -1,0 +1,44 @@
+diff --git a/signavio-export.bpmn b/signavio-export.bpmn
+index de83d35..142e6cf 100644
+--- a/signavio-export.bpmn
++++ b/signavio-export.bpmn
+@@ -122,12 +122,6 @@
+           <omgdc:Bounds x="106.36071395874023" y="327" width="57.27857208251953" height="11" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui" bpmnElement="sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C">
+-        <omgdc:Bounds x="225" y="270" width="100" height="80" />
+-        <bpmndi:BPMNLabel labelStyle="sid-98dc5a42-8fd4-4484-ba25-961a7288d3d2">
+-          <omgdc:Bounds x="256.8714294433594" y="302" width="36.25714111328125" height="12" />
+-        </bpmndi:BPMNLabel>
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="sid-28CA9418-A686-4DD4-9576-2611515C414F_gui" bpmnElement="sid-28CA9418-A686-4DD4-9576-2611515C414F">
+         <omgdc:Bounds x="536" y="140" width="100" height="80" />
+         <bpmndi:BPMNLabel labelStyle="sid-98dc5a42-8fd4-4484-ba25-961a7288d3d2">
+@@ -164,9 +158,15 @@
+           <omgdc:Bounds x="709.5" y="388.5" width="75.5999984741211" height="24" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C_gui" bpmnElement="sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C">
++        <omgdc:Bounds x="270" y="270" width="100" height="80" />
++        <bpmndi:BPMNLabel labelStyle="sid-98dc5a42-8fd4-4484-ba25-961a7288d3d2">
++          <omgdc:Bounds x="301.8714294433594" y="302" width="36.25714111328125" height="12" />
++        </bpmndi:BPMNLabel>
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="sid-D84DD080-9128-42BB-BCC9-BD5148D97547_gui" bpmnElement="sid-D84DD080-9128-42BB-BCC9-BD5148D97547">
+-        <omgdi:waypoint x="325" y="310.15197568389056" />
+-        <omgdi:waypoint x="419" y="310.43768996960483" />
++        <omgdi:waypoint x="370" y="310" />
++        <omgdi:waypoint x="419" y="310" />
+       </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="sid-A75D7241-700A-460E-9F38-0D456F5AFB93_gui" bpmnElement="sid-A75D7241-700A-460E-9F38-0D456F5AFB93">
+         <omgdi:waypoint x="439.5" y="290" />
+@@ -204,7 +204,7 @@
+       </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="sid-6F611B9A-FD78-435D-936D-6B67F123C9D6_gui" bpmnElement="sid-6F611B9A-FD78-435D-936D-6B67F123C9D6">
+         <omgdi:waypoint x="150" y="310" />
+-        <omgdi:waypoint x="225" y="310" />
++        <omgdi:waypoint x="270" y="310" />
+       </bpmndi:BPMNEdge>
+     </bpmndi:BPMNPlane>
+     <bpmndi:BPMNLabelStyle id="sid-dc3ba873-47b5-4027-8306-93aeab017ac3">

@@ -1,0 +1,16 @@
+b927f92 save 3: move task A
+
+ crlf.bpmn | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+360984c save 2: rename task B
+
+ crlf.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+764019d save 1: rename task A
+
+ crlf.bpmn | 213 +++++++++++++++++++++++++++++++-------------------------------
+ 1 file changed, 107 insertions(+), 106 deletions(-)
+b355c38 original
+
+ crlf.bpmn | 106 ++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 106 insertions(+)

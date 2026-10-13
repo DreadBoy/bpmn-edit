@@ -1,0 +1,62 @@
+diff --git before after
+index e14cd9c..7d9bd8a 100644
+--- before
++++ after
+@@ -16,14 +16,6 @@
+          <outgoing>sid-D84DD080-9128-42BB-BCC9-BD5148D97547</outgoing>
+          <outgoing>Flow_0u9px3z</outgoing>
+       </task>
+-      <task completionQuantity="1" id="sid-28CA9418-A686-4DD4-9576-2611515C414F" isForCompensation="false" name="Task 2" startQuantity="1">
+-         <extensionElements>
+-            <signavio:signavioMetaData metaKey="bgcolor" metaValue="#ffffcc"/>
+-            <signavio:signavioMetaData metaKey="bordercolor" metaValue="#000000"/>
+-         </extensionElements>
+-         <incoming>sid-A75D7241-700A-460E-9F38-0D456F5AFB93</incoming>
+-         <outgoing>sid-2595595D-5F23-45DD-AC11-828D9F0C715F</outgoing>
+-      </task>
+       <endEvent id="sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38" name="End Event">
+          <extensionElements>
+             <signavio:signavioMetaData metaKey="bgcolor" metaValue="#ffffff"/>
+@@ -117,6 +109,10 @@
+          <incoming>Flow_0u9px3z</incoming>
+       </task>
+       <sequenceFlow id="Flow_0u9px3z" sourceRef="sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C" targetRef="Activity_1evzj12" />
++      <userTask id="sid-28CA9418-A686-4DD4-9576-2611515C414F" name="Task 2">
++         <incoming>sid-A75D7241-700A-460E-9F38-0D456F5AFB93</incoming>
++         <outgoing>sid-2595595D-5F23-45DD-AC11-828D9F0C715F</outgoing>
++      </userTask>
+       <textAnnotation id="TextAnnotation_0o8tpa1">
+          <text>Note – Änderung</text>
+       </textAnnotation>
+@@ -136,12 +132,6 @@
+                <omgdc:Bounds height="12.0" width="36.25714111328125" x="256.8714294433594" y="302.0"/>
+             </bpmndi:BPMNLabel>
+          </bpmndi:BPMNShape>
+-         <bpmndi:BPMNShape bpmnElement="sid-28CA9418-A686-4DD4-9576-2611515C414F" id="sid-28CA9418-A686-4DD4-9576-2611515C414F_gui">
+-            <omgdc:Bounds height="80.0" width="100.0" x="536.0" y="140.0"/>
+-            <bpmndi:BPMNLabel labelStyle="sid-98dc5a42-8fd4-4484-ba25-961a7288d3d2">
+-               <omgdc:Bounds height="12.0" width="36.25714111328125" x="567.8714294433594" y="172.0"/>
+-            </bpmndi:BPMNLabel>
+-         </bpmndi:BPMNShape>
+          <bpmndi:BPMNShape bpmnElement="sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38" id="sid-0B227E38-4B4F-4AEF-85C8-29828C1DFF38_gui">
+             <omgdc:Bounds height="28.0" width="28.0" x="780.0" y="265.0"/>
+             <bpmndi:BPMNLabel labelStyle="sid-dc3ba873-47b5-4027-8306-93aeab017ac3">
+@@ -175,6 +165,9 @@
+          <bpmndi:BPMNShape id="Activity_1evzj12_di" bpmnElement="Activity_1evzj12">
+             <omgdc:Bounds x="285" y="430" width="100" height="80" />
+          </bpmndi:BPMNShape>
++         <bpmndi:BPMNShape id="Activity_0tb6rss_di" bpmnElement="sid-28CA9418-A686-4DD4-9576-2611515C414F">
++            <omgdc:Bounds x="536" y="140" width="100" height="80" />
++         </bpmndi:BPMNShape>
+          <bpmndi:BPMNEdge id="Association_0z1vxqu_di" bpmnElement="Association_0z1vxqu">
+             <omgdi:waypoint x="275" y="270" />
+             <omgdi:waypoint x="275" y="213" />
+@@ -184,7 +177,7 @@
+             <omgdi:waypoint x="419.0" y="310.43768996960483"/>
+          </bpmndi:BPMNEdge>
+          <bpmndi:BPMNEdge bpmnElement="sid-A75D7241-700A-460E-9F38-0D456F5AFB93" id="sid-A75D7241-700A-460E-9F38-0D456F5AFB93_gui">
+-            <omgdi:waypoint x="439.5" y="290.0"/>
++            <omgdi:waypoint x="440" y="291"/>
+             <omgdi:waypoint x="439.5" y="180.0"/>
+             <omgdi:waypoint x="536.0" y="180.0"/>
+          </bpmndi:BPMNEdge>

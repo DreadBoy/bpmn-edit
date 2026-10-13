@@ -1,0 +1,4 @@
+# Byte-exact BPMN fixtures and evidence (line endings matter)
+*.bpmn -text
+docs/q4-evidence/** -text
+test/fixtures/** -text

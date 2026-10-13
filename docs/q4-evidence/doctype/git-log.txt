@@ -1,0 +1,16 @@
+54c8981 save 3: move task A
+
+ doctype.bpmn | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+ea84d05 save 2: rename task B
+
+ doctype.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+277752a save 1: rename task A
+
+ doctype.bpmn | 10 ++++------
+ 1 file changed, 4 insertions(+), 6 deletions(-)
+16532c7 original
+
+ doctype.bpmn | 110 +++++++++++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 110 insertions(+)

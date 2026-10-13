@@ -1,0 +1,122 @@
+[
+  {
+    "fixture": "bizagi-export.bpmn",
+    "ok": true,
+    "taskA": "_5a972b87-735d-454a-b31c-f52fb3afc5c7",
+    "taskB": "_4f7d62d7-f0e6-46bc-be00-69e02da38f65",
+    "oldNameA": "Task 1",
+    "oldNameB": "Task 2",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "bpmnio-demo-export.bpmn",
+    "ok": true,
+    "taskA": "task_id",
+    "taskB": "user_task_id",
+    "oldNameA": "Task",
+    "oldNameB": "User Task",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "camunda7-loan-approval.bpmn",
+    "ok": true,
+    "taskA": "UserTask_1",
+    "taskB": "UserTask_1",
+    "oldNameA": "Approve Request",
+    "oldNameB": "Approve Request",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "camunda7-modeler.bpmn",
+    "ok": true,
+    "taskA": "Activity_09yexpb",
+    "taskB": "Activity_1navjv9",
+    "oldNameA": "1",
+    "oldNameB": "2",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "camunda8-modeler.bpmn",
+    "ok": true,
+    "taskA": "Activity_1kpg3ok",
+    "taskB": "Activity_0kzg0nb",
+    "oldNameA": "Verify Data is Correct",
+    "oldNameB": "View and Correct Error",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "comments-nonascii.bpmn",
+    "ok": true,
+    "taskA": "Task_CheckStock",
+    "taskB": "Task_ShipOrder",
+    "oldNameA": "Preveri zalogo (Lager prüfen)",
+    "oldNameB": "Odpošlji naročilo 📦",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "crlf.bpmn",
+    "ok": true,
+    "taskA": "Task_CheckStock",
+    "taskB": "Task_ShipOrder",
+    "oldNameA": "Check stock",
+    "oldNameB": "Ship order",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "doctype.bpmn",
+    "ok": true,
+    "taskA": "Task_CheckStock",
+    "taskB": "Task_ShipOrder",
+    "oldNameA": "Check stock",
+    "oldNameB": "Ship order",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "hand-4space.bpmn",
+    "ok": true,
+    "taskA": "Task_CheckStock",
+    "taskB": "Task_ShipOrder",
+    "oldNameA": "Check stock",
+    "oldNameB": "Ship order",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "hand-tabs.bpmn",
+    "ok": true,
+    "taskA": "Task_CheckStock",
+    "taskB": "Task_ShipOrder",
+    "oldNameA": "Check stock",
+    "oldNameB": "Ship order",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "no-trailing-newline.bpmn",
+    "ok": true,
+    "taskA": "Task_CheckStock",
+    "taskB": "Task_ShipOrder",
+    "oldNameA": "Check stock",
+    "oldNameB": "Ship order",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  },
+  {
+    "fixture": "signavio-export.bpmn",
+    "ok": true,
+    "taskA": "sid-35027A00-C747-43EC-A8BB-9F8BA65FC08C",
+    "taskB": "sid-28CA9418-A686-4DD4-9576-2611515C414F",
+    "oldNameA": "Task 1",
+    "oldNameB": "Task 2",
+    "name1": "Q4 first rename",
+    "name2": "Q4 zweite Änderung"
+  }
+]

@@ -1,0 +1,42 @@
+diff --git a/comments-nonascii.bpmn b/comments-nonascii.bpmn
+index 5b35956..826849f 100644
+--- a/comments-nonascii.bpmn
++++ b/comments-nonascii.bpmn
+@@ -1,22 +1,15 @@
+<?xml version="1.0" encoding="UTF-8"?>
+[-<!-- Order process. Owner: Team Šumi. Do not rename ids: referenced by the worker code. -->-]
+[-<?acme-tool version="2.1" generated="2026-10-01"?>-]<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL" xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI" xmlns:dc="http://www.omg.org/spec/DD/20100524/DC" xmlns:di="http://www.omg.org/spec/DD/20100524/DI" xmlns:acme="https://example.com/schema/acme/1.0" id="Definitions_Order" targetNamespace="http://bpmn.io/schema/bpmn" acme:owner="Team Šumi [-&amp;-]{+&#38;+} Co">
+  <bpmn:process id="Process_Order" name="Naročilo – Bestellung" isExecutable="false">
+[-    <!-- Happy path first, then the cancellation branch -->-]
+    <bpmn:startEvent id="StartEvent_OrderReceived" name="Naročilo prejeto">
+      <bpmn:outgoing>Flow_ToCheckStock</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_CheckStock" [-name="Preveri zalogo (Lager prüfen)"-]{+name="Q4 first rename"+} acme:sla="PT2H">
+      [-<!-- Stock is checked against the warehouse system (Lager) -->-]
+[-      <bpmn:documentation>-]
+[-        <![CDATA[Checks <stock> &-]{+<bpmn:documentation>Checks &lt;stock&gt; &amp;+} reserves items; see "Lagerbestand" [-policy.]]>-]
+[-      </bpmn:documentation>-]{+policy.</bpmn:documentation>+}
+      <bpmn:extensionElements>
+        <acme:retryPolicy retries="3" backoff="PT5S">
+          <acme:note>Façade call – keep idempotent</acme:note>
+        </acme:retryPolicy>
+[-        <?acme-lint ignore="missing-implementation"?>-]
+      </bpmn:extensionElements>
+      <bpmn:incoming>Flow_ToCheckStock</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToGateway</bpmn:outgoing>
+@@ -30,7 +23,7 @@
+      <bpmn:incoming>Flow_Yes</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:task id="Task_CancelOrder" name="Prekliči [-&quot;naročilo&quot; &amp;-]{+&#34;naročilo&#34; &#38;+} obvesti">
+      <bpmn:incoming>Flow_No</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToCancelled</bpmn:outgoing>
+    </bpmn:task>
+@@ -57,6 +50,7 @@
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_CheckStock_di" bpmnElement="Task_CheckStock">
+        <dc:Bounds x="240" y="160" width="100" height="80" />
+        {+<bpmndi:BPMNLabel />+}
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Gateway_InStock_di" bpmnElement="Gateway_InStock" isMarkerVisible="true">
+        <dc:Bounds x="395" y="175" width="50" height="50" />

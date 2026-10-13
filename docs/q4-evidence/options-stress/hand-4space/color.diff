@@ -1,0 +1,28 @@
+diff --git before after
+index 8e73df1..4164aaf 100644
+--- before
++++ after
+@@ -4,7 +4,9 @@
+                   xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                   xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                   id="Definitions_Order"
+-                  targetNamespace="http://bpmn.io/schema/bpmn">
++                  targetNamespace="http://bpmn.io/schema/bpmn"
++                  xmlns:bioc="http://bpmn.io/schema/bpmn/biocolor/1.0"
++                  xmlns:color="http://www.omg.org/spec/BPMN/non-normative/color/1.0">
+     <bpmn:process id="Process_Order"
+                   name="Order process"
+                   isExecutable="false">
+@@ -84,7 +86,11 @@
+                 </bpmndi:BPMNLabel>
+             </bpmndi:BPMNShape>
+             <bpmndi:BPMNShape id="Task_CheckStock_di"
+-                              bpmnElement="Task_CheckStock">
++                              bpmnElement="Task_CheckStock"
++                              bioc:stroke="#0d4372"
++                              bioc:fill="#bbdefb"
++                              color:background-color="#bbdefb"
++                              color:border-color="#0d4372">
+                 <dc:Bounds x="240"
+                            y="160"
+                            width="100"

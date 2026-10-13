@@ -1,0 +1,21 @@
+diff --git a/hand-4space.bpmn b/hand-4space.bpmn
+index 4c28fdb..31e7dcf 100644
+--- a/hand-4space.bpmn
++++ b/hand-4space.bpmn
+@@ -13,7 +13,7 @@
+       <bpmn:outgoing>Flow_Yes</bpmn:outgoing>
+       <bpmn:outgoing>Flow_No</bpmn:outgoing>
+     </bpmn:exclusiveGateway>
+-    <bpmn:task id="Task_ShipOrder" name="Ship order">
++    <bpmn:task id="Task_ShipOrder" name="Q4 zweite Änderung">
+       <bpmn:incoming>Flow_Yes</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+     </bpmn:task>
+@@ -54,6 +54,7 @@
+       </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Task_ShipOrder_di" bpmnElement="Task_ShipOrder">
+         <dc:Bounds x="500" y="60" width="100" height="80" />
++        <bpmndi:BPMNLabel />
+       </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Task_CancelOrder_di" bpmnElement="Task_CancelOrder">
+         <dc:Bounds x="500" y="260" width="100" height="80" />

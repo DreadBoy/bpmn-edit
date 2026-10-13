@@ -1,0 +1,50 @@
+diff --git before after
+index 0e4974e..baa2d28 100644
+--- before
++++ after
+@@ -27,10 +27,6 @@
+       <bpmn:outgoing>Flow_Yes</bpmn:outgoing>
+       <bpmn:outgoing>Flow_No</bpmn:outgoing>
+     </bpmn:exclusiveGateway>
+-    <bpmn:task id="Task_ShipOrder" name="Odpošlji naročilo 📦">
+-      <bpmn:incoming>Flow_Yes</bpmn:incoming>
+-      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+-    </bpmn:task>
+     <bpmn:task id="Task_CancelOrder" name="Prekliči &quot;naročilo&quot; &amp; obvesti">
+       <bpmn:incoming>Flow_No</bpmn:incoming>
+       <bpmn:outgoing>Flow_ToCancelled</bpmn:outgoing>
+@@ -51,6 +47,10 @@
+       <bpmn:incoming>Flow_1rv1sf5</bpmn:incoming>
+     </bpmn:task>
+     <bpmn:sequenceFlow id="Flow_1rv1sf5" sourceRef="Task_CheckStock" targetRef="Activity_0pyn6v7" />
++    <bpmn:userTask id="Task_ShipOrder" name="Odpošlji naročilo 📦">
++      <bpmn:incoming>Flow_Yes</bpmn:incoming>
++      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
++    </bpmn:userTask>
+     <bpmn:textAnnotation id="TextAnnotation_0axp8l1">
+       <bpmn:text>Note – Änderung</bpmn:text>
+     </bpmn:textAnnotation>
+@@ -70,12 +70,9 @@
+       <bpmndi:BPMNShape id="Gateway_InStock_di" bpmnElement="Gateway_InStock" isMarkerVisible="true">
+         <dc:Bounds x="395" y="175" width="50" height="50" />
+         <bpmndi:BPMNLabel>
+-          <dc:Bounds x="456" y="193" width="47" height="14" />
++          <dc:Bounds x="455" y="193" width="84" height="14" />
+         </bpmndi:BPMNLabel>
+       </bpmndi:BPMNShape>
+-      <bpmndi:BPMNShape id="Task_ShipOrder_di" bpmnElement="Task_ShipOrder">
+-        <dc:Bounds x="500" y="60" width="100" height="80" />
+-      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Task_CancelOrder_di" bpmnElement="Task_CancelOrder">
+         <dc:Bounds x="500" y="260" width="100" height="80" />
+       </bpmndi:BPMNShape>
+@@ -94,6 +91,9 @@
+       <bpmndi:BPMNShape id="Activity_0pyn6v7_di" bpmnElement="Activity_0pyn6v7">
+         <dc:Bounds x="300" y="320" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="Activity_1cuo7i5_di" bpmnElement="Task_ShipOrder">
++        <dc:Bounds x="500" y="60" width="100" height="80" />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNEdge id="Association_1x0jk5f_di" bpmnElement="Association_1x0jk5f">
+         <di:waypoint x="290" y="160" />
+         <di:waypoint x="290" y="103" />

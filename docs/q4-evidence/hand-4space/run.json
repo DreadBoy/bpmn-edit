@@ -1,0 +1,10 @@
+{
+  "fixture": "hand-4space.bpmn",
+  "ok": true,
+  "taskA": "Task_CheckStock",
+  "taskB": "Task_ShipOrder",
+  "oldNameA": "Check stock",
+  "oldNameB": "Ship order",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

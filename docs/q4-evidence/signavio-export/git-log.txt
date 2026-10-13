@@ -1,0 +1,16 @@
+6e160ac save 3: move task A
+
+ signavio-export.bpmn | 18 +++++++++---------
+ 1 file changed, 9 insertions(+), 9 deletions(-)
+ae23c4f save 2: rename task B
+
+ signavio-export.bpmn | 2 +-
+ 1 file changed, 1 insertion(+), 1 deletion(-)
+b0149fd save 1: rename task A
+
+ signavio-export.bpmn | 431 ++++++++++++++++++++++++++-------------------------
+ 1 file changed, 216 insertions(+), 215 deletions(-)
+f400c89 original
+
+ signavio-export.bpmn | 216 +++++++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 216 insertions(+)

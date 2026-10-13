@@ -1,0 +1,16 @@
+231d523 save 3: move task A
+
+ no-trailing-newline.bpmn | 12 ++++++------
+ 1 file changed, 6 insertions(+), 6 deletions(-)
+f2ebaa7 save 2: rename task B
+
+ no-trailing-newline.bpmn | 3 ++-
+ 1 file changed, 2 insertions(+), 1 deletion(-)
+0bace43 save 1: rename task A
+
+ no-trailing-newline.bpmn | 5 +++--
+ 1 file changed, 3 insertions(+), 2 deletions(-)
+fb75bf0 original
+
+ no-trailing-newline.bpmn | 106 +++++++++++++++++++++++++++++++++++++++++++++++
+ 1 file changed, 106 insertions(+)

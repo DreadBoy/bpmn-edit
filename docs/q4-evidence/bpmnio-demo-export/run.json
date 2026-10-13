@@ -1,0 +1,10 @@
+{
+  "fixture": "bpmnio-demo-export.bpmn",
+  "ok": true,
+  "taskA": "task_id",
+  "taskB": "user_task_id",
+  "oldNameA": "Task",
+  "oldNameB": "User Task",
+  "name1": "Q4 first rename",
+  "name2": "Q4 zweite Änderung"
+}

@@ -1,0 +1,13 @@
+diff --git before after
+index ad5b977..51703b6 100644
+--- before
++++ after
+@@ -15,7 +15,7 @@
+          <incoming>sid-6F611B9A-FD78-435D-936D-6B67F123C9D6</incoming>
+          <outgoing>sid-D84DD080-9128-42BB-BCC9-BD5148D97547</outgoing>
+       </task>
+-      <task id="sid-28CA9418-A686-4DD4-9576-2611515C414F" name="Task 2">
++      <task id="sid-28CA9418-A686-4DD4-9576-2611515C414F" name="Q4 zweite Änderung">
+          <extensionElements>
+             <signavio:signavioMetaData metaKey="bgcolor" metaValue="#ffffcc" />
+             <signavio:signavioMetaData metaKey="bordercolor" metaValue="#000000" />

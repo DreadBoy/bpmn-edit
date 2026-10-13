@@ -1,0 +1,40 @@
+diff --git before after
+index 2d18ee5..d88c30d 100644
+--- before
++++ after
+@@ -112,7 +112,12 @@
+       </bpmn:extensionElements>
+       <bpmn:incoming>Flow_0rfbpf0</bpmn:incoming>
+       <bpmn:outgoing>Flow_0o6zxl7</bpmn:outgoing>
++      <bpmn:outgoing>Flow_0zuvb23</bpmn:outgoing>
+     </bpmn:userTask>
++    <bpmn:task id="Activity_0csmb9b">
++      <bpmn:incoming>Flow_0zuvb23</bpmn:incoming>
++    </bpmn:task>
++    <bpmn:sequenceFlow id="Flow_0zuvb23" sourceRef="Activity_1kpg3ok" targetRef="Activity_0csmb9b" />
+   </bpmn:process>
+   <bpmn:error id="Error_0gyjhl0" name="ErrorInData" errorCode="ErrorInData" />
+   <bpmn:error id="Error_0df5ic3" name="FailedToCreateRecord" errorCode="FailedToCreateRecord" />
+@@ -123,6 +128,12 @@
+         <di:waypoint x="1560" y="490" />
+         <di:waypoint x="1632" y="490" />
+       </bpmndi:BPMNEdge>
++      <bpmndi:BPMNEdge id="Flow_0zuvb23_di" bpmnElement="Flow_0zuvb23">
++        <di:waypoint x="320" y="517" />
++        <di:waypoint x="320" y="560" />
++        <di:waypoint x="380" y="560" />
++        <di:waypoint x="380" y="597" />
++      </bpmndi:BPMNEdge>
+       <bpmndi:BPMNEdge id="Flow_1vt6ezk_di" bpmnElement="Flow_1vt6ezk" bioc:stroke="#000000" color:border-color="#000000">
+         <di:waypoint x="1410" y="490" />
+         <di:waypoint x="1460" y="490" />
+@@ -170,6 +181,9 @@
+       <bpmndi:BPMNShape id="Activity_0t5rsxo_di" bpmnElement="Activity_0kzg0nb" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="410" y="560" width="100" height="80" />
+       </bpmndi:BPMNShape>
++      <bpmndi:BPMNShape id="Activity_0csmb9b_di" bpmnElement="Activity_0csmb9b">
++        <dc:Bounds x="330" y="597" width="100" height="80" />
++      </bpmndi:BPMNShape>
+       <bpmndi:BPMNShape id="Activity_1luk15l_di" bpmnElement="Activity_0h20swu" bioc:stroke="#000000" bioc:fill="#ffffff" color:background-color="#ffffff" color:border-color="#000000">
+         <dc:Bounds x="890" y="220" width="100" height="80" />
+       </bpmndi:BPMNShape>

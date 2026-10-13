@@ -1,0 +1,85 @@
+diff --git before after
+index 796c54d..f5e44b3 100644
+--- before
++++ after
+@@ -37,18 +37,6 @@
+       <incoming>_a3d40a56-9b7f-417e-911e-d39e7f18b90c</incoming>
+       <incoming>_d4ce87c6-1373-45d6-a3b4-fbb2a04ee2e5</incoming>
+     </endEvent>
+-    <task id="_4f7d62d7-f0e6-46bc-be00-69e02da38f65" name="Task 2">
+-      <extensionElements>
+-        <bizagi:BizagiExtensions xmlns:bizagi="http://www.bizagi.com/bpmn20">
+-          <bizagi:BizagiProperties>
+-            <bizagi:BizagiProperty name="bgColor" value="White" />
+-            <bizagi:BizagiProperty name="borderColor" value="Black" />
+-          </bizagi:BizagiProperties>
+-        </bizagi:BizagiExtensions>
+-      </extensionElements>
+-      <incoming>_f1478fb7-98c4-4c01-8c15-68bd04c91535</incoming>
+-      <outgoing>_a3d40a56-9b7f-417e-911e-d39e7f18b90c</outgoing>
+-    </task>
+     <task id="_e6eb725a-34bc-45c7-aed0-9f9596cd7bee" name="Task 3">
+       <extensionElements>
+         <bizagi:BizagiExtensions xmlns:bizagi="http://www.bizagi.com/bpmn20">
+@@ -194,6 +182,10 @@
+       <incoming>Flow_0cld1o5</incoming>
+     </task>
+     <sequenceFlow id="Flow_0cld1o5" sourceRef="_5a972b87-735d-454a-b31c-f52fb3afc5c7" targetRef="Activity_1bynlkx" />
++    <userTask id="_4f7d62d7-f0e6-46bc-be00-69e02da38f65" name="Task 2">
++      <incoming>_f1478fb7-98c4-4c01-8c15-68bd04c91535</incoming>
++      <outgoing>_a3d40a56-9b7f-417e-911e-d39e7f18b90c</outgoing>
++    </userTask>
+   </process>
+   <process id="Id_55a65f07-b366-4943-8120-51e834197488">
+     <laneSet id="Id_e96e2982-221b-4cd4-967a-2922cb58079e" />
+@@ -256,14 +248,6 @@
+           <Bounds x="590.5963134765625" y="155.59762573242187" width="0" height="0" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+         </BPMNLabel>
+       </BPMNShape>
+-      <BPMNShape id="DiagramElement_4f88b7cd-320d-4003-be8d-56a557de8396" bpmnElement="_4f7d62d7-f0e6-46bc-be00-69e02da38f65">
+-        <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-        <Bounds x="414" y="70" width="83" height="68" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+-        <BPMNLabel id="DiagramElement_a35c3f30-667f-4906-8c2f-70fb0e186fb7" labelStyle="Style_9f3fab87-242d-4376-af4b-366937b1ce20">
+-          <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-          <Bounds x="419.33334350585937" y="97.581878662109375" width="0" height="0" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+-        </BPMNLabel>
+-      </BPMNShape>
+       <BPMNShape id="DiagramElement_6fa29b15-cbae-410b-80fd-0421110a9e17" bpmnElement="_e6eb725a-34bc-45c7-aed0-9f9596cd7bee">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+         <Bounds x="414" y="155" width="83" height="68" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+@@ -299,6 +283,9 @@
+       <BPMNShape id="Activity_1bynlkx_di" bpmnElement="Activity_1bynlkx">
+         <dc:Bounds x="237.5" y="303" width="100" height="80" />
+       </BPMNShape>
++      <BPMNShape id="Activity_17yl4k4_di" bpmnElement="_4f7d62d7-f0e6-46bc-be00-69e02da38f65">
++        <dc:Bounds x="414" y="70" width="100" height="80" />
++      </BPMNShape>
+       <BPMNEdge id="DiagramElement_59ed7a00-ed2f-4885-bba7-ccc9367a9459" bpmnElement="_b50f530c-3450-4e1a-b81f-ea346dc6e1cb">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+         <waypoint x="150" y="189" xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+@@ -321,9 +308,9 @@
+       </BPMNEdge>
+       <BPMNEdge id="DiagramElement_15bccf31-cdbf-4cc1-93ea-0b72eab62823" bpmnElement="_f1478fb7-98c4-4c01-8c15-68bd04c91535">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-        <waypoint x="354" y="168" xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-        <waypoint x="354" y="104" xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-        <waypoint x="414" y="104" xmlns="http://www.omg.org/spec/DD/20100524/DI" />
++        <di:waypoint x="354" y="168" />
++        <di:waypoint x="354" y="104" />
++        <di:waypoint x="414" y="104" />
+         <BPMNLabel id="DiagramElement_2a4af27a-1e7b-490c-84e2-cd438e4fdd24" labelStyle="Style_66863169-173a-4100-9414-734fabb5d715">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+           <Bounds x="0" y="0" width="0" height="0" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
+@@ -331,9 +318,9 @@
+       </BPMNEdge>
+       <BPMNEdge id="DiagramElement_66b94eb6-eb20-4c12-a675-d81f59dafd24" bpmnElement="_a3d40a56-9b7f-417e-911e-d39e7f18b90c">
+         <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-        <waypoint x="497" y="104" xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-        <waypoint x="686" y="104" xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+-        <waypoint x="686" y="142" xmlns="http://www.omg.org/spec/DD/20100524/DI" />
++        <di:waypoint x="514" y="104" />
++        <di:waypoint x="686" y="104" />
++        <di:waypoint x="686" y="142" />
+         <BPMNLabel id="DiagramElement_b4c280d2-3df8-447f-bdd2-a721a5a2f5c2" labelStyle="Style_762fccf2-0043-4a84-a942-3714e7b6972c">
+           <extension xmlns="http://www.omg.org/spec/DD/20100524/DI" />
+           <Bounds x="0" y="0" width="0" height="0" xmlns="http://www.omg.org/spec/DD/20100524/DC" />
