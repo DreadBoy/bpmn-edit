@@ -141,6 +141,11 @@ cannot tell host and collaborator apart:
 - Failed import → re-import of last good XML resets undo history. (S3)
 - `POST /api/file` → 404 instead of 405; raw EACCES message. (S1)
 
+## Execution order (updated 2026-10-13 by product owner)
+
+Public link proves the MVP, so S7 moves up: **S4 → Q1 (in progress) → S7 → S5 → S6 → S8**, then Q2, Q4-impl,
+Q3 wrap-up, S9, S10. Quality over speed: verified properly, no rushing.
+
 ## Parallelisation
 
 Slices touch the same files (`server.js`, `app.js`), so they run mostly sequentially. Exception: the tunnel
