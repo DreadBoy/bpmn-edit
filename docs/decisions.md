@@ -113,7 +113,7 @@ How it works now:
   exception is a version that only changes made on disk replaced since: such an update is still accepted
   and replaces the document, with a warning, as before (the disk-race policy is Q2's to decide; see the
   known limits for the case where the disk wins instead). Identical content is a no-op whatever its
-  base.
+  base. *Superseded by Q2: a change on disk now counts like another window's update.*
 - Client (`web/app.js`): at most one update in flight. Every user action (root command) is recorded as
   an "edit" of id-based ops: label, move, create (palette, paste), append, connect, delete. Each op also
   records what it expects to find (the label before the edit, the position before the move). The edits
@@ -199,6 +199,7 @@ Why this and not the alternatives:
   still waiting in the host's write debounce (250 ms), the pending write is dropped (`src/file.js`:
   "a pending save from the editor was discarded"), the disk version is pushed to every window and that
   browser edit is lost, with only the stderr warning. So neither side reliably wins today.
+  *Resolved by Q2 (below).*
 - Closing, reloading or hiding a window sends a pending edit right away instead of after the 300 ms
   debounce (best effort, `pagehide` / `visibilitychange`); an edit whose update is still waiting for a
   rebase at that moment is lost.
@@ -216,3 +217,101 @@ Why this and not the alternatives:
 - The client relies on diagram-js internals (`commandStack._currentExecution`, `_stack`, `_stackIdx`)
   to find root commands and undone edits; if they change, every edit is treated as unsupported (safe,
   but concurrent edits are then dropped with a toast instead of merged).
+
+## Q2: browser edit racing a save made on disk (IDE)
+
+### Question
+
+What happens when an edit in the browser and a save of a different change by another program (an IDE)
+land within the debounce windows, in either order, or just before Ctrl-C? Is anything lost silently,
+and what should the policy be? Product preference: never lose work silently.
+
+### Experiment
+
+`test/e2e/q2-ide-race.measure.spec.js`; method, per-trial data and root causes in
+`docs/q2-ide-race.md`. Real CLI, two Chrome windows, the fixture in a temp git repo
+(`core.autocrlf=false`), the IDE save simulated by reading the file and writing it back with another
+element renamed (`fs.writeFile`). Scenarios: (a) browser edit, then IDE save 0–600 ms later, 15 trials;
+(b) IDE save, then browser edit 0–400 ms later, 15; (c) IDE save 20–140 ms before the host writes the
+accepted edit, 15; (d) IDE save 0–100 ms before SIGINT while the accepted edit waits for its write,
+10 (fresh CLI each).
+
+### Results
+
+| | Before: both kept | Before: lost silently | After: both kept | After: lost (silently or not) |
+|---|---|---|---|---|
+| a | 2/15 | 13/15 (7 browser edits, 6 disk changes) | 15/15 | 0 |
+| b | 11/15 | 4/15 (disk change) | 15/15 | 0 |
+| c | 0/15 | 15/15 (disk change) | 15/15 | 0 |
+| d | 0/10 | 10/10 (disk change) | 10/10 | 0 |
+
+Before, no loss was shown in any window (the only trace: a stderr warning in 14 of the 42 losses); the
+windows always agreed with the file, so everyone converged on the smaller document. Four causes: the
+store dropped an accepted but unwritten browser edit when a change on disk arrived; the write loop
+wrote over a change the watcher had not reported yet (it waits 150 ms for the file to settle); the
+session accepted browser documents based on a version a change on disk had replaced (last write
+wins); shutdown cancelled the pending check and flushed over the change.
+
+### Decision
+
+**The change on disk is the newer base; browser edits not yet on disk are re-applied on top of it,
+per element, with the Q1 machinery. A true same-element conflict keeps the file's version and is
+shown in the window whose edit lost. Nothing is ever written over a change on disk the host has not
+seen.** Alternatives considered: last write wins with a toast (still loses work, just visibly);
+pause-and-ask (a modal in every window for something that is almost always mergeable, and nobody to
+ask at shutdown or when the host's window is not focused); disk always wins (loses browser work).
+
+How it works:
+
+- Session (`src/session.js`): a change on disk is a version like any other: an update based on an
+  older version is refused (`conflict`), and the window re-applies its edits on top (Q1 rebase). The
+  one exception kept from before: a change on disk that the editor cannot display (`import-failed`)
+  can still be replaced by an edit based on the version before it (warning on stderr).
+- Pre-write check (`src/file.js`): right before the rename that replaces the file, the store compares
+  the file with what it last read or wrote: `stat` (inode, size, mtime) as a cheap pre-check, then the
+  content. If another program changed it, the temp file is discarded, the write is held back and the
+  change is reported after the usual settle delay, exactly like a change the watcher found first.
+- Unwritten accepted edits: when a change on disk replaces a pending write, the session marks the
+  disk version with `discardedAfter` (the last version that is on disk). The host also tells the
+  windows when versions are on disk (`saved`), so each window keeps the edits of its acknowledged
+  updates until then; on a disk version with `discardedAfter` it re-applies its own edits newer than
+  that, before its other unsent edits, and sends the result.
+- Browser (`web/app.js`): a change on disk is no longer sent over; it is rebased onto like another
+  window's edit. Every window shows "Reloaded from disk" as before; the window whose edits were
+  re-applied shows a toast (`data-kind="merged"`): "The file was changed on disk; your edits were
+  applied on top of that change". Ops that cannot be re-applied are reported with disk wording, e.g.
+  "Your change to “Ship order” was not applied: it was changed on disk at the same time (the file's
+  version was kept)" (`conflict`), "…it was deleted on disk" (`dropped`). A delete re-applied over an
+  element that was changed on disk says so in the deleting window ("Your delete of “…” removed a
+  change made to it on disk").
+- Shutdown (`bin/local-bpmn.js`, one added line): after the windows sent their last edits, the host
+  checks the file at once (`session.checkDisk()` → `store.checkNow()`, no settle delay). If a change
+  replaced unwritten edits, the windows get it, re-apply and send again (second drain, 1 s max) before
+  the final write. If nobody re-applied them (no window left, or the drain timed out), or the file
+  changes between that check and the final write, the file keeps its content and the editor's
+  version is saved next to it as `<name>.local-bpmn-unsaved-<yyyymmdd-hhmmss>.bpmn` (shows up in
+  `git status`), with a stderr warning naming the file.
+
+Verified by `test/e2e/q2-ide-race.spec.js` (regular suite): accepted edit + IDE save of another
+element (both kept in the file, `git diff` and both windows; merged toast); IDE save inside the settle
+delay just before the host write, with the file sampled every 5 ms for 2 s to prove it is never
+overwritten (`core.autocrlf=input`); browser edit right after an IDE save; same label in both (file
+wins, conflict toast with the exact text, file not overwritten later); Ctrl-C right after an IDE save
+(both kept, exit 0); Ctrl-C with no window left (file keeps the save, edit kept aside, untracked in
+`git status`). The two S3 tests that asserted last-write-wins now assert that both changes are kept.
+
+### Known limits
+
+- The pre-write check and the rename are two steps: a save landing in the microseconds between them is
+  still overwritten. The watcher then reads our content and reports nothing.
+- An IDE that is still writing (non-atomic, slow) when the host checks is "invalid" content; as
+  before, the host's next write replaces an invalid file. At shutdown such a file is replaced as well.
+- Edits of a window that closed after its update was accepted but before it was written cannot be
+  re-applied by anyone during the session: the change on disk wins and only stderr says so ("…changed
+  on disk before the latest edits were saved…"). At shutdown that content is kept aside instead.
+- A change on disk is merged only where Q1 has ops (label, move, create, append, connect, delete);
+  other browser edits racing it (resize, bendpoints, type change, …) are dropped with a toast.
+- Conflict detection is per property (label text, position) as in Q1; a change on disk to other
+  attributes of an element the browser edits at the same time is kept (the browser op only touches
+  its own property), but the browser cannot report it.
+- Kept-aside files are never cleaned up automatically; that is deliberate (they are the user's work).

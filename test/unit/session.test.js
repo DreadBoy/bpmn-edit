@@ -150,31 +150,57 @@ describe('Session and changes on disk', () => {
     assert.deepEqual(store.writes, []);
   });
 
-  it('warns when a stale browser edit replaces a change made on disk (and still applies it)', () => {
+  it('refuses an update based on a version a change on disk replaced (Q2: re-applied on top instead)', () => {
     const logs = [];
     const store = fakeStore();
     const session = new Session({ xml: original, store, log: (m) => logs.push(m) });
-    session.replaceFromDisk(variant(1));
-    assert.equal(session.applyUpdate(variant(2), 1, 'a'), 3);
-    assert.equal(session.getState().xml, variant(2));
-    assert.deepEqual(store.writes, [variant(2)]);
-    assert.equal(logs.length, 1);
-    assert.match(logs[0], /^local-bpmn: warning: an edit from the browser replaced a change made on disk/);
-
-    session.applyUpdate(variant(3), 3, 'a'); // up to date: no warning
-    assert.equal(logs.length, 1);
-  });
-
-  it('accepts an update over changes on disk only, never over another update', () => {
-    const logs = [];
-    const session = new Session({ xml: original, store: fakeStore(), log: (m) => logs.push(m) });
     session.applyUpdate(variant(1), 1, 'a'); // v2
     session.replaceFromDisk(variant(2)); // v3
     session.replaceFromDisk(variant(3)); // v4
-    assert.throws(() => session.applyUpdate(variant(4), 1, 'b'), (err) => err.code === 'conflict' && err.details.version === 4);
-    assert.equal(session.applyUpdate(variant(4), 2, 'b'), 5, 'only disk changes since version 2');
+    assert.throws(() => session.applyUpdate(variant(4), 2, 'b'), (err) => err.code === 'conflict' && err.details.version === 4);
+    assert.throws(() => session.applyUpdate(variant(4), 3, 'b'), (err) => err.code === 'conflict' && err.details.version === 4);
+    assert.equal(session.getState().xml, variant(3));
+    assert.equal(session.applyUpdate(variant(4), 4, 'b'), 5);
+    assert.deepEqual(store.writes, [variant(1), variant(4)]);
+    assert.deepEqual(logs, []);
+  });
+
+  it('a change on disk the editor cannot display is replaced by an edit based on the version before it', () => {
+    const logs = [];
+    const session = new Session({ xml: original, store: fakeStore(), log: (m) => logs.push(m) });
+    session.applyUpdate(variant(1), 1, 'a'); // v2
+    session.replaceFromDisk(variant(2)); // v3, cannot be displayed
+    assert.equal(session.reportUnreadable(3, 'no diagram to display'), true);
+    assert.equal(session.applyUpdate(variant(3), 2, 'a'), 4);
     assert.equal(logs.length, 1);
-    assert.throws(() => session.applyUpdate(variant(5), 4, 'a'), (err) => err.code === 'conflict' && err.details.version === 5);
+    assert.match(logs[0], /^local-bpmn: warning: an edit from the browser replaced a change made on disk that the editor could not display/);
+    assert.throws(() => session.applyUpdate(variant(4), 2, 'b'), (err) => err.code === 'conflict');
+  });
+
+  it('reports accepted updates a change on disk replaced before they were written (discardedAfter)', () => {
+    const logs = [];
+    const store = fakeStore();
+    const session = new Session({ xml: original, store, log: (m) => logs.push(m) });
+    const changes = [];
+    const saved = [];
+    session.on('change', (c) => changes.push(c));
+    session.on('saved', (s) => saved.push(s.version));
+    session.applyUpdate(variant(1), 1, 'a'); // v2
+    store.emit('saved', { xml: variant(1) });
+    assert.deepEqual(saved, [2]);
+    session.applyUpdate(variant(2), 2, 'a'); // v3
+    session.applyUpdate(variant(3), 3, 'b'); // v4
+    store.emit('external-change', { xml: variant(9), discarded: true }); // v3 and v4 never written
+    assert.deepEqual(changes.at(-1), { xml: variant(9), version: 5, origin: 'disk', discardedAfter: 2 });
+    assert.equal(logs.length, 1);
+    assert.match(logs[0], /changed on disk before the latest edits were saved/);
+
+    // Nothing unsaved: an external change is a plain one.
+    session.applyUpdate(variant(4), 5, 'a'); // v6
+    store.emit('saved', { xml: variant(4) });
+    assert.deepEqual(saved, [2, 6]);
+    store.emit('external-change', { xml: variant(10) });
+    assert.deepEqual(changes.at(-1), { xml: variant(10), version: 7, origin: 'disk' });
   });
 
   it('reportUnreadable marks the file invalid only for the current version from disk', () => {

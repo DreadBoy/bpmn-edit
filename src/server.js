@@ -24,9 +24,8 @@
 //                                                               already been sent that newer version as
 //                                                               'remote-update'). The client re-applies
 //                                                               its edits on it and sends a new update.
-//                                                               Updates based on a version that only
-//                                                               changes on disk replaced since are
-//                                                               accepted (they overwrite those).
+//                                                               A change made on disk counts like
+//                                                               another client's update (Q2).
 //   server -> client  { type: 'error', code, message }          code: 'bad-message' | 'invalid-xml' |
 //                                                               'write-failed' (pushed) | 'internal'
 //   server -> client  { type: 'flush' }                         shutting down: send pending edits now
@@ -37,7 +36,11 @@
 //                                                               (sent to every client), otherwise the
 //                                                               clientId of the editing client (sent to
 //                                                               every other client). Versions only
-//                                                               grow.
+//                                                               grow. discardedAfter (disk only):
+//                                                               accepted updates with a higher
+//                                                               version never reached the disk; their
+//                                                               senders re-apply them on this one.
+//   server -> client  { type: 'saved', version }                every version up to this is on disk
 //   server -> client  { type: 'file-status', state, message? }  state of the file on disk: 'ok' |
 //                                                               'missing' | 'invalid'; pushed on change
 //                                                               and after 'init' when not 'ok'
@@ -263,8 +266,10 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
    * Pushes an accepted change to the clients that do not have it yet: a change on disk to everyone,
    * a client's edit to everyone else (the sender only gets its 'ack').
    */
-  function onChange({ xml, version, origin, overrides }) {
-    if (origin === 'disk') return broadcast({ type: 'remote-update', xml, version, origin });
+  function onChange({ xml, version, origin, overrides, discardedAfter }) {
+    if (origin === 'disk') {
+      return broadcast({ type: 'remote-update', xml, version, origin, ...(discardedAfter !== undefined ? { discardedAfter } : {}) });
+    }
     const sender = clientIds.has(origin) ? origin : null;
     const originId = sender ? clientIds.get(sender) : String(origin ?? 'host');
     const message = { type: 'remote-update', xml, version, origin: originId };
@@ -276,11 +281,16 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
     broadcast({ type: 'file-status', ...status });
   }
 
+  function onSaved({ version }) {
+    broadcast({ type: 'saved', version });
+  }
+
   function attachSession(newSession) {
     session = newSession;
     session.on('write-error', onWriteError);
     session.on('change', onChange);
     session.on('disk-status', onDiskStatus);
+    session.on('saved', onSaved);
   }
   if (session) attachSession(session);
   let ownStore = null; // store created by listen() (watched by us, unwatched on close)
@@ -409,6 +419,7 @@ export function createServer({ filePath, session = null, port = 3000, host = 'lo
       session?.off('write-error', onWriteError);
       session?.off('change', onChange);
       session?.off('disk-status', onDiskStatus);
+      session?.off('saved', onSaved);
       await ownStore?.unwatch();
     },
   };

@@ -4,7 +4,7 @@ import { watch as chokidarWatch } from 'chokidar';
 import { createHash, randomBytes } from 'node:crypto';
 import { EventEmitter } from 'node:events';
 import { open, readFile, realpath, rename, stat, unlink } from 'node:fs/promises';
-import { basename, dirname, join } from 'node:path';
+import { basename, dirname, extname, join } from 'node:path';
 
 export const BPMN_MODEL_NS = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
 
@@ -156,6 +156,15 @@ export function sha256(text) {
   return createHash('sha256').update(text, 'utf8').digest('hex');
 }
 
+/** The parts of a stat result that change whenever a program writes or replaces a file. */
+function statKey(info) {
+  return { ino: info.ino, size: info.size, mtimeMs: info.mtimeMs };
+}
+
+function sameStat(a, b) {
+  return a !== null && b !== null && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs;
+}
+
 /**
  * Debounced, serialised, atomic writer for one file.
  *
@@ -170,8 +179,20 @@ export function sha256(text) {
  * the file has been quiet for `settleMs`. Content equal to what we believe is on disk (including our
  * own writes) is ignored, so our writes never come back as external changes. Watching never writes.
  *
+ * Never writes over a change it has not seen (Q2 in docs/decisions.md): right before a write
+ * replaces the file, the file is checked (stat as a cheap pre-check, then the content) against what
+ * we last read or wrote. If another program changed it, the write is held back and the change is
+ * reported like any other ('external-change', with `discarded: true` as the pending write is
+ * dropped: the session has those edits re-applied on top of it). During flush() (shutdown) nobody
+ * can re-apply them any more: the file keeps the version on disk and ours is saved next to it
+ * ('kept-aside').
+ *
  * Events: 'written' ({ xml, hash, mtimeMs, size }), 'write-error' (Error),
- *   'external-change' ({ xml }) valid new content on disk (a pending write of ours was dropped),
+ *   'saved' ({ xml }) `xml` is on disk now (written, or already there),
+ *   'external-change' ({ xml, discarded? }) valid new content on disk; `discarded: true` if a
+ *     pending write of ours was dropped because of it,
+ *   'kept-aside' ({ path, xml }) during flush() the file had changed on disk: it was left alone and
+ *     the content we were about to write was saved to `path` instead,
  *   'external-missing' the file was deleted (emitted once until it reappears),
  *   'external-invalid' ({ message }) the file is not (or not yet) a complete BPMN document,
  *   'disk-ok' the file is valid again after 'external-missing' / 'external-invalid'.
@@ -193,7 +214,41 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
   let diskState = 'ok';      // 'ok' | 'missing' | 'invalid'
   let invalidXml = null;     // the invalid content last reported (to report each version once)
   let writeSeq = 0;          // incremented whenever one of our writes starts
+  let diskStat = null;       // { ino, size, mtimeMs } of the file holding diskXml (cheap change check)
+  let blockedByDisk = false; // a write was held back because the file changed on disk (see checkDisk)
+  let flushing = 0;          // flush() calls running: a change on disk then keeps both versions
+  let checkingNow = false;   // checkNow() is running (shutdown)
+  let unclaimedXml = null;   // write checkNow() dropped for a change on disk; saved aside by flush()
+                             // unless new content is written meanwhile (the edits were re-applied)
 
+  /**
+   * Content another program wrote over what we last read or wrote, or null if the file still holds
+   * diskXml (or we do not know what it holds: missing or invalid before; our write replaces it).
+   */
+  async function externalContent() {
+    if (diskXml === null) return null;
+    let info;
+    let xml;
+    try {
+      info = statKey(await stat(targetPath));
+      if (sameStat(info, diskStat)) return null;
+      xml = await readFile(targetPath, 'utf8');
+    } catch (err) {
+      if (err.code === 'ENOENT' || err.code === 'ENOTDIR') return null; // deleted: recreated by the write
+      throw err;
+    }
+    if (xml === diskXml) {
+      diskStat = info; // e.g. touched, or rewritten with the same content
+      return null;
+    }
+    return xml;
+  }
+
+  /**
+   * Writes `xml` to a temp file and renames it over the target, unless the target was changed by
+   * another program (checked right before the rename). Resolves to { stat } when written, else
+   * { external } (the content found on disk).
+   */
   async function writeAtomically(xml) {
     const dir = dirname(targetPath);
     const tmp = join(dir, `.${basename(targetPath)}.${process.pid}.${randomBytes(6).toString('hex')}.tmp`);
@@ -204,36 +259,111 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
       if (err.code !== 'ENOENT') throw err;
     }
     try {
+      let written;
       const handle = await open(tmp, 'wx', mode ?? 0o644);
       try {
         await handle.writeFile(xml, 'utf8');
         if (mode !== undefined) await handle.chmod(mode); // the open() mode is subject to umask
         await handle.sync();
+        written = statKey(await handle.stat()); // inode, size and mtime are kept by the rename
       } finally {
         await handle.close();
       }
+      const external = await externalContent();
+      if (external !== null) {
+        await unlink(tmp).catch(() => {});
+        return { external };
+      }
       await rename(tmp, targetPath);
+      return { stat: written };
     } catch (err) {
       await unlink(tmp).catch(() => {});
       throw err;
     }
   }
 
+  /** Saves `xml` next to the file as <name>.local-bpmn-unsaved-<time>.bpmn; resolves to its path. */
+  async function saveAside(xml) {
+    const ext = extname(path);
+    const stem = basename(path, ext === '.bpmn' ? ext : '');
+    const now = new Date();
+    const pad = (n) => String(n).padStart(2, '0');
+    const time = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-`
+      + `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
+    for (let n = 1; ; n++) {
+      const aside = join(dirname(path), `${stem}.local-bpmn-unsaved-${time}${n > 1 ? `-${n}` : ''}.bpmn`);
+      try {
+        const handle = await open(aside, 'wx', 0o644);
+        try {
+          await handle.writeFile(xml, 'utf8');
+          await handle.sync();
+        } finally {
+          await handle.close();
+        }
+        return aside;
+      } catch (err) {
+        if (err.code !== 'EEXIST' || n >= 100) throw err;
+      }
+    }
+  }
+
+  /**
+   * A write of `xml` found the file changed by another program (`external`). Normally the write
+   * waits and the change is reported (checkDisk), and the session has the edits re-applied on top
+   * of it. During flush() there is no time for that: the file keeps its content and `xml` is saved
+   * aside, so neither version is lost.
+   */
+  async function onBlockedWrite(xml, external) {
+    if (pendingXml === null) pendingXml = xml;
+    if (!flushing) {
+      ready = false;
+      blockedByDisk = true;
+      // Report the change after the usual settle delay (the other program may still be writing).
+      if (checking) recheck = true;
+      else if (!settleTimer) settleTimer = setTimeout(runCheck, settleMs);
+      return;
+    }
+    const content = pendingXml;
+    pendingXml = null;
+    diskXml = external; // seen now
+    diskStat = null;
+    if (!(await keepAside(content))) pendingXml = content; // nowhere else to keep it: the retry writes it
+  }
+
+  /** Saves `xml` next to the file instead of writing it (see 'kept-aside'); resolves to success. */
+  async function keepAside(xml) {
+    let aside;
+    try {
+      aside = await saveAside(xml);
+    } catch (err) {
+      log(`local-bpmn: ${path} changed on disk, but the editor's version could not be saved next to it `
+        + `(${err.message}); writing it to the file instead\n`);
+      return false;
+    }
+    log(`local-bpmn: warning: ${path} changed on disk while the editor's last changes were being saved; `
+      + `the file keeps the version on disk, the editor's version was saved to ${aside}\n`);
+    store.emit('kept-aside', { path: aside, xml });
+    return true;
+  }
+
   async function writeOne(xml) {
-    if (xml === diskXml) return;
+    if (xml === diskXml) {
+      store.emit('saved', { xml });
+      return;
+    }
     writeSeq += 1;
     inFlightXml = xml;
     try {
-      await writeAtomically(xml);
-      diskXml = xml;
-      let info = null;
-      try {
-        info = await stat(targetPath);
-      } catch {
-        // Removed right after our rename; nothing to record.
+      const result = await writeAtomically(xml);
+      if (result.external !== undefined) {
+        await onBlockedWrite(xml, result.external);
+        return;
       }
-      lastWrite = { xml, hash: sha256(xml), mtimeMs: info?.mtimeMs ?? null, size: info?.size ?? null };
+      diskXml = xml;
+      diskStat = result.stat;
+      lastWrite = { xml, hash: sha256(xml), mtimeMs: result.stat.mtimeMs, size: result.stat.size };
       store.emit('written', lastWrite);
+      store.emit('saved', { xml });
       setDiskOk(); // e.g. our write recreated a deleted file
     } catch (err) {
       const error = new Error(`Could not write ${path}: ${err.message}`, { cause: err });
@@ -284,14 +414,34 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
     return had;
   }
 
+  /** A write held back by a change on disk may go ahead (nothing changed after all, or the file is broken or gone). */
+  function unblockWrite() {
+    if (!blockedByDisk) return;
+    blockedByDisk = false;
+    if (pendingXml !== null && !timer) {
+      ready = true;
+      kick();
+    }
+  }
+
   /** Reads the file after it settled and reports what changed (see the 'external-*' events). */
   async function checkDisk() {
+    try {
+      await inspectDisk();
+    } finally {
+      unblockWrite();
+    }
+  }
+
+  async function inspectDisk() {
     // Never judge content read while one of our writes ran: wait for writes, retry if one started.
     let xml;
+    let info;
     try {
       for (;;) {
         if (running) await running;
         const seq = writeSeq;
+        info = statKey(await stat(targetPath)); // before reading: a change in between is seen later
         xml = await readFile(targetPath, 'utf8');
         if (seq === writeSeq && !running) break;
       }
@@ -311,6 +461,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
     // Content we believe is on disk (last read, or our own completed / in-flight write): not external.
     if (xml === diskXml || xml === inFlightXml) {
       diskXml = xml;
+      diskStat = info;
       setDiskOk();
       return;
     }
@@ -328,12 +479,15 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
       return;
     }
     diskXml = xml;
-    // The external change reached us after our pending (not yet started) write: it wins.
-    if (dropPendingWrite()) {
-      log(`local-bpmn: warning: ${path} changed on disk; a pending save from the editor was discarded\n`);
-    }
+    diskStat = info;
+    // The external change reached us before our pending (not yet started or held back) write: the
+    // change on disk is the newer base; the session has that write's edits re-applied on top of it.
+    const pending = pendingXml;
+    const discarded = dropPendingWrite();
+    if (discarded && checkingNow) unclaimedXml = pending;
+    blockedByDisk = false;
     setDiskOk();
-    store.emit('external-change', { xml });
+    store.emit('external-change', discarded ? { xml, discarded: true } : { xml });
   }
 
   /** Runs disk checks one at a time; a request during a check runs one more afterwards. */
@@ -367,6 +521,12 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
 
     /** Reads and validates the file; records its content as what is on disk. */
     async read() {
+      let info = null;
+      try {
+        info = statKey(await stat(path)); // before reading: a change in between is seen as a change
+      } catch {
+        // readBpmnFile reports it
+      }
       const xml = await readBpmnFile(path);
       try {
         targetPath = await realpath(path);
@@ -374,6 +534,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
         targetPath = path;
       }
       diskXml = xml;
+      diskStat = info;
       return xml;
     },
 
@@ -381,22 +542,39 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
     write(xml) {
       if (typeof xml !== 'string') throw new TypeError('xml must be a string');
       pendingXml = xml;
+      unclaimedXml = null;
       ready = false;
       if (timer) clearTimeout(timer);
       timer = setTimeout(onTimer, debounceMs);
     },
 
-    /** Writes anything pending right away and waits for all writes to finish. Never rejects. */
+    /**
+     * Writes anything pending right away and waits for all writes to finish. Never rejects. If the
+     * file was changed by another program meanwhile, it is left alone and the pending content is
+     * saved next to it ('kept-aside'): flush() is for shutdown, when the edits can no longer be
+     * re-applied on top of that change. So is a write checkNow() dropped for a change on disk if
+     * nothing was written since (nobody re-applied the edits on it).
+     */
     async flush() {
-      for (;;) {
-        if (timer) {
-          clearTimeout(timer);
-          timer = null;
-          ready = true;
+      flushing += 1;
+      try {
+        if (unclaimedXml !== null && pendingXml === null) {
+          const xml = unclaimedXml;
+          unclaimedXml = null;
+          await keepAside(xml);
         }
-        const active = kick();
-        if (!active) return;
-        await active;
+        for (;;) {
+          if (timer) {
+            clearTimeout(timer);
+            timer = null;
+          }
+          if (pendingXml !== null) ready = true;
+          const active = kick();
+          if (!active) return;
+          await active;
+        }
+      } finally {
+        flushing -= 1;
       }
     },
 
@@ -436,6 +614,26 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, log = 
       watcher.on('error', (err) => log(`local-bpmn: file watcher error: ${err.message}\n`));
       const current = watcher;
       await new Promise((resolveReady) => current.once('ready', resolveReady));
+    },
+
+    /**
+     * Checks the file for changes made by other programs right away (instead of after the settle
+     * delay) and reports them like the watcher does; resolves when done. Used at shutdown, so a
+     * change saved just before can still be merged (Q2).
+     */
+    async checkNow() {
+      if (settleTimer) {
+        clearTimeout(settleTimer);
+        settleTimer = null;
+      }
+      while (checking) await checking;
+      checkingNow = true;
+      try {
+        runCheck();
+        while (checking) await checking;
+      } finally {
+        checkingNow = false;
+      }
     },
 
     /** Stops watching (closes the watcher, cancels a scheduled check, waits for a running one). */

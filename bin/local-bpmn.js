@@ -111,6 +111,7 @@ async function shutdown() {
   if (signals > 1) return;
   server.stopAccepting();
   await server.drainClients(1000);
+  if (await session.checkDisk()) await server.drainClients(1000); // re-apply edits on a last-moment save (Q2)
   await store.unwatch(); // our final write must not come back as an external change
   await store.flush();
   await server.close();

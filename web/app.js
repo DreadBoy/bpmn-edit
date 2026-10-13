@@ -83,6 +83,9 @@ let replaying = null;     // while re-applying an op: { flowId, spliced } (see a
 let droppedOnFlow = null; // id of the flow the running root command inserted a shape into, if any
 let deleteSeen = null;    // seenOf() the elements the running root delete command removes
 let pendingOverrides = []; // others' concurrent changes our next update removes (see applyOp 'delete')
+let unsavedEdits = [];    // [{ version, edits }] accepted by the host but not on disk yet ('saved')
+let lostEdits = [];       // accepted edits a change on disk replaced before they were saved: re-applied
+                          // on top of it, before the other unsent edits (see 'remote-update')
 const recentChanges = new Map(); // element id -> when an update of ours that changed it was accepted
 let queue = Promise.resolve(); // incoming messages and deferred work, strictly in order
 
@@ -129,7 +132,7 @@ const NOTICES = {
   reloaded: { text: 'Reloaded from disk' },
   deferred: {
     text: 'Disk changed; reloads after your edit',
-    title: 'If your edit is saved first, it replaces the change made on disk',
+    title: 'Your edit is then re-applied on top of the change made on disk',
   },
   // Same kind (a held-back update), different wording when it comes from another window.
   deferredRemote: {
@@ -251,7 +254,7 @@ function scheduleSend() {
  */
 function onSendDue() {
   sendTimer = null;
-  if (inflight || sending || mustRebase || (deferredUpdate && deferredUpdate.origin !== 'disk')) {
+  if (inflight || sending || mustRebase || deferredUpdate) {
     sendHeld = true;
     renderStatus();
     settleLocalActivity();
@@ -391,31 +394,26 @@ function settleLocalActivity() {
  * Once the user is done (no label editor, drag or popup menu) and no update is on its way to the
  * host, a held-back remote update is:
  * - dropped if a local edit was accepted by the host after it (higher version; only possible for a
- *   change made on disk, which an edit based on the version before it replaces: last write wins);
+ *   change made on disk the editor could not display, see Session);
  * - shown, with this window's unsent edits re-applied on top, if there are any or the host refused
- *   our update — except for a change on disk with unsent edits, which are sent first (and win, as
- *   above) unless the host refused them;
+ *   our update (a change made on disk is treated like another window's edit: Q2);
  * - otherwise simply shown.
  * Then anything still unsent goes out.
  */
 async function settleNow() {
   if (deferredUpdate && !interactionActive() && !sending && !inflight) {
     const message = deferredUpdate;
-    const unsentEdits = Boolean(dirty || localEdits.length);
-    if (unsentEdits && message.origin === 'disk' && !mustRebase) {
-      if (!sendTimer) sendNow(); // the host accepts it over the change on disk (see Session)
+    const unsentEdits = Boolean(dirty || localEdits.length || lostEdits.length);
+    deferredUpdate = null;
+    if (version !== null && message.version <= version) {
+      console.warn(`local-bpmn: an edit from this window replaced ${describeOrigin(message.origin)}`);
+    } else if (unsentEdits || mustRebase) {
+      await rebaseLocalEdits(message);
     } else {
-      deferredUpdate = null;
-      if (version !== null && message.version <= version) {
-        console.warn(`local-bpmn: an edit from this window replaced ${describeOrigin(message.origin)}`);
-      } else if (unsentEdits || mustRebase) {
-        await rebaseLocalEdits(message);
-      } else {
-        await showRemoteDocument(message);
-      }
+      await showRemoteDocument(message);
     }
   }
-  if (sendHeld && !inflight && !sending && !mustRebase && !(deferredUpdate && deferredUpdate.origin !== 'disk')) {
+  if (sendHeld && !inflight && !sending && !mustRebase && !deferredUpdate) {
     sendNow();
   }
   renderNotice();
@@ -875,15 +873,20 @@ async function replayEdits(edits, message) {
   }
 }
 
-/** Tells the user which of their edits were not applied. */
-function reportProblems(problems) {
+/** Tells the user which of their edits were not applied (`fromDisk`: on top of a change made on disk). */
+function reportProblems(problems, fromDisk = false) {
   if (!problems.length) return;
-  const sentences = problems.map(({ reason, name }) => ({
+  const sentences = problems.map(({ reason, name }) => (fromDisk ? {
+    changed: `Your change to “${name}” was not applied: it was changed on disk at the same time (the file's version was kept)`,
+    deleted: `Your change to “${name}” was not applied: it was deleted on disk`,
+    unsupported: `Your edit (${name}) could not be merged with a change made on disk and was not applied`,
+    failed: `Your change to “${name}” could not be applied on top of a change made on disk`,
+  } : {
     changed: `Your change to “${name}” was not applied: someone else changed it first`,
     deleted: `Your change to “${name}” was not applied: someone else deleted it`,
     unsupported: `Your edit (${name}) could not be merged with someone else's and was not applied`,
     failed: `Your change to “${name}” could not be applied on top of someone else's edit`,
-  }[reason]));
+  })[reason]);
   const unique = [...new Set(sentences)];
   for (const sentence of unique) console.warn(`local-bpmn: ${sentence}`);
   const kind = problems.some((p) => p.reason === 'changed') ? 'conflict' : 'dropped';
@@ -898,7 +901,8 @@ function reportProblems(problems) {
 async function rebaseLocalEdits(message) {
   clearTimeout(sendTimer);
   sendTimer = null;
-  const edits = normalizeEdits(localEdits);
+  const edits = normalizeEdits([...lostEdits, ...localEdits]);
+  lostEdits = [];
   localEdits = [];
   mustRebase = false;
   if (!(await showRemoteDocument(message))) {
@@ -911,9 +915,32 @@ async function rebaseLocalEdits(message) {
     return;
   }
   dirty = false;
-  reportProblems(await replayEdits(edits, message));
+  const problems = await replayEdits(edits, message);
+  if (message.origin === 'disk') reportDiskMerge(edits, problems);
+  else reportProblems(problems);
   if (dirty) sendNow();
   else sendHeld = false;
+}
+
+/**
+ * After re-applying this window's edits on top of a change made on disk (Q2): says what happened.
+ * Edits that could not be applied are reported as such; a delete that removed an element changed on
+ * disk says so too (the file's change to it is gone); otherwise the merge is confirmed.
+ */
+function reportDiskMerge(edits, problems) {
+  if (problems.length) {
+    reportProblems(problems, true);
+    return;
+  }
+  if (pendingOverrides.length) {
+    const sentences = pendingOverrides.map(({ name, id, kind }) => (kind === 'connection'
+      ? `Your delete of “${name || id}” also removed a connection added on disk`
+      : `Your delete of “${name || id}” removed a change made to it on disk`));
+    for (const sentence of sentences) console.warn(`local-bpmn: ${sentence}`);
+    showToast('conflict', sentences.length > 1 ? `${sentences[0]} (+${sentences.length - 1} more)` : sentences[0], sentences);
+    return;
+  }
+  if (edits.length) showToast('merged', 'The file was changed on disk; your edits were applied on top of that change');
 }
 
 /** Fetches the host's current document (used if a newer one is needed but was not received). */
@@ -974,6 +1001,8 @@ async function handleMessage(message) {
       break;
     case 'ack':
       rememberChanges(inflight?.edits ?? []);
+      // Kept until the host has written them, in case a change on disk replaces them first (Q2).
+      if (inflight?.edits?.length) unsavedEdits.push({ version: message.version, edits: inflight.edits });
       inflight = null;
       advanceVersion(message.version);
       lastError = null;
@@ -1005,7 +1034,20 @@ async function handleMessage(message) {
     case 'flush':
       flushForShutdown();
       break;
+    case 'saved':
+      unsavedEdits = unsavedEdits.filter((entry) => entry.version > message.version);
+      break;
     case 'remote-update':
+      if (message.origin === 'disk' && Number.isInteger(message.discardedAfter)) {
+        // The file changed on disk before our accepted edits were written: they are not in this
+        // document. Re-apply them on top of it (Q2), like edits the host refused.
+        const lost = unsavedEdits.filter((entry) => entry.version > message.discardedAfter);
+        unsavedEdits = [];
+        if (lost.length) {
+          lostEdits.push(...lost.flatMap((entry) => entry.edits));
+          mustRebase = true;
+        }
+      }
       await applyRemoteUpdate(message);
       break;
     case 'file-status':

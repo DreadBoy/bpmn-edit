@@ -1,5 +1,5 @@
 import assert from 'node:assert/strict';
-import { chmod, copyFile, mkdtemp, readdir, readFile, rename, rm, stat, symlink, lstat, unlink, writeFile } from 'node:fs/promises';
+import { chmod, copyFile, mkdtemp, readdir, readFile, rename, rm, stat, symlink, lstat, unlink, utimes, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
@@ -328,18 +328,91 @@ describe('createFileStore watching', () => {
     assert.equal(store.diskState, 'ok');
   });
 
-  it('drops a pending write when an external change arrives after it', async () => {
+  it('drops a pending write when an external change arrives after it, and says so (discarded)', async () => {
     await start({ debounceMs: 60_000 });
     store.write(variant(1));
     assert.ok(store.pending);
     const changed = next('external-change');
     await writeFile(file, variant(2));
-    await changed;
+    assert.deepEqual(await changed, { xml: variant(2), discarded: true });
     assert.equal(store.pending, false);
     await store.flush();
     assert.equal(await readFile(file, 'utf8'), variant(2), 'the external change was not overwritten');
+    assert.deepEqual(logs, []);
+  });
+
+  it('never writes over an external change it has not seen yet: holds the write back and reports it', async () => {
+    await start({ debounceMs: 0, settleMs: 300 });
+    const saved = [];
+    store.on('saved', ({ xml }) => saved.push(xml));
+    await writeFile(file, variant(2)); // not reported yet (settle delay)
+    const changed = next('external-change');
+    store.write(variant(1)); // due right away
+    assert.deepEqual(await changed, { xml: variant(2), discarded: true });
+    assert.equal(await readFile(file, 'utf8'), variant(2));
+    assert.ok(!events.some((e) => e.type === 'written'));
+    assert.deepEqual(saved, []);
+    assert.equal(store.pending, false);
+
+    // The next write (based on the change) goes through.
+    store.write(variant(3));
+    await store.flush();
+    assert.equal(await readFile(file, 'utf8'), variant(3));
+    assert.deepEqual(saved, [variant(3)]);
+    assert.deepEqual((await readdir(dir)).filter((n) => TEMP_FILE_RE.test(n)), []);
+  });
+
+  it('flush() keeps an external change it has not seen and saves the pending content next to the file', async () => {
+    await start({ debounceMs: 60_000, settleMs: 60_000 });
+    const asides = [];
+    store.on('kept-aside', (a) => asides.push(a));
+    store.write(variant(1));
+    await writeFile(file, variant(2));
+    await store.unwatch();
+    await store.flush();
+    assert.equal(await readFile(file, 'utf8'), variant(2), 'the change on disk is kept');
+    assert.equal(asides.length, 1);
+    assert.match(asides[0].path, /order\.local-bpmn-unsaved-\d{8}-\d{6}\.bpmn$/);
+    assert.equal(await readFile(asides[0].path, 'utf8'), variant(1), 'the editor version is saved aside');
     assert.equal(logs.length, 1);
-    assert.match(logs[0], /^local-bpmn: warning: .* changed on disk; a pending save from the editor was discarded/);
+    assert.match(logs[0], /^local-bpmn: warning: .* changed on disk while the editor's last changes were being saved; .*saved to .*local-bpmn-unsaved/);
+    assert.equal(store.pending, false);
+  });
+
+  it('checkNow() reports a change before it settled; flush() keeps the dropped write aside unless rewritten', async () => {
+    await start({ debounceMs: 60_000, settleMs: 60_000 });
+    const asides = [];
+    store.on('kept-aside', (a) => asides.push(a));
+    store.write(variant(1));
+    await writeFile(file, variant(2));
+    const changed = next('external-change');
+    await store.checkNow();
+    assert.deepEqual(await changed, { xml: variant(2), discarded: true });
+    await store.unwatch();
+    await store.flush(); // nobody re-applied the edits: kept aside
+    assert.equal(await readFile(file, 'utf8'), variant(2));
+    assert.equal(asides.length, 1);
+    assert.equal(await readFile(asides[0].path, 'utf8'), variant(1));
+
+    // Re-applied (a new write after the check): written, nothing kept aside.
+    await store.watch();
+    store.write(variant(3));
+    await writeFile(file, variant(4));
+    await store.checkNow();
+    store.write(variant(5));
+    await store.unwatch();
+    await store.flush();
+    assert.equal(await readFile(file, 'utf8'), variant(5));
+    assert.equal(asides.length, 1);
+  });
+
+  it('a touched file (same content, new mtime) does not hold back a write', async () => {
+    await start({ debounceMs: 0, settleMs: 60_000 });
+    const now = new Date(Date.now() + 5000);
+    await utimes(file, now, now);
+    store.write(variant(1));
+    await store.flush();
+    assert.equal(await readFile(file, 'utf8'), variant(1));
   });
 
   it('ignores other files in the directory, including its own temp file names', async () => {
