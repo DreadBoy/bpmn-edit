@@ -23,7 +23,9 @@
 //   status = { state: 'idle' | 'starting' | 'active' | 'error', url?, progress?, error? } (src/share.js)
 //
 // WebSocket protocol (JSON text frames, each with a `type`):
-//   server -> client  { type: 'init', xml, version, name, path?, clientId, role }
+//   (WebSocket URL: `?page=<key>` optional, the page's random key, as in presence 'hello'.)
+//   server -> client  { type: 'init', xml, version, name, path?, clientId, role, instance, saved, discards,
+//                       lastDisk, lastEdit, staleSaves, accepted }
 //                                                               on connect; clientId ('c1', 'c2', …) is
 //                                                               unique for the server's lifetime;
 //                                                               path (absolute, on the host) is left
@@ -31,8 +33,27 @@
 //                                                               role: 'host' | 'local' | 'collaborator'
 //                                                               (how this socket was opened; a page
 //                                                               whose host secret is from an earlier
-//                                                               run of the CLI is 'local')
-//   client -> server  { type: 'update', xml, baseVersion, overrides? }
+//                                                               run of the CLI is 'local').
+//                                                               instance: id of this session (versions
+//                                                               only compare within one); saved: every
+//                                                               version up to this is on disk;
+//                                                               discards: [{ after, version }] accepted
+//                                                               updates with a version in between were
+//                                                               replaced by the change on disk at
+//                                                               `version` before they were written (a
+//                                                               reconnecting client re-applies its own,
+//                                                               see 'remote-update' discardedAfter; Q2);
+//                                                               lastDisk / lastEdit: newest version
+//                                                               from disk (or null) / from an update;
+//                                                               accepted: { seq, version } of the
+//                                                               newest update accepted from this page
+//                                                               key (or null), so a page whose 'ack'
+//                                                               was lost with its connection knows
+//                                                               whether its update in flight was
+//                                                               accepted (and at which version);
+//                                                               staleSaves: [{ name, version }] recent
+//                                                               'kept-aside' stale saves (see below)
+//   client -> server  { type: 'update', xml, baseVersion, overrides?, seq?, reapplied? }
 //                                                               full XML after an edit, based on the
 //                                                               version the client last received or
 //                                                               had acknowledged; at most one update
@@ -43,6 +64,11 @@
 //                                                               a connection someone added to an
 //                                                               element it deletes (name = that
 //                                                               element). Passed on unchanged.
+//                                                               seq: per-page update number (see
+//                                                               'init' accepted). reapplied: versions
+//                                                               of this page's discarded updates
+//                                                               (discardedAfter) re-applied in it.
+//   client -> server  { type: 'reapplied', versions }           the same when nothing was left to send
 //   server -> client  { type: 'ack', version }                  update accepted (the sender gets no
 //                                                               remote-update for its own edit)
 //   server -> client  { type: 'conflict', version, message }    update refused: another update replaced
@@ -50,9 +76,8 @@
 //                                                               already been sent that newer version as
 //                                                               'remote-update'). The client re-applies
 //                                                               its edits on it and sends a new update.
-//                                                               Updates based on a version that only
-//                                                               changes on disk replaced since are
-//                                                               accepted (they overwrite those).
+//                                                               A change made on disk counts like
+//                                                               another client's update (Q2).
 //   server -> client  { type: 'error', code, message }          code: 'bad-message' | 'invalid-xml' |
 //                                                               'write-failed' (pushed) | 'internal'
 //   server -> client  { type: 'flush' }                         shutting down: send pending edits now
@@ -63,7 +88,19 @@
 //                                                               (sent to every client), otherwise the
 //                                                               clientId of the editing client (sent to
 //                                                               every other client). Versions only
-//                                                               grow.
+//                                                               grow. discardedAfter (disk only):
+//                                                               accepted updates with a higher
+//                                                               version never reached the disk; their
+//                                                               senders re-apply them on this one.
+//                                                               stale (disk only): it is a save from an
+//                                                               older copy that also replaced written
+//                                                               edits; 'kept-aside' follows
+//   server -> client  { type: 'saved', version }                every version up to this is on disk
+//   server -> client  { type: 'kept-aside', reason: 'stale-save', name }
+//                                                               a save from an older copy replaced the
+//                                                               last write shortly after it; the
+//                                                               editor's version was saved next to
+//                                                               the file as `name` (file name only)
 //   server -> client  { type: 'file-status', state, message? }  state of the file on disk: 'ok' |
 //                                                               'missing' | 'invalid'; pushed on change
 //                                                               and after 'init' when not 'ok'
@@ -96,7 +133,9 @@ import net from 'node:net';
 import { basename, dirname, extname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { WebSocketServer } from 'ws';
-import { CLOSE_SESSION_ENDED, CLOSE_SHARE_STOPPED, KEEPALIVE_MS } from '../web/connection-shared.js';
+import {
+  CLIENT_KEY_RE, CLOSE_SESSION_ENDED, CLOSE_SHARE_STOPPED, KEEPALIVE_MS,
+} from '../web/connection-shared.js';
 import { createFileStore } from './file.js';
 import { createPresence } from './presence.js';
 import {
@@ -127,6 +166,10 @@ const CONTENT_TYPES = {
 const PORT_FALLBACK_RANGE = 20;
 
 export const WS_PATH = '/ws';
+/** WebSocket URL parameter with the page's random key (see 'init' accepted). */
+const PAGE_PARAM = 'page';
+/** How many pages acceptedByPage remembers. */
+const MAX_PAGES = 1000;
 /** Largest accepted WebSocket message; bigger ones close the connection with 1009. */
 export const WS_MAX_PAYLOAD = 10 * 1024 * 1024;
 
@@ -260,6 +303,22 @@ export function createServer({
   const clientIds = new WeakMap();
   /** How each connection was opened: { role: 'host' | 'local' | 'collaborator', token? }. */
   const clientAccess = new WeakMap();
+  /**
+   * Page key each connection gave in its URL, scoped by how it connected ('role:token|key', as for
+   * presence keys): a collaborator can never claim the host's page, nor one of another link.
+   */
+  const clientPages = new WeakMap();
+  /** Scoped page key -> { seq, version } of the newest update accepted from that page (oldest dropped first). */
+  const acceptedByPage = new Map();
+
+  /** Remembers an accepted update by page and sequence number, for that page's next 'init'. */
+  function rememberAccepted(ws, seq, version) {
+    const page = clientPages.get(ws);
+    if (page === undefined || seq === undefined) return;
+    acceptedByPage.delete(page);
+    acceptedByPage.set(page, { seq, version });
+    if (acceptedByPage.size > MAX_PAGES) acceptedByPage.delete(acceptedByPage.keys().next().value);
+  }
   let lastClientNumber = 0;
   /** Connections that answered the last keepalive ping (or sent something) since it was sent. */
   const alive = new WeakSet();
@@ -319,15 +378,24 @@ export function createServer({
       case 'ping':
         return send(ws, { type: 'pong' });
       case 'update': {
-        const { xml, baseVersion, overrides } = message;
+        const { xml, baseVersion, overrides, seq, reapplied } = message;
         if (typeof xml !== 'string' || !Number.isInteger(baseVersion) || baseVersion < 0) {
           return sendError(ws, 'bad-message', 'update needs a string "xml" and an integer "baseVersion"');
         }
         if (overrides !== undefined && !validOverrides(overrides)) {
           return sendError(ws, 'bad-message', 'update "overrides" must be a list of { id, name } strings');
         }
+        if (seq !== undefined && !(Number.isInteger(seq) && seq > 0)) {
+          return sendError(ws, 'bad-message', 'update "seq" must be a positive integer');
+        }
+        if (reapplied !== undefined && !validVersions(reapplied)) {
+          return sendError(ws, 'bad-message', 'update "reapplied" must be a list of versions');
+        }
         try {
-          const version = session.applyUpdate(xml, baseVersion, ws, overrides ? { overrides } : {});
+          const version = session.applyUpdate(xml, baseVersion, ws, {
+            ...(overrides ? { overrides } : {}), reapplied, owner: clientPages.get(ws) ?? null,
+          });
+          rememberAccepted(ws, seq, version);
           return send(ws, { type: 'ack', version });
         } catch (err) {
           if (err instanceof SessionError && err.code === 'conflict') {
@@ -339,6 +407,12 @@ export function createServer({
       }
       case 'flushed':
         flushWaiters.get(ws)?.();
+        return undefined;
+      case 'reapplied':
+        if (!validVersions(message.versions)) {
+          return sendError(ws, 'bad-message', 'reapplied needs a list of versions');
+        }
+        session.reapplied?.(message.versions, clientPages.get(ws) ?? null); // only its own page's versions
         return undefined;
       case 'import-failed': {
         const { version, message: text } = message;
@@ -355,6 +429,13 @@ export function createServer({
 
   wss.on('connection', (ws, req, access = { role: 'local' }) => {
     clientAccess.set(ws, access);
+    let page = null;
+    try {
+      page = new URL(req.url, 'http://localhost').searchParams.get(PAGE_PARAM);
+    } catch {
+      // no page key
+    }
+    if (page !== null && CLIENT_KEY_RE.test(page)) clientPages.set(ws, `${access.role}:${access.token ?? ''}|${page}`);
     // Without a listener, protocol errors (e.g. an oversize frame -> close 1009) would crash the process.
     ws.on('error', () => {});
     alive.add(ws);
@@ -368,7 +449,11 @@ export function createServer({
         sendError(ws, 'internal', 'Internal server error');
       }
     });
-    ws.on('close', () => flushWaiters.get(ws)?.());
+    ws.on('close', () => {
+      flushWaiters.get(ws)?.();
+      // Its accepted edits not on disk yet can no longer be re-applied through this connection (Q2).
+      session.originGone?.(ws);
+    });
     ws.on('close', () => presence.leave(ws));
     lastClientNumber += 1;
     const clientId = `c${lastClientNumber}`;
@@ -377,6 +462,8 @@ export function createServer({
     const shared = access.role === 'collaborator';
     send(ws, {
       type: 'init', xml, version, name: fileName, ...(shared ? {} : { path: filePath }), clientId, role: access.role,
+      ...session.syncState(),
+      accepted: acceptedByPage.get(clientPages.get(ws)) ?? null,
     });
     const diskStatus = session.diskStatus;
     if (diskStatus.state !== 'ok') send(ws, { type: 'file-status', ...diskStatus });
@@ -437,8 +524,13 @@ export function createServer({
    * Pushes an accepted change to the clients that do not have it yet: a change on disk to everyone,
    * a client's edit to everyone else (the sender only gets its 'ack').
    */
-  function onChange({ xml, version, origin, overrides }) {
-    if (origin === 'disk') return broadcast({ type: 'remote-update', xml, version, origin });
+  function onChange({ xml, version, origin, overrides, discardedAfter, stale }) {
+    if (origin === 'disk') {
+      return broadcast({
+        type: 'remote-update', xml, version, origin,
+        ...(discardedAfter !== undefined ? { discardedAfter } : {}), ...(stale ? { stale: true } : {}),
+      });
+    }
     const sender = clientIds.has(origin) ? origin : null;
     const originId = sender ? clientIds.get(sender) : String(origin ?? 'host');
     const message = { type: 'remote-update', xml, version, origin: originId };
@@ -450,11 +542,21 @@ export function createServer({
     broadcast({ type: 'file-status', ...status });
   }
 
+  function onSaved({ version }) {
+    broadcast({ type: 'saved', version });
+  }
+
+  function onStaleSave({ name }) {
+    broadcast({ type: 'kept-aside', reason: 'stale-save', name }); // the file name only, no path
+  }
+
   function attachSession(newSession) {
     session = newSession;
     session.on('write-error', onWriteError);
     session.on('change', onChange);
     session.on('disk-status', onDiskStatus);
+    session.on('saved', onSaved);
+    session.on('stale-save', onStaleSave);
   }
   if (session) attachSession(session);
   let ownStore = null; // store created by listen() (watched by us, unwatched on close)
@@ -654,6 +756,8 @@ export function createServer({
       session?.off('write-error', onWriteError);
       session?.off('change', onChange);
       session?.off('disk-status', onDiskStatus);
+      session?.off('saved', onSaved);
+      session?.off('stale-save', onStaleSave);
       await ownStore?.unwatch();
     },
   };
@@ -661,6 +765,10 @@ export function createServer({
 }
 
 /** `overrides` of an update: at most 1000 { id, name, kind? } (strings; kind only 'connection'). */
+function validVersions(versions) {
+  return Array.isArray(versions) && versions.length <= 10_000 && versions.every((v) => Number.isInteger(v) && v > 0);
+}
+
 function validOverrides(overrides) {
   return Array.isArray(overrides) && overrides.length <= 1000 && overrides.every((o) => o !== null
     && typeof o === 'object' && typeof o.id === 'string' && typeof o.name === 'string'

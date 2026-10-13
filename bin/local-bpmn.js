@@ -58,7 +58,14 @@ try {
 } catch (err) {
   fail(err.message);
 }
-const session = new Session({ xml: initialXml, store });
+// How long discarded edits wait for their disconnected window to re-apply them (hidden, for tests;
+// default: see src/session.js).
+let reapplyGraceMs;
+if (process.env.LOCAL_BPMN_REAPPLY_GRACE_MS !== undefined) {
+  reapplyGraceMs = Number(process.env.LOCAL_BPMN_REAPPLY_GRACE_MS);
+  if (!/^\d+$/.test(process.env.LOCAL_BPMN_REAPPLY_GRACE_MS)) fail('LOCAL_BPMN_REAPPLY_GRACE_MS must be an integer');
+}
+const session = new Session({ xml: initialXml, store, ...(reapplyGraceMs === undefined ? {} : { reapplyGraceMs }) });
 const fileName = basename(filePath);
 session.on('change', ({ origin }) => {
   if (origin === 'disk') process.stderr.write(`local-bpmn: reloaded ${fileName} (changed on disk)\n`);
@@ -122,8 +129,10 @@ if (options.open) {
 }
 
 // Shutdown: stop accepting, let open editors (collaborators too, through the tunnel) send their last
-// edits, tell them the session ended (close 4002: "Session ended", no reconnect; before the tunnel
-// stops, so collaborators get it too), stop the tunnel, write everything to disk, exit 0. A second
+// edits, check the file for a last-moment save on disk and let the editors re-apply their edits on it
+// (Q2), stop watching, tell them the session ended (close 4002: "Session ended", no reconnect; before
+// the tunnel stops, so collaborators get it too), stop the tunnel, write everything to disk (or keep
+// it aside if the file changed meanwhile), exit 0. Order and reasons: docs/decisions.md, Q2. A second
 // signal skips waiting for the editors but still stops the tunnel and finishes the disk write; a
 // third one exits immediately (escape hatch if the disk hangs; the tunnel module's exit hook still
 // kills cloudflared).
@@ -132,15 +141,27 @@ async function shutdown() {
   signals += 1;
   if (signals === 3) process.exit(1);
   if (signals === 2) {
-    await Promise.all([server.endSession(200).then(() => server.share.stop()), store.flush()]);
+    // Skips waiting for the editors, but the disk write and its last look at the file still run to
+    // the end: flush() waits for the one the first signal started (Q2).
+    await Promise.all([server.endSession(200).then(() => server.share.stop()), session.keepUnapplied().then(() => store.flush({ final: true }))]);
     process.exit(0);
   }
   if (signals > 1) return;
   server.stopAccepting();
   await server.drainClients(1000);
-  await server.endSession(1000);
+  // A save on disk the watcher has not reported yet (it waits for the file to settle) is applied now;
+  // if it replaced accepted edits, the windows (collaborators too: the tunnel is still up) re-apply
+  // them on top of it and send them before anything is closed (Q2).
+  if (await session.checkDisk()) await server.drainClients(1000);
+  // Stop watching before the windows go: a change on disk from now on is caught by the final write's
+  // own check (the file keeps it, our version is kept aside), never by a watcher event that would ask
+  // windows that are closing to re-apply edits.
   await store.unwatch(); // our final write must not come back as an external change
-  await Promise.all([server.share.stop(), store.flush()]);
+  await server.endSession(1000);
+  // Edits a change on disk replaced that no window re-applied (closed, or its connection died
+  // unnoticed) are kept next to the file now: nobody can re-apply them any more (Q2).
+  await session.keepUnapplied();
+  await Promise.all([server.share.stop(), store.flush({ final: true })]);
   await server.close();
   process.exit(0);
 }

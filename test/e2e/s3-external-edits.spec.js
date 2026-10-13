@@ -254,10 +254,8 @@ test.describe('S3: external edits show up in the browser', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a label committed after a change on disk wins (last write wins), and browser and disk agree', async ({ page }) => {
+  test('a label committed after a change on disk is applied on top of it (Q2: both kept), browser and disk agree', async ({ page }) => {
     const errors = collectPageErrors(page);
-    const warnings = [];
-    page.on('console', (msg) => { if (msg.type() === 'warning') warnings.push(msg.text()); });
     await openEditor(page, cli);
 
     await typeLabel(page, 'Task_CancelOrder', 'Cancel and refund', { commit: false });
@@ -268,17 +266,16 @@ test.describe('S3: external edits show up in the browser', () => {
     await expect.poll(() => readFile(fixture.file, 'utf8'), { timeout: 2000 }).toContain('name="Cancel and refund"');
     await expect(status(page)).toHaveAttribute('data-state', 'saved');
     await expect(notice(page)).not.toHaveAttribute('data-kind', 'deferred');
-    // The whole document from the browser replaced the change on disk: both sides show the same.
+    // The label was re-applied on top of the change on disk: both are kept, both sides show the same.
     const xml = await readFile(fixture.file, 'utf8');
-    expect(xml).toContain('<bpmn:task id="Task_CheckStock" name="Check stock"');
-    await expect(label(page, 'Task_CheckStock')).toHaveText('Check stock');
+    expect(xml).toContain('<bpmn:task id="Task_CheckStock" name="Check stock levels"');
+    await expect(label(page, 'Task_CheckStock')).toHaveText('Check stock levels');
     await expect(label(page, 'Task_CancelOrder')).toHaveText('Cancel and refund');
+    await expect(page.locator('#toast')).toHaveAttribute('data-kind', 'merged');
     const info = await stat(fixture.file);
     await expectNoWriteBack(fixture.file, xml, info);
     await expect(label(page, 'Task_CancelOrder')).toHaveText('Cancel and refund');
-    // Not silent: the browser console and the host log both say so.
-    expect(warnings.some((w) => /replaced a change made on disk/.test(w))).toBe(true);
-    expect(cli.stderr()).toContain('an edit from the browser replaced a change made on disk');
+    expect(cli.stderr()).not.toContain('replaced a change made on disk');
     expect(errors).toEqual([]);
   });
 
@@ -356,7 +353,7 @@ test.describe('S3: external edits show up in the browser', () => {
     expect(errors).toEqual([]);
   });
 
-  test('a change on disk during a drag does not drop the drag (last write wins), browser and disk agree', async ({ page }) => {
+  test('a change on disk during a drag does not drop the drag (Q2: both kept), browser and disk agree', async ({ page }) => {
     const errors = collectPageErrors(page);
     await openEditor(page, cli);
 
@@ -377,9 +374,9 @@ test.describe('S3: external edits show up in the browser', () => {
     await expect(status(page)).toHaveAttribute('data-state', 'saved');
     await expect(notice(page)).not.toHaveAttribute('data-kind', 'deferred');
     const xml = await readFile(fixture.file, 'utf8');
-    // The drag reached the host after the change on disk, so its document won.
-    expect(xml).toContain('<bpmn:task id="Task_CheckStock" name="Check stock"');
-    await expect(label(page, 'Task_CheckStock')).toHaveText('Check stock');
+    // The move was re-applied on top of the change on disk: both are kept.
+    expect(xml).toContain('<bpmn:task id="Task_CheckStock" name="Check stock levels"');
+    await expect(label(page, 'Task_CheckStock')).toHaveText('Check stock levels');
     const info = await stat(fixture.file);
     await expectNoWriteBack(fixture.file, xml, info);
     expect(cancelOrderY(await readFile(fixture.file, 'utf8'))).toBeGreaterThanOrEqual(300);
