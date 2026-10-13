@@ -943,6 +943,28 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     });
   }
 
+  test('a palette drop released on a notice reaches the canvas', async ({ browser }) => {
+    // The notice is shown at the bottom centre, over the canvas, for 8 s: it must not catch the drop.
+    await start();
+    const [A] = await open(browser, 1);
+    const errors = collectPageErrors(A);
+    const copy = await disk();
+    await renameInBrowser(A, 'Ship parcel');
+    await expect.poll(async () => nameInXml(await disk(), 'Task_ShipOrder'), { timeout: 3000 }).toBe('Ship parcel');
+    await delay(200);
+    await writeFile(fixture.file, renameInXml(copy, 'Task_CheckStock', 'Check stock levels')); // a stale save: notice
+    await expect(toast(A)).toBeVisible();
+    const box = await toast(A).boundingBox();
+    const to = { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+    const id = await dragNewTask(A, to);
+    await expect(toast(A)).toBeVisible(); // the drop was released on it
+    const created = await A.locator(`.djs-element[data-element-id="${id}"]`).boundingBox();
+    expect(Math.abs(created.x + created.width / 2 - to.x)).toBeLessThanOrEqual(20);
+    expect(Math.abs(created.y + created.height / 2 - to.y)).toBeLessThanOrEqual(20);
+    await expect.poll(async () => (await disk()).includes(`id="${id}"`), { timeout: 3000 }).toBe(true);
+    expect(errors).toEqual([]);
+  });
+
   test('normal use with an IDE that reloads before it saves gives no stale-save notice', async ({ browser }) => {
     await start();
     const [A] = await open(browser, 1);

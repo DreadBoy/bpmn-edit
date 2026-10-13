@@ -244,7 +244,12 @@ body {
   font-size: 13px;
   box-shadow: 0 2px 8px rgba(31, 35, 40, 0.15);
   z-index: 100;
+  /* It sits over the canvas: a palette drop or shape move released on it must reach the canvas. */
+  pointer-events: none;
 }
+
+/* Interactive content in a toast (none today) stays clickable. */
+#toast :is(a, button) { pointer-events: auto; }
 
 #toast[hidden] { display: none; }
 

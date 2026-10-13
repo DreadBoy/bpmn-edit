@@ -821,6 +821,13 @@ name, the windows showed only "Reloaded from disk", and the rename was gone (10/
   changed the task renamed in the browser (documentation / outgoing): the rename is kept next to it"
   (fails on the code before the fix: no side file).
 
+**B2: the notice caught pointer events.** The notice is shown at the bottom centre, over the canvas,
+for 8 s; a palette drop or shape move released on it was cancelled (seen by the fifth check's
+`chain` probe). It now has `pointer-events: none` (links or buttons in it, none today, stay
+clickable). Its tooltip with the full list of unapplied edits is no longer shown on hover (the list
+is in the browser console, and the notice says "+N more"). E2E "a palette drop released on a notice
+reaches the canvas".
+
 ### Known limits
 
 - The pre-write check and the rename are separate steps. A save renamed over the file between the
