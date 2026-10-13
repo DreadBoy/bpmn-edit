@@ -113,7 +113,7 @@ How it works now:
   exception is a version that only changes made on disk replaced since: such an update is still accepted
   and replaces the document, with a warning, as before (the disk-race policy is Q2's to decide; see the
   known limits for the case where the disk wins instead). Identical content is a no-op whatever its
-  base.
+  base. *Superseded by Q2: a change on disk now counts like another window's update.*
 - Client (`web/app.js`): at most one update in flight. Every user action (root command) is recorded as
   an "edit" of id-based ops: label, move, create (palette, paste), append, connect, delete. Each op also
   records what it expects to find (the label before the edit, the position before the move). The edits
@@ -199,6 +199,7 @@ Why this and not the alternatives:
   still waiting in the host's write debounce (250 ms), the pending write is dropped (`src/file.js`:
   "a pending save from the editor was discarded"), the disk version is pushed to every window and that
   browser edit is lost, with only the stderr warning. So neither side reliably wins today.
+  *Resolved by Q2 (below).*
 - Closing, reloading or hiding a window sends a pending edit right away instead of after the 300 ms
   debounce (best effort, `pagehide` / `visibilitychange`); an edit whose update is still waiting for a
   rebase at that moment is lost.
@@ -216,6 +217,649 @@ Why this and not the alternatives:
 - The client relies on diagram-js internals (`commandStack._currentExecution`, `_stack`, `_stackIdx`)
   to find root commands and undone edits; if they change, every edit is treated as unsupported (safe,
   but concurrent edits are then dropped with a toast instead of merged).
+
+## Q2: browser edit racing a save made on disk (IDE)
+
+### Question
+
+What happens when an edit in the browser and a save of a different change by another program (an IDE)
+land within the debounce windows, in either order, or just before Ctrl-C? Is anything lost silently,
+and what should the policy be? Product preference: never lose work silently.
+
+### Experiment
+
+`test/e2e/q2-ide-race.measure.spec.js`; method, per-trial data and root causes in
+`docs/q2-ide-race.md`. Real CLI, two Chrome windows, the fixture in a temp git repo
+(`core.autocrlf=false`), the IDE save simulated by reading the file and writing it back with another
+element renamed (`fs.writeFile`). Scenarios: (a) browser edit, then IDE save 0–600 ms later, 15 trials;
+(b) IDE save, then browser edit 0–400 ms later, 15; (c) IDE save 20–140 ms before the host writes the
+accepted edit, 15; (d) IDE save 0–100 ms before SIGINT while the accepted edit waits for its write,
+10 (fresh CLI each).
+
+### Results
+
+| | Before: both kept | Before: lost silently | After: both kept | After: lost (silently or not) |
+|---|---|---|---|---|
+| a | 2/15 | 13/15 (7 browser edits, 6 disk changes) | 15/15 | 0 |
+| b | 11/15 | 4/15 (disk change) | 15/15 | 0 |
+| c | 0/15 | 15/15 (disk change) | 15/15 | 0 |
+| d | 0/10 | 10/10 (disk change) | 10/10 | 0 |
+
+Before, no loss was shown in any window (the only trace: a stderr warning in 14 of the 42 losses); the
+windows always agreed with the file, so everyone converged on the smaller document. Four causes: the
+store dropped an accepted but unwritten browser edit when a change on disk arrived; the write loop
+wrote over a change the watcher had not reported yet (it waits 150 ms for the file to settle); the
+session accepted browser documents based on a version a change on disk had replaced (last write
+wins); shutdown cancelled the pending check and flushed over the change.
+
+### Decision
+
+**The change on disk is the newer base; browser edits not yet on disk are re-applied on top of it,
+per element, with the Q1 machinery. A true same-element conflict keeps the file's version and is
+shown in the window whose edit lost. Nothing is ever written over a change on disk the host has not
+seen.** Alternatives considered: last write wins with a toast (still loses work, just visibly);
+pause-and-ask (a modal in every window for something that is almost always mergeable, and nobody to
+ask at shutdown or when the host's window is not focused); disk always wins (loses browser work).
+
+How it works:
+
+- Session (`src/session.js`): a change on disk is a version like any other: an update based on an
+  older version is refused (`conflict`), and the window re-applies its edits on top (Q1 rebase). The
+  one exception kept from before: a change on disk that the editor cannot display (`import-failed`)
+  can still be replaced by an edit based on the version before it (warning on stderr).
+- Pre-write check (`src/file.js`): right before the rename that replaces the file, the store compares
+  the file with what it last read or wrote: `stat` (inode, size, mtime) as a cheap pre-check, then the
+  content. If another program changed it, the temp file is discarded, the write is held back and the
+  change is reported after the usual settle delay, exactly like a change the watcher found first.
+  If the file was invalid or missing when last seen, the host may still replace it while it stays
+  missing or holds exactly the broken content reported after it settled (as before). Anything else
+  holds the write back: a complete BPMN document counts as a change made on disk, other content
+  means another program is still writing (e.g. truncated and about to be rewritten), so the host
+  waits until the file settles (no stat shortcut in that state).
+- Slow saves (`src/file.js`, `confirmMs`, 2 s): a write that replaced a missing or invalid file is
+  not reported as saved until the file has held our content for 2 s, counted from that first write
+  (further writes of ours do not restart it: under continuous editing the wait would never end), and
+  restarted by every missing/invalid observation. The file is read when the wait ends; if it does
+  not hold our content (the other program broke it again), the write stays unconfirmed for as long
+  as that lasts (the windows keep the "not valid BPMN" notice). If a valid save arrives while
+  unconfirmed (an IDE finishing a slow save from its own copy, without the browser edit), it is
+  treated like a change that replaced a pending write: the edits are re-applied on top of it in their
+  windows (merged toast), or kept aside if their window has closed. The windows show "Saved" as soon
+  as the host accepted an edit, also while such a write is unconfirmed; the UI does not distinguish
+  this (rare) state. A program saving in place through one file descriptor (truncate, write, pause,
+  write the rest) writes the rest into the file our rename replaced, not into the file at the path; so
+  while unconfirmed, that replaced file is kept open and polled (see "After the merge" below).
+- Shutdown while a write is unconfirmed: `flush()` always keeps a copy of it aside (side file +
+  stderr), whether or not the file holds it at that moment, because the other program may finish its
+  save after we exit (the verifier's "IDE finishes after exit": before 8/8 lost silently, also with a
+  second edit still waiting for its write). Chosen over waiting out the rest of the 2 s at shutdown:
+  waiting delays Ctrl-C and still loses the edit if the program finishes after the wait (which is
+  what happens when it finishes after exit). The cost is a side file nobody needed when no other
+  program was involved, only when Ctrl-C comes within 2 s of replacing a broken or deleted file. A
+  normal Ctrl-C is neither delayed nor leaves a side file (E2E asserted).
+- Re-applying is idempotent (`web/app.js`): a label already at its new text, a created element or
+  connection already there, a deleted element already gone, and (new) a moved shape already at its
+  target position count as applied. Before, a change on disk that already contained a move (an IDE
+  that reloaded the host's write) gave a false "changed on disk" conflict toast. The "merged" toast
+  is shown only if something was actually re-applied, so a change on disk that already contains the
+  window's edits (moves, appends, connects, deletes, labels) shows no toast at all.
+- Merged toasts: they are correct but frequent in long sessions with an IDE saving often (the
+  verifier counted 3–5 per window per minute with clean IDE saves of other elements). They could be
+  rate-limited or folded into the "Reloaded from disk" notice; left as is for v1 (tunable in
+  `reportDiskMerge`, `web/app.js`).
+- Replacing the file: right before the rename, the store re-stats the file synchronously and checks
+  again if it changed while being checked, so the remaining gap is the rename call itself.
+- Unwritten accepted edits: when a change on disk replaces a pending write, the session marks the
+  disk version with `discardedAfter` (the last version that is on disk). The host also tells the
+  windows when versions are on disk (`saved`), so each window keeps the edits of its acknowledged
+  updates until then; on a disk version with `discardedAfter` it re-applies its own edits newer than
+  that, before its other unsent edits, and sends the result, saying which of its versions it
+  re-applied. Until every window concerned has done so, the host remembers the unsaved document; if
+  one of those windows is gone and does not come back within 20 s, or at shutdown, that document is
+  saved next to the file (see Shutdown below for the name), with a stderr warning (details in "After
+  the merge" below).
+- Browser (`web/app.js`): a change on disk is no longer sent over; it is rebased onto like another
+  window's edit. Every window shows "Reloaded from disk" as before; the window whose edits were
+  re-applied shows a toast (`data-kind="merged"`): "The file was changed on disk; your edits were
+  applied on top of that change". Ops that cannot be re-applied are reported with disk wording, e.g.
+  "Your change to “Ship order” was not applied: it was changed on disk at the same time (the file's
+  version was kept)" (`conflict`), "…it was deleted on disk" (`dropped`). A delete re-applied over an
+  element that was changed on disk says so in the deleting window ("Your delete of “…” removed a
+  change made to it on disk").
+- Shutdown (`bin/local-bpmn.js`; full order with S7/S8 below): after the windows sent their last edits, the host
+  checks the file at once (`session.checkDisk()` → `store.checkNow()`, no settle delay). If a change
+  replaced unwritten edits, the windows get it, re-apply and send again (second drain, 1 s max) before
+  the final write. If nobody re-applied them (no window left, or the drain timed out), or the file
+  changes between that check and the final write, the file keeps its content and the editor's
+  version is saved next to it as `<name>.local-bpmn-unsaved-<yyyymmdd-hhmmss>.bpmn` (shows up in
+  `git status`), with a stderr warning naming the file.
+
+Verified by `test/e2e/q2-ide-race.spec.js` (regular suite): accepted edit + IDE save of another
+element (both kept in the file, `git diff` and both windows; merged toast); IDE save inside the settle
+delay just before the host write, with the file sampled every 5 ms for 2 s to prove it is never
+overwritten (`core.autocrlf=input`); browser edit right after an IDE save; same label in both (file
+wins, conflict toast with the exact text, file not overwritten later); Ctrl-C right after an IDE save
+(both kept, exit 0); Ctrl-C with no window left (file keeps the save, edit kept aside, untracked in
+`git status`); a valid save just before the host write after the file was invalid, and after it was
+deleted (both kept); a slow save that finishes after the host wrote a browser edit over the
+half-written file (both kept, merged toast); Ctrl-C after the slow save broke the file again (file
+left alone, edit kept aside); Ctrl-C within 2 s of replacing a half-written file with the IDE
+finishing after exit, with and without a second edit waiting for its write (edits kept aside, no
+shutdown delay); a normal Ctrl-C (under 1 s, no side file, no warning); a save that already contains
+a move made over a broken file (no false conflict toast); a save replacing the unwritten edit of a window that
+closed (edit kept aside, file keeps the save). The two S3 tests that asserted last-write-wins now assert that both changes are
+kept.
+
+### With reconnect and sharing (S7/S8)
+
+Q2 was developed in parallel with S7 (share, tokens, Host checks) and S8 (keepalive, reconnect,
+close 4002) and merged after them. What the merge decided:
+
+- Messages: `saved` and `remote-update` with `discardedAfter` are broadcast like every other sync
+  message, i.e. only to sockets that passed S7's Host / Origin / token checks at the upgrade
+  (collaborators included: they carry version numbers only, no path or secret). Presence is
+  untouched; the socket's `close` handler marks the origin gone (Q2) and leaves the users list (S5).
+- One model of pending edits in the page (`web/app.js`), oldest first: `unsavedEdits`
+  ([{ version, edits }] acknowledged, not yet confirmed written by `saved`), `lostEdits` (acknowledged
+  edits a change on disk replaced before they were written), `inflight` (sent, unanswered) and
+  `localEdits` (not sent). The last three are re-applied by one function, `rebaseLocalEdits`, in that
+  order, for every cause: a `conflict`, a change on disk with `discardedAfter`, and a reconnect to a
+  document that is not the one the edits are based on. An edit is in exactly one of the lists and
+  leaves `unsavedEdits` either confirmed (`saved`, dropped for good, never re-applied) or lost (moved to
+  `lostEdits`).
+- Reconnect: a window that was disconnected misses `saved` and `discardedAfter`, and the host may not
+  have noticed the old connection die (so it does not keep the edits aside either). `init` therefore
+  carries `instance` (random id of the session; versions only compare within one), `saved` (every
+  version up to it is on disk) and `discards` (`[{ after, version }]`: accepted versions in between were
+  replaced by the change on disk at `version`; the last 100). On re-sync (`resync` → `reconcileAccepted`)
+  the window moves its `unsavedEdits` inside a discard range to `lostEdits` (re-applied, "merged"
+  toast and disk wording since the cause was a change on disk), forgets those up to `saved`, and keeps
+  the rest waiting (they are in the host's document; a later `discardedAfter` still finds them). With
+  another `instance` (local-bpmn restarted) `unsavedEdits` are forgotten: the old host wrote them or kept
+  them aside when it stopped. `lostEdits`, `inflight` and `localEdits` are never written by anyone but
+  this window, so they survive any reconnect and are re-applied as in S8.
+  So nothing confirmed written is re-applied (no resurrection), nothing is applied twice (an update
+  in flight that the host accepted is recognised by its number, see D3 below, or as in S8 by its
+  content; re-applied ops are idempotent), and
+  offline edits are kept. E2E: `q2-ide-race.spec.js`, "…window that was disconnected: it re-applies it
+  on reconnect, with its offline edit" and "an edit already written before the connection dropped is
+  not re-applied after a reconnect".
+- Shutdown order (`bin/local-bpmn.js`): stop accepting → drain (windows send their edits) → check the
+  file now (`session.checkDisk()`) and, if a change replaced accepted edits, drain again so the windows
+  re-apply them → stop watching → `endSession` (4002 to every window) → stop the share and do the final
+  write (`store.flush()`, which keeps the editor's version aside if the file changed meanwhile) → exit.
+  Why: re-applying needs the windows, collaborators included, so the re-check and its drain come
+  before 4002 and before the tunnel stops (stopping the share first would also show "Sharing stopped"
+  instead of "Session ended", S8). The watcher is stopped before the windows are closed: a change on
+  disk from then on is caught by the final write's own check (file kept, editor's version kept aside)
+  instead of a watcher event that would hand edits to windows that are closing (they could not re-apply
+  them, and the host would not keep them aside because their sockets were still open). Updates that
+  still arrive during `endSession` are accepted and included in the final write. A second Ctrl-C
+  keeps S8's fast path (4002 with 200 ms, share stop and flush in parallel, no re-check of the file
+  for a last-moment save), but since the fourth check its flush waits for the one the first Ctrl-C
+  started, including that flush's last look at the file (`flush()` is single-flight). A third Ctrl-C
+  exits at once.
+  Since the second check (below), `session.keepUnapplied()` runs after `endSession` and before the
+  final write: discarded edits that no window re-applied are kept aside then.
+
+### After the merge: second independent check
+
+An independent check of the merged code (randomised races, reconnects, Ctrl-C, collaborators;
+verifier scripts outside the repository) found three silent losses or resurrections. All three now
+have E2E regression tests in `test/e2e/q2-ide-race.spec.js` that fail with the fix disabled.
+
+**D1: slow save in place through one file descriptor.** The IDE opens the file for writing
+(truncating it), writes half, pauses, writes the rest through the same descriptor and closes. The
+host saw the half-written file as invalid and replaced it with a browser edit by rename, so the
+rest of the IDE's save went into the replaced, now unlinked file. The file kept the browser edit
+only; the IDE's change was gone, with no toast and no side file. Before: 5/5 with a 1.5 s pause,
+10 of 30 randomised slow-save trials (30–400 ms pauses); at Ctrl-C the side file lacked the IDE's
+change too. Writing by path to finish the save was always fine. Fix (`src/file.js`):
+- A write that replaces a missing or broken file opens the file it replaces first (same inode as
+  checked) and keeps it open while that write is unconfirmed. The replaced file is polled
+  (`fstat` every 50 ms). Once it has changed and then been left alone for the settle delay, it is
+  read. If it holds a complete BPMN document, that document is put back in place (renamed in like
+  our own writes) and reported as a change on disk that replaced our unconfirmed write
+  (`discarded`). The windows re-apply their edits on top of it (merged toast), as for a path save.
+- The write is not confirmed while the replaced file is still being written: confirmation waits
+  until it has been left alone for `confirmMs` (2 s).
+- `checkNow()` (Ctrl-C) and `flush()` read a changed replaced file at once instead of waiting for it
+  to settle. At the re-check the windows still re-apply. In the final write the file keeps the
+  IDE's save and the editor's version is kept aside.
+- Alternative considered: not replacing a broken file until it has been broken and quiet for longer.
+  That only moves the threshold (a pause longer than the wait still loses the save) and delays every
+  edit made while the file is broken. Watching the replaced file catches the save whatever the
+  pause, for as long as the write is unconfirmed.
+- After (verifier `g-slowfd`, 5 trials each): one fd, 1.5 s pause: 5/5 both kept; one fd, 250 ms
+  pause: 5/5; path finish (control): 5/5; no silent loss. E2E: "a slow save in place through one
+  file descriptor, finished after the host replaced the half-written file: both kept" and "Ctrl-C
+  right after a slow save finished through the replaced file: both kept". Unit tests: the put-back
+  (`discarded`), staying unconfirmed while the replaced file changes, and flush.
+
+**D2: discarded edits of a window that never re-applies them.** Window A's edit was accepted and
+waiting for its write. A's connection died without the host noticing, an IDE save replaced the
+edit (the host expected A to re-apply it), then A was closed and the host stopped with Ctrl-C. The
+edit was gone with no side file; stderr only said "they are re-applied on top of the change". The
+side file used to be written only if the origin was already known to be gone at the moment of the
+discard. Fix (`src/session.js`):
+- Every discard is remembered: the unsaved document plus the versions it replaced, by origin. A
+  window that re-applies them says so, either in its next update (`reapplied: [versions]`) or with
+  a `reapplied` message when nothing was left to send (all its edits were already in the change on
+  disk). Any connection may say so, so a reconnected window counts. Once every version is accounted
+  for, the document is dropped.
+- If an origin of an unresolved discard is gone (closed, or terminated by the keepalive), the
+  document is kept aside after a grace period of 20 s (`REAPPLY_GRACE_MS`;
+  `LOCAL_BPMN_REAPPLY_GRACE_MS`, hidden, for tests), unless a reconnected window re-applies first.
+  At shutdown, after the windows had their chance (both drains, then `endSession`), every unresolved
+  discard is kept aside (`keepUnapplied()`).
+- stderr names the case: "…changed on disk before the latest edits were saved, and the window that
+  made them is disconnected: they are re-applied if it reconnects within 20 s, otherwise the editor's
+  version is saved next to the file", or "…the windows that made them re-apply them on top of the
+  change" when they are connected.
+- The page counts acknowledged edits not yet confirmed written (`unsavedEdits`) as unconfirmed work
+  (`hasUnconfirmedWork`): status tooltips while reconnecting or disconnected, and the overlay after
+  giving up or a dead link ("Your latest changes may not have been saved."). After 4002 or "Sharing
+  stopped" they are not counted: the host writes or keeps aside what it accepted.
+- This also settles the redundant side file from the merge (concern 1): a window the host saw
+  disconnect before the discard now has 20 s to reconnect and re-apply, and no copy is written then.
+- After: verifier `E3` (dead connection, discard, window closed, Ctrl-C): 0/5 silent loss (side file
+  with the edit in 5/5); `E1` (host saw the close, window reconnects): 5/5 both in the file, 0
+  redundant side files. E2E: "a window whose connection died unnoticed and that closed before
+  re-applying: Ctrl-C keeps its discarded edit next to the file" and "a window the host saw
+  disconnect re-applies its discarded edit on reconnect: no copy is kept aside".
+
+**D3: resurrection of an update whose ack was lost.** The host accepted and wrote window A's
+update, its `ack` was lost with the connection, and the file was then reverted on disk (e.g. by a
+checkout). On reconnect A did not know its update had been accepted, so it re-applied it as unsent
+work: the rename (and a created task) came back, with no toast. Before: 10/10. Fix:
+- The page sends its random key in the WebSocket URL (`?page=`, the same key as presence `hello`) and
+  numbers its updates (`seq`). The host remembers, per page key, the newest update it accepted and
+  its version (the last 1000 pages), and `init` returns it (`accepted: { seq, version }`).
+- On re-sync an update in flight whose `seq` the host accepted becomes an `unsavedEdits` entry at
+  that version and is handled like the others: forgotten if written (`saved`), re-applied only if a
+  change on disk discarded it. Only updates the host never accepted are re-applied.
+- Wording: `init` also carries `lastDisk` / `lastEdit` (newest version from a change on disk / from
+  an update). If only changes on disk replaced the window's document while it was away, conflicts in
+  its re-applied edits use the disk wording ("…it was changed on disk at the same time (the file's
+  version was kept)") instead of "someone else changed it first".
+- After: verifier `E2` (ack lost, written, then IDE save of another element / revert of the label /
+  revert of a created task / IDE save of the same label): 0/20 resurrected, no toasts. E2E: "an
+  update whose ack was lost, written, then reverted on disk while the window was away is not
+  re-applied" and "an edit made while disconnected that conflicts with a save on disk is reported
+  with the disk wording".
+
+**D4: an IDE save at the same moment as the final write at Ctrl-C** (found while re-measuring with
+the verifier's `c-ctrlc` "afterSigint" scenario: IDE save 0–40 ms after SIGINT, edit still waiting for
+its write). Before: 1/12 and 2/40 lost one side silently. In one, the IDE's save landed between the
+final write's check and its rename, or truncated the file there and wrote the rest into the
+replaced file, so the IDE's change was lost. In the other, the IDE renamed its save over ours right
+after our final write, so the browser edit was lost. Fix (`src/file.js`):
+- The rename is now synchronous (`renameSync`), right after the synchronous re-stat, so no other
+  work of ours runs between the last check and the rename.
+- Every write keeps the file it replaces open. If that file was written to between the check and
+  the rename, the write is treated like one over a broken file (unconfirmed, the replaced file
+  polled, a complete save there put back, D1).
+- `flush()`: a file replaced less than 300 ms ago is watched until then, and while it is being
+  written (at most 1 s), so a save already under way is put back and ours kept aside. If our last
+  write is less than 300 ms old, the file is read once more when those 300 ms are up. If it now
+  holds another program's save made from a copy older than our write (`containsChanges`, see the
+  third check below for how that is judged), the file keeps that save, ours is kept aside, and stderr
+  says "another program saved … right after the editor's last save, from a copy without the editor's
+  last changes". A save that contains our change keeps nothing aside.
+- Cost: Ctrl-C takes up to 300 ms longer when it writes edits or comes within 300 ms of a write;
+  otherwise there is no delay.
+- After: 40/40 with no loss and no redundant side file (15 kept aside, every one named on stderr;
+  exit within 343 ms). Unit tests: stale save right after the last write (kept aside), save that
+  contains it (nothing kept), `containsChanges`. E2E: "a save from a stale copy right after the
+  final write at Ctrl-C: the file keeps it, the edit is kept next to it".
+
+Re-run of the verifier's other scenarios on the final code (12 trials each unless noted). Races a/b/c
+(`autocrlf` false and input) and d: 84/84 both changes on disk, no loss, no side file, windows equal
+the file. Reconnect: 12/12. Ctrl-C "reapply": 12/12 both kept. Ctrl-C "closedWindow": 12/12 file keeps
+the save, edit kept aside and named. Collaborator: 24/24, no leaks, presence always 2. Slow save
+through one descriptor (`g-slowfd`): 15/15 both kept. `e-concerns`: 0 resurrected in 20, 0 silent loss
+in 5, 0 redundant side files in 5.
+
+### Third independent check
+
+A fresh verifier (adversarial probes `x-adv`, `y-adv`, `z-adv`, scripts outside the repository) found
+two silent losses and a protocol weakness. While re-measuring, two more Ctrl-C cases showed up. Each
+fix has a regression test that fails with the fix disabled.
+
+**DEF-1: a delete came back through a stale save at Ctrl-C.** The file was in the editor's own
+formatting and a delete was waiting for its write. At SIGINT an IDE whose copy predated the delete
+wrote it back 80–290 ms after the final write. `containsChanges` (D4) only checked that the lines our
+write added were still there; a delete adds none, so the stale save passed for a fresh one. The
+element came back, with no side file and no stderr line. Before: 10/10 (`x-adv` X2, delete).
+- Fix: `containsChanges` compares line counts (trimmed lines as multisets). Every line our write
+  has more often than the version it replaced must be in the new save at least that often. Every
+  line it has less often (removed) must be there at most as often as in our write.
+- At the 300 ms re-check, a file that is not complete BPMN, or still changing, is waited for (left
+  alone for 50 ms, at most 1 s more) before it is judged. Before, two half-written saves that then
+  finished with our edit gave redundant side files and a misleading "the file keeps that save".
+  If the file is still being written at the deadline, ours is kept aside with "another program was
+  still writing … when local-bpmn stopped".
+- After: X2 delete 0/10 lost, 10/10 kept aside. X2 rename: 2/10 lost, and only where the IDE wrote
+  314–344 ms after SIGINT, i.e. after the re-check or after exit (the stale-copy limit below);
+  every save inside the window was caught. `c-ctrlc` afterSigint: 0/12 lost, 0 redundant side
+  files (before 2/12 redundant).
+- Tests: E2E "a stale save right after the final write at Ctrl-C that brings a deleted element
+  back: the delete is kept next to the file". Unit: `containsChanges` with a delete; flush with a
+  stale save that restores a removed task; flush waiting for a half-written save that then contains
+  our change (nothing kept aside).
+
+**DEF-2: a write that found the file missing was confirmed at once.** The file was removed (`rm`,
+or renamed away by a vim-style save) 30–240 ms before the host's write, before the watcher had
+reported it. The pre-write check treats a missing file as "recreate it", but the write was then
+confirmed like any other. When the program that removed it wrote its copy (read before the
+removal) 60–360 ms later, the browser edit was replaced silently. Before: `y-adv`
+rmJustBefore 10/10, rmLongBefore 10/10, vim-like 1/10; `x-adv` X6 (delete, recreate 50–400 ms
+later) 1/5.
+- Fix (`src/file.js`): `writeAtomically` reports that the target was missing at the check, and such
+  a write is unconfirmed for `confirmMs` (2 s) like one over a broken file. A save arriving
+  meanwhile replaces it as `discarded`, and the windows re-apply the edit on top. In the vim case the
+  new file is written by path after our rename, so the watcher sees it as such a save.
+- After: rmJustBefore 10/10 both kept, rmLongBefore 10/10, vim-like 10/10, X6 recreate 5/5; no side
+  files.
+- Tests: E2E "the file deleted just before the host writes, then saved from an older copy: the
+  edit is re-applied on top". Unit: a write that finds the file missing stays unconfirmed and a
+  later save is reported as replacing it; it is confirmed after `confirmMs` otherwise.
+
+**DEF-3: any connection could send `reapplied` for versions it does not own.** A collaborator socket
+sending `{"type":"reapplied","versions":[1..200]}` cleared the pending discard of another window's
+edit, so no side file was written at Ctrl-C. Before: 3/3 lost (`x-adv` X4b).
+- Fix: the page key from the WebSocket URL is scoped by how the socket connected,
+  `role:token|key`, as presence scopes its keys. That scoped key is the `owner` of every accepted
+  update (`Session.applyUpdate`) and the key of `acceptedByPage` (D3). `reapplied`, as a message or
+  on an update, only clears versions in a pending discard whose owner is the same scoped key. A
+  reconnecting page (same key, same role and token) still clears its own; a collaborator cannot
+  claim the host's or another link's page. Versions not awaiting re-apply are ignored. A connection
+  without a valid key can no longer clear anything.
+- After: X4b with spoofing 0/3 lost (side file with the edit 3/3).
+- Tests: E2E "a collaborator claiming another window's discarded versions does not stop them from
+  being kept aside" (the collaborator even uses the window's own page key). Unit: `reapplied`
+  without an owner, or with the same key in another scope, is ignored; a reconnected page with the
+  same scoped key counts.
+
+**Ctrl-C while another program is rewriting the file** (found re-running `z-adv` Z2 and `c-ctrlc`
+afterSigint on the fixes above).
+- An IDE began a slow in-place save from an older copy after our edit was already written. Ctrl-C
+  came while the file was half-written, and the IDE finished after exit. Nothing was pending, so
+  nothing was checked: 4/10 lost (Z2, finish by path).
+  - Fix: if the file was seen newly broken or newly missing after our last write and less than
+    `confirmMs` ago, the final flush also does the re-check above (wait for it to settle, at most
+    1 s; keep ours aside if the save lacks our change or is still being written).
+- An IDE truncated the file just after SIGINT while an edit was still waiting for its write. The
+  final write replaced the half-written file, so the rest of the IDE's save went into the replaced
+  file, gone after exit: 1/12 IDE changes lost (afterSigint, slow descriptor).
+  - Fix: `flush({ final: true })` (only the CLI's shutdown) leaves a file that became broken or
+    disappeared less than `confirmMs` ago to the program rewriting it. The pending edits are kept
+    aside ("another program is rewriting … local-bpmn left it alone").
+- After: Z2 by path 0/10 lost (side file with the edit 10/10); afterSigint 0/12 lost.
+- Tests: E2E "Ctrl-C while another program is rewriting the file from an older copy: the written
+  edit is kept next to it" and "Ctrl-C while another program has just begun a slow in-place save:
+  the file is left to it, the edit is kept next to it".
+
+Re-run of every scenario on the final code: races a–d in 5 save modes (in place, temp + rename,
+truncate + write, slow by path, slow by descriptor) and both `autocrlf` settings, 0 silent loss and 0
+side files in every report. Reconnect: 12/12. Ctrl-C reapply / closedWindow / afterSigint: 12/12 each,
+0 loss. Collaborator: 24/24, 0 leaks, presence intact. `e-concerns` and `g-slowfd` as before. Edit to
+disk latency p50 572 ms against 570 ms on 8480f98 (`x-adv` X1). A normal Ctrl-C took 8–20 ms on both
+builds.
+
+### Fourth independent check
+
+A fourth verifier (probes `n-adv` N1–N8, outside the repository) confirmed the earlier fixes, the
+suites and latency against 8480f98. Checked with 4 windows, CPU-throttled Chrome and a 150 s
+session. It found one silent loss and two documentation errors, and it named two documented
+residuals it considered fixable. All five are addressed below. Each new e2e test fails with its fix
+disabled.
+
+**N2-1: a second Ctrl-C defeated the final stale-save check** (MUST).
+- Repro: an edit waits for its write, Ctrl-C, the final write lands, a stale copy is saved 40–120 ms
+  later, and a second Ctrl-C comes 305–345 ms after the first. The second signal's own
+  `store.flush({ final: true })` found nothing to do (its write was more than 300 ms old) and exited
+  while the first flush was still in its re-check. Before: N2 staleLate 7/10 lost, N2 stale 2/10; 4
+  trials had two side files from two parallel flushes.
+- Fix: `flush()` is single-flight. Calls queue (`flushQueue`), so the second Ctrl-C waits for the
+  first flush including its last look at the file, then has nothing left to do. The re-check runs
+  once per write (`postCheckedFor`), so it never keeps a copy aside twice. A third Ctrl-C still exits
+  at once.
+- After: N2 staleLate 0/10 lost (side file 10/10), stale 0/10, none / ideBefore / slowfd 0/10 each;
+  no duplicate side files.
+- Tests: e2e "a second Ctrl-C while the first is still looking after the final write: a stale save
+  is still caught"; unit "a second flush() waits for the one running and keeps nothing aside twice".
+
+**Docs: stale-copy frequency and the formatting false positive** (MUST).
+- The README and the limit above gave "2 of 10"; another run measured 5/10 with the same
+  distribution. Both now say it depends on timing.
+- The false positive: a fresh save reformatted by another program within 300 ms of Ctrl-C (attribute
+  order, `<a></a>` for `<a/>`) left a redundant side file, 8/8 in N1.
+- Fix: the line comparison uses a canonical form of each line (`canonicalLine`: trimmed, attributes
+  sorted, empty elements self-closed). After: N1, all 7 fresh variants (none, indent + CRLF,
+  attribute order, expanded empty elements, reordered flows, with rename / delete / move edits): 0/28
+  side files. All 6 stale variants: 24/24 kept aside, 0 silent loss.
+- Unit test: `containsChanges` with reformatted fresh and stale copies.
+
+**R1: a slow save through one descriptor still under way at Ctrl-C** (SHOULD, implemented).
+- When the host replaced the half-written file earlier, the rest of the IDE's save went to the
+  unlinked file after exit. Before: Z2 by descriptor 7/10 IDE changes lost.
+- Fix:
+  - Right before the rename that replaces a broken file, the file gets a second name, a hard link
+    `<name>.local-bpmn-replaced-<time>.bpmn`. It is made synchronously, checked to be the same inode
+    as the file that was checked, and made before the rename because macOS cannot link an open,
+    unlinked file.
+  - The link is removed when the write is confirmed, when a save found there is put back, when a save
+    by path replaces the unconfirmed write, and on every error path.
+  - At shutdown with the write still unconfirmed, the link is kept and named on stderr. A program
+    still writing through its descriptor finishes its save there.
+  - In normal use the link exists only during the 2 s after a write over a broken file.
+- Cost: a Ctrl-C within 2 s of replacing a broken file leaves this second file even when nobody was
+  writing into it. The host cannot know whether someone has the file open.
+- After: Z2 by descriptor 0/10 IDE changes lost (in the kept file) and edits kept 10/10; Z2 by path
+  unchanged, 0 lost.
+- Tests:
+  - e2e: "Ctrl-C while a slow save through one descriptor is still under way: its save ends up in the
+    kept half-written file".
+  - unit: the link is removed on confirm, on put-back and on a save by path; flush keeps it.
+  - The three e2e Ctrl-C tests that counted side files now count the editor's side file and the kept
+    file separately.
+
+**R2: a save from a stale copy during the session** (SHOULD, conservative variant).
+- Before: X3 5/10 browser edits lost silently.
+- Fix (`inspectDisk`): a change on disk that replaced no pending write, within 5 s of our last write
+  (`STALE_SAVE_MS`), is tested with `looksStale(save, before, ours)`. It is stale if a line our write
+  removed is back (the old label, a deleted element), or, for a write that only added lines, none of
+  them is there. A later change of the same lines (someone renaming the same element again from our
+  version) does not count, unlike `!containsChanges`. If stale:
+  - the save is still taken as the newer version (it may be deliberate);
+  - our version is kept aside (stderr "…was saved on disk from a copy without the editor's last
+    changes…");
+  - every window gets `kept-aside` (reason `stale-save`, file name only) and shows "The file was
+    saved on disk from an older copy, without the latest changes; they were saved next to it as
+    <name>".
+- The stronger variant (re-apply the edits as for a discard) was not taken. It would undo deliberate
+  reverts within the window, and it would be no safer.
+- After:
+  - X3 4/10 edits replaced on disk, 0 silently: all 4 kept aside, with a notice.
+  - Normal use, no false positives: N5 150 s session with 163 edits and 34 IDE saves, 0 side files;
+    X9 0; N6 four windows 0; races a–d 0.
+  - Deliberate reverts within 5 s give the expected visible notice: X7 checkout 4/10 side files.
+- Tests:
+  - e2e: "a save from an older copy during the session: the file keeps it, the edit is kept next to
+    it and the windows say so", and "normal use with an IDE that reloads before it saves gives no
+    stale-save notice" (other elements, then the same element, no notice or side file).
+  - unit: `looksStale`; the store reports a stale save (reason `stale`) but not a fresh one.
+  - Changed e2e: "an update whose ack was lost, written, then reverted on disk while the window was
+    away is not re-applied". The revert lands within 5 s of the write, so it now also expects the
+    side file with the edit and the stderr line. The no-resurrection assertions are unchanged.
+
+Re-run on the final code: `c-ctrlc` reapply / closedWindow / afterSigint 12/12 each, 0 loss;
+`a-race` with all save modes 0 loss, 0 side files.
+
+### Fifth independent check
+
+A fifth verifier (probes `r4-adv`, `chain`, `fp`, `r2m`, `r4c`, `long`, outside the repository)
+confirmed the merge: 350 race trials, Ctrl-C single, double, triple and SIGTERM, collaborators, a
+200 s session and the R1 lifecycle with unusual file names. It found three silent losses and one
+class of false positives in the round-4 code. Each fix below has e2e tests that fail on the round-4
+code (checked by running them against it) or with the fix disabled.
+
+**DEF-A: a second browser edit stopped the watch of the replaced file.** While a write over a
+half-written file was unconfirmed (its replaced file watched, D1), a second browser edit was
+written normally. That write closed its own replaced file through `stopWatchingReplaced`, whose
+`clearInterval` was global, so polling of the first write's replaced file stopped. The IDE's rest,
+written through its descriptor, was then lost, and the link removed at confirm. Before: `r4-adv` P2
+5/5 IDE changes lost silently.
+- Fix: a normal write closes only its own handle (and link). `stopWatchingReplaced` stops polling
+  only when the unconfirmed write has nothing left to watch.
+- After: P2 0/5 lost, no stray files.
+- Tests: e2e "a slow save through one descriptor, with a second browser edit while the first write
+  is unconfirmed: all kept". Unit: "a normal write during an unconfirmed one keeps the replaced file
+  of the unconfirmed write watched".
+
+**DEF-B: a stale save was not checked when it also replaced a pending write.** The check ran only
+for changes on disk that discarded nothing. With another edit waiting for its write, the windows
+re-applied only that pending edit, and the already written edit was gone, shown with a "merged"
+notice. Before: `r4-adv` P1 10/10 lost, silently 6/10 (pending edit in the same window) and 2/10
+(another window).
+- Fix: the check runs in both cases. Variant chosen: the pending edits are re-applied on top of the
+  save as usual (they were never on disk). The written ones are not, because they were confirmed
+  and the windows no longer hold them as unsaved. The side file holds the latest version, pending
+  edits included. The change carries `stale: true` (`remote-update` too), so the windows skip the
+  "merged" notice. They show only the older-copy notice, which names the side file. This keeps one
+  outcome for the user: the file has the other program's save plus the edits that were not written
+  yet, and everything else is in the named side file.
+- After: P1 0/30 lost silently, written edit kept aside 30/30, notice in every trial.
+- Tests: e2e "a save from an older copy while another edit waits for its write: the written edit is
+  kept aside, the pending one re-applied" (no "merged" notice). Unit: "a stale save that also
+  replaces a pending write: kept aside with the pending content, flagged stale and discarded".
+
+**DEF-C: only the last write was compared.** Two writes of the same element in a row (add a task,
+then name it; rename, then correct the name), then a save from a copy older than both. The check
+compared the save with the write just before the last one, which already had the element: no
+notice. Before: `chain` addThenName 10/10 and renameTwice 10/10 lost silently.
+- Fix: our writes less than `STALE_SAVE_MS` (5 s) apart, with no other program's change in between,
+  form a chain. The save is compared with the disk version before the chain's first write
+  (`chainBase`), and the chain's earlier writes are kept (`chainWrites`, last 20). A save in which an
+  element we changed has its base form, or its form after one of the earlier writes (a copy from
+  between our writes), is old.
+- Found while measuring: comparing only with the chain's base made such in-between copies look like
+  concurrent changes (`x-adv` X3 2/10 silent).
+- After: renameTwice 0/10 lost (kept aside 10/10); X3 0/20 silent (4 replaced, all kept aside with a
+  notice); `chain` addThenName could not be re-measured: from its second trial on, the probe's
+  palette drag lands on the notice now shown at the bottom of the window. The e2e test covers it.
+- Tests: e2e "a save from a copy older than the last of two consecutive writes" (renameTwice,
+  addThenName, copyBetween). Unit: `looksStale` with a chain history, and a store-level chain test.
+
+**DEF-D: false positives from lines without ids.** A browser delete, then within 5 s a fresh save
+that adds an element, gave a wrong notice and side file: the line multiset counted lines such as
+`</bpmndi:BPMNShape>` and `<dc:Bounds …>`. Before: `fp` add 10/10 false positives.
+- Fix: element-level comparison by id (`src/elements.js`, used by both `looksStale` and
+  `containsChanges`; no new dependency).
+  - A small tokenizer reads each document into id -> canonical form: name, sorted attributes,
+    trimmed text, and the forms of child elements without an id (bounds, waypoints, incoming,
+    outgoing, conditions, documentation) folded into the parent. Children with an id are elements
+    of their own.
+  - CRLF, indentation, attribute order and self-closing tags do not change any form; namespace
+    prefixes are taken as they are.
+  - A document that cannot be read counts as old (copy kept).
+  - Our changes are the ids whose form differs between the chain base and our last write.
+  - `looksStale`: some such id has a form we no longer have (base or in between) in the save. An
+    element the other program changed its own way is concurrent, not old.
+  - `containsChanges`, used at Ctrl-C where nobody can be told any more, is stricter: every such id
+    must have our form. A concurrent change of the same element there also keeps a copy.
+- After: `fp` add / remove / other 0/30 side files; N1 (formatting at Ctrl-C) 0 false positives in
+  28 fresh trials, 0 silent loss in 24 stale ones; `r2m` fresh 0 side files in 47 completed trials,
+  stale 56/56 kept aside; long session (203 edits, 32 IDE saves) 0 notices, 0 side files.
+- Tests: e2e "a delete, then a save from a fresh copy that adds an element: no stale notice". Unit:
+  element-level `containsChanges` and `looksStale` (reformatting, renamed again, delete, addition,
+  unreadable document).
+
+**Optional, done: a window that was away when a stale save was reported is told on reconnect.**
+`init` carries `staleSaves` (`[{ name, version }]`, the last 20). A reconnecting window of the same
+session shows the notice for the newest one after the version it had. `r4c` S2: notice in the window
+that was away 0/20 before, 20/20 after. Test: the e2e "an update whose ack was lost, written, then
+reverted on disk while the window was away is not re-applied" now expects that notice, naming the
+side file.
+
+Re-run of the earlier probes on the final code:
+- `c-ctrlc` 36/36, 0 loss; N2 double Ctrl-C stale / staleLate 20/20 kept; X2 delete 10/10 kept.
+- X2 rename: 2/10 IDE saves at 344–347 ms after SIGINT, after the 300 ms re-check (the documented
+  limit).
+- X7 checkout: 20/20 side files, the expected visible notice for reverts.
+- Z2 0 lost; S1 collaborator notice without paths 10/10; races 0 loss, 0 side files.
+
+### Known limits
+
+- The pre-write check and the rename are separate steps. A save renamed over the file between the
+  last check (a synchronous stat) and our (synchronous) rename is overwritten, and the watcher then
+  reads our content and reports nothing. The gap is two system calls, but it grows under heavy load
+  (before the re-stat was added, a verifier run lost one IDE save in 20 heavily loaded
+  "invalid/valid flip" trials this way, with the gap spanning a whole file read). An in-place save
+  that truncates the file in that gap is caught (D4).
+- A broken file that has been quiet for the settle delay is replaced by the next browser edit, as
+  before. If the program that broke it then leaves our content alone for 2 s (`confirmMs`) and only
+  afterwards finishes its save from its own copy, that save replaces the browser edit like any save of
+  a stale copy: every window reloads it ("Reloaded from disk") but nobody is told the edit is gone
+  (verifier: 4/4 with the IDE finishing 2.5 s after the host's write). While the file stays broken
+  (or is broken again) the write is not confirmed, so that case is merged or kept aside. In short:
+  an IDE finishing a save later than `confirmMs` after our first write over its broken file, with the
+  file left alone meanwhile, is not detected during the session; at shutdown within that window the
+  edit is kept aside.
+- A save that is valid for less than the settle delay plus the watcher's latency (about 150 ms plus
+  a few ms to tens of ms) before the same program breaks the file
+  again is never seen by the host. When the host then replaces the broken file it writes its last
+  known valid version plus the browser edits, so `git diff` briefly lacks that short-lived save
+  until the program saves again (seen in 1–3 of 10 rapid "invalid/valid" flip trials; the final file
+  had everything every time).
+- With edits in two windows, a window re-applying an op on an element another window created (and
+  has not re-created yet on top of the change on disk) is told the element was "deleted on disk";
+  the wording is wrong in that case (inferred from the code, not reproduced).
+- Edits of a window that closed after its update was accepted but before it was written are not
+  merged: the file keeps the change on disk and the unsaved document (all windows' unsaved edits) is
+  kept aside, reported on stderr only (no window of its author is left to show a toast). This
+  happens 20 s after the host notices the window is gone (for a connection that died silently, the
+  keepalive notices within 30–60 s), or at Ctrl-C. A window that reconnects after those 20 s still
+  re-applies its edits, so the side file is redundant in that case.
+- A slow save through one file descriptor (D1 above) is caught only while our write over the broken
+  file is unconfirmed: if the program pauses for longer than `confirmMs` (2 s) after its last write
+  into the replaced file before finishing, or never writes there again after our rename until then,
+  its save is lost as in the limit above. If the host is stopped while the program is still writing
+  into the replaced file, its save ends up in the kept `….local-bpmn-replaced-….bpmn` (fourth check,
+  R1), not in the file itself: the user has to look there.
+- The host remembers only the newest accepted update per page and only for the last 1000 pages; an
+  older page key falls back to S8's behaviour (the update in flight is re-applied).
+- An update in flight whose page reconnects to a restarted host (another `instance`) is re-applied
+  unless the new document equals it (S8): the old host wrote or kept aside what it had accepted, but
+  the page cannot tell which.
+- If several windows edited while a window was away, its conflicts use the generic wording even when
+  the conflicting change came from disk.
+- A change on disk is merged only where Q1 has ops (label, move, create, append, connect, delete);
+  other browser edits racing it (resize, bendpoints, type change, …) are dropped with a toast.
+- Conflict detection is per property (label text, position) as in Q1; a change on disk to other
+  attributes of an element the browser edits at the same time is kept (the browser op only touches
+  its own property), but the browser cannot report it.
+- A save from a stale copy: another program reads the file, local-bpmn writes a browser edit, and the
+  program later writes its older copy back (an IDE buffer loaded before the edit reached the file,
+  saved without reloading). That save is newer on disk and replaces the edit. How often this happens
+  depends only on the timing of the other program's read and write (verifiers saw 2 to 5 of 10 with
+  30–400 ms between them). Since the fourth check (R2, element level since the fifth), such a save
+  within 5 s of our last write is noticed if an element our recent writes changed has a form it had
+  before the last of them: the file keeps it, the edits are saved next to it, and every window is told
+  (a window that was away when it reconnects). Not noticed: a stale save later than 5 s after our
+  last write, after a write that replaced a broken or missing file (nothing to compare with), or after
+  exit (at Ctrl-C the file is looked at once more 300 ms after the last write). The host cannot tell a stale save from a deliberate one: a revert or `git checkout` within
+  5 s of an edit also gets the notice and a side file (visible, never a loss). The editor's undo
+  cannot help (its history is reset when a change on disk is shown); git or the other program's undo
+  or local history can.
+- The stale-save checks compare elements by id (src/elements.js), not text: attribute values and text
+  are compared as written, so a program that rewrites them in another form (other character escapes,
+  reflowed documentation) makes those elements look changed. During the session that can only hide a
+  change as "concurrent" when that element was also changed by us; at Ctrl-C (where an element the
+  other program changed again also counts as not having our change) it gives a redundant side file.
+  A document the tokenizer cannot read counts as an old copy (a copy is kept rather than guessed).
+- Kept-aside files are never cleaned up automatically; that is deliberate (they are the user's work).
 
 ## Q3: persistent session links across restarts
 
@@ -413,12 +1057,13 @@ re-sync, overlay) and `web/connection-shared.js` (the numbers below, shared by h
 | Code | Sent when | Page shows | Reconnects |
 |---|---|---|---|
 | 4001 `share-stopped` | Stop sharing (S7), to collaborators of that link | overlay "Sharing stopped" — "The host stopped sharing. This link no longer works." | no |
-| 4002 `session-ended` | host Ctrl-C / SIGTERM, after the editors flushed their edits and before the tunnel stops | overlay "Session ended"; collaborators "The host closed this session.", local windows a hint to run local-bpmn again plus a **Reconnect** button | no (only on Reconnect) |
+| 4002 `session-ended` | host Ctrl-C / SIGTERM, after the editors flushed their edits (and re-applied them on a last-moment change on disk, Q2) and before the tunnel stops | overlay "Session ended"; collaborators "The host closed this session.", local windows a hint to run local-bpmn again plus a **Reconnect** button | no (only on Reconnect) |
 | anything else (1006, 1001, …) | network, tunnel, killed host process | "Reconnecting…" banner, status "Reconnecting…" | yes |
 
 The shutdown order matters: the host now calls `endSession()` (4002 to every socket, waits up to 1 s for
 the close handshakes) before stopping the share, which would otherwise close collaborators with 4001 and
-they would read "Sharing stopped" instead of "Session ended".
+they would read "Sharing stopped" instead of "Session ended". The full order, with Q2's last check of
+the file before it, is in Q2, "With reconnect and sharing".
 
 ### Backoff and giving up
 
@@ -450,6 +1095,10 @@ while disconnected) and then:
    a `conflict` (Q1). Ops already contained in the document are no-ops (label already set, element already
    created / deleted, and now also a shape already at the moved-to position), so an accepted update is
    not reported as a conflict. Elements others deleted stay deleted; edits of them are reported, as in Q1.
+
+Acknowledged edits not yet confirmed on disk are sorted out first with `init`'s `instance`, `saved` and
+`discards` (Q2, "With reconnect and sharing"): those a change on disk replaced while the page was away
+are re-applied with the others (case 3).
 
 Versions restart at 1 when the host restarts, so the page forgets its version and takes the one from
 `init`. A page whose file has changed identity (another file served on the same port) ends the session
@@ -490,7 +1139,7 @@ duplicate, even before the keepalive would notice the old connection. The key is
 
 - `files` in `package.json` whitelists `bin/`, `src/`, `web/` (including `web/vendor/bpmn-js/` with its
   `LICENSE`), `README.md` and `LICENSE` (npm adds `package.json`). Tests, fixtures, `scripts/`, `docs/`,
-  `test-results/` and local tool directories are not shipped: 32 files, ~376 kB packed, ~1.2 MB unpacked
+  `test-results/` and local tool directories are not shipped: 33 files, ~397 kB packed, ~1.2 MB unpacked
   (`npm pack --dry-run`), most of it the vendored bpmn-js build and its font.
 - `src/test-tunnel.js` (the stand-in tunnel provider for tests, S7) **is shipped**. `bin/local-bpmn.js`
   imports it statically, so leaving it out would break the installed CLI at startup. Making the import
@@ -499,6 +1148,7 @@ duplicate, even before the keepalive would notice the old connection. The key is
   the CLI says "TEST MODE" on stderr. Shipping it also means the E2E suite runs exactly the code users get.
 - Hidden, environment-only knobs that ship but are not in the README: `LOCAL_BPMN_CLOUDFLARED_URL_BASE`
   (where `cloudflared` is downloaded from; default: the latest GitHub release), `LOCAL_BPMN_KEEPALIVE_MS`,
+  `LOCAL_BPMN_REAPPLY_GRACE_MS` (Q2),
   `LOCAL_BPMN_TEST_TUNNEL`, plus the hidden `--write-delay` option.
 - Q3 wrap-up: the README states that every Share and every restart gives a new link and that persistent
   links are out of scope for v1 (see Q3 above).

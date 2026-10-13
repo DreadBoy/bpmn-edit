@@ -150,31 +150,139 @@ describe('Session and changes on disk', () => {
     assert.deepEqual(store.writes, []);
   });
 
-  it('warns when a stale browser edit replaces a change made on disk (and still applies it)', () => {
+  it('refuses an update based on a version a change on disk replaced (Q2: re-applied on top instead)', () => {
     const logs = [];
     const store = fakeStore();
     const session = new Session({ xml: original, store, log: (m) => logs.push(m) });
-    session.replaceFromDisk(variant(1));
-    assert.equal(session.applyUpdate(variant(2), 1, 'a'), 3);
-    assert.equal(session.getState().xml, variant(2));
-    assert.deepEqual(store.writes, [variant(2)]);
-    assert.equal(logs.length, 1);
-    assert.match(logs[0], /^local-bpmn: warning: an edit from the browser replaced a change made on disk/);
-
-    session.applyUpdate(variant(3), 3, 'a'); // up to date: no warning
-    assert.equal(logs.length, 1);
-  });
-
-  it('accepts an update over changes on disk only, never over another update', () => {
-    const logs = [];
-    const session = new Session({ xml: original, store: fakeStore(), log: (m) => logs.push(m) });
     session.applyUpdate(variant(1), 1, 'a'); // v2
     session.replaceFromDisk(variant(2)); // v3
     session.replaceFromDisk(variant(3)); // v4
-    assert.throws(() => session.applyUpdate(variant(4), 1, 'b'), (err) => err.code === 'conflict' && err.details.version === 4);
-    assert.equal(session.applyUpdate(variant(4), 2, 'b'), 5, 'only disk changes since version 2');
+    assert.throws(() => session.applyUpdate(variant(4), 2, 'b'), (err) => err.code === 'conflict' && err.details.version === 4);
+    assert.throws(() => session.applyUpdate(variant(4), 3, 'b'), (err) => err.code === 'conflict' && err.details.version === 4);
+    assert.equal(session.getState().xml, variant(3));
+    assert.equal(session.applyUpdate(variant(4), 4, 'b'), 5);
+    assert.deepEqual(store.writes, [variant(1), variant(4)]);
+    assert.deepEqual(logs, []);
+  });
+
+  it('a change on disk the editor cannot display is replaced by an edit based on the version before it', () => {
+    const logs = [];
+    const session = new Session({ xml: original, store: fakeStore(), log: (m) => logs.push(m) });
+    session.applyUpdate(variant(1), 1, 'a'); // v2
+    session.replaceFromDisk(variant(2)); // v3, cannot be displayed
+    assert.equal(session.reportUnreadable(3, 'no diagram to display'), true);
+    assert.equal(session.applyUpdate(variant(3), 2, 'a'), 4);
     assert.equal(logs.length, 1);
-    assert.throws(() => session.applyUpdate(variant(5), 4, 'a'), (err) => err.code === 'conflict' && err.details.version === 5);
+    assert.match(logs[0], /^local-bpmn: warning: an edit from the browser replaced a change made on disk that the editor could not display/);
+    assert.throws(() => session.applyUpdate(variant(4), 2, 'b'), (err) => err.code === 'conflict');
+  });
+
+  it('reports accepted updates a change on disk replaced before they were written (discardedAfter)', () => {
+    const logs = [];
+    const store = fakeStore();
+    const session = new Session({ xml: original, store, log: (m) => logs.push(m) });
+    const changes = [];
+    const saved = [];
+    session.on('change', (c) => changes.push(c));
+    session.on('saved', (s) => saved.push(s.version));
+    session.applyUpdate(variant(1), 1, 'a'); // v2
+    store.emit('saved', { xml: variant(1) });
+    assert.deepEqual(saved, [2]);
+    session.applyUpdate(variant(2), 2, 'a'); // v3
+    session.applyUpdate(variant(3), 3, 'b'); // v4
+    store.emit('external-change', { xml: variant(9), discarded: true }); // v3 and v4 never written
+    assert.deepEqual(changes.at(-1), { xml: variant(9), version: 5, origin: 'disk', discardedAfter: 2 });
+    assert.equal(logs.length, 1);
+    assert.match(logs[0], /changed on disk before the latest edits were saved; the windows that made them re-apply them/);
+
+    // Nothing unsaved: an external change is a plain one.
+    session.applyUpdate(variant(4), 5, 'a'); // v6
+    store.emit('saved', { xml: variant(4) });
+    assert.deepEqual(saved, [2, 6]);
+    store.emit('external-change', { xml: variant(10) });
+    assert.deepEqual(changes.at(-1), { xml: variant(10), version: 7, origin: 'disk' });
+  });
+
+  it('discarded edits of a window that is gone are kept aside after the grace period, unless re-applied', async () => {
+    const logs = [];
+    const store = fakeStore();
+    store.kept = [];
+    store.keepAside = async (xml) => { store.kept.push(xml); return true; };
+    const session = new Session({ xml: original, store, log: (m) => logs.push(m), reapplyGraceMs: 100 });
+    const delay = (ms) => new Promise((r) => setTimeout(r, ms));
+
+    // Gone before the discard: kept aside after the grace period; the log says so.
+    const ws1 = {};
+    session.applyUpdate(variant(1), 1, ws1); // v2
+    session.originGone(ws1);
+    store.emit('external-change', { xml: variant(11), discarded: true }); // v3
+    assert.match(logs.at(-1), /window that made them is disconnected: they are re-applied if it reconnects within 0 s, otherwise the editor's version is saved next to the file/);
+    assert.deepEqual(store.kept, []);
+    await delay(200);
+    assert.deepEqual(store.kept, [variant(1)]);
+
+    // Gone before the discard, but re-applied (by its new connection) within the grace period.
+    const ws2 = {};
+    session.applyUpdate(variant(2), 3, ws2, { owner: 'local:|page2' }); // v4
+    session.originGone(ws2);
+    store.emit('external-change', { xml: variant(12), discarded: true }); // v5
+    session.applyUpdate(variant(3), 5, {}, { reapplied: [4], owner: 'local:|page2' }); // v6, same page reconnected
+    await delay(200);
+    assert.deepEqual(store.kept, [variant(1)]);
+
+    // Gone after the discard (a dead connection noticed later): kept aside after the grace period.
+    const ws3 = {};
+    session.applyUpdate(variant(4), 6, ws3); // v7
+    store.emit('external-change', { xml: variant(13), discarded: true }); // v8
+    session.originGone(ws3);
+    await delay(200);
+    assert.deepEqual(store.kept, [variant(1), variant(4)]);
+
+    // Still connected, nothing to re-apply in the end ('reapplied' message): nothing kept.
+    const ws4 = {};
+    session.applyUpdate(variant(5), 8, ws4, { owner: 'local:|page4' }); // v9
+    store.emit('external-change', { xml: variant(14), discarded: true }); // v10
+    session.reapplied([9]); // no owner: ignored
+    session.reapplied([9], 'collaborator:tok|page4'); // another page (same key, other scope): ignored
+    session.reapplied([9], 'local:|page4');
+    session.originGone(ws4);
+    await delay(200);
+    assert.deepEqual(store.kept, [variant(1), variant(4)]);
+
+    // Shutdown: whatever was not re-applied is kept aside right away (a claim by another page does
+    // not count).
+    const ws5 = {};
+    session.applyUpdate(variant(6), 10, ws5, { owner: 'local:|page5' }); // v11
+    store.emit('external-change', { xml: variant(15), discarded: true }); // v12
+    session.applyUpdate(variant(7), 12, {}, { reapplied: [11], owner: 'collaborator:tok|other' }); // v13
+    session.reapplied([11, 1, 2, 3, 200], 'collaborator:tok|other');
+    assert.equal(await session.keepUnapplied(), 1);
+    assert.deepEqual(store.kept, [variant(1), variant(4), variant(6)]);
+    assert.equal(await session.keepUnapplied(), 0, 'once');
+  });
+
+  it('syncState: instance, saved version and discards for clients that (re)connect', () => {
+    const store = fakeStore();
+    const session = new Session({ xml: original, store, log: () => {} });
+    const first = session.syncState();
+    assert.match(first.instance, /^[0-9a-f-]{36}$/);
+    assert.notEqual(new Session({ xml: original }).syncState().instance, first.instance, 'one id per session');
+    assert.deepEqual(first, { instance: first.instance, saved: 1, discards: [], lastDisk: null, lastEdit: 1, staleSaves: [] });
+    session.applyUpdate(variant(1), 1, 'a'); // v2
+    session.applyUpdate(variant(2), 2, 'a'); // v3
+    assert.equal(session.syncState().saved, 1, 'v2 and v3 not written yet');
+    store.emit('saved', { xml: variant(1) });
+    assert.equal(session.syncState().saved, 2);
+    store.emit('external-change', { xml: variant(9), discarded: true }); // v3 never written -> v4
+    assert.deepEqual(session.syncState(), {
+      instance: first.instance, saved: 4, discards: [{ after: 2, version: 4 }], lastDisk: 4, lastEdit: 3, staleSaves: [],
+    });
+    // A plain change on disk (nothing discarded) adds no entry.
+    store.emit('external-change', { xml: variant(10) }); // v5
+    assert.deepEqual(session.syncState().discards, [{ after: 2, version: 4 }]);
+    // The copy handed out cannot change the session's list.
+    session.syncState().discards[0].after = 99;
+    assert.deepEqual(session.syncState().discards, [{ after: 2, version: 4 }]);
   });
 
   it('reportUnreadable marks the file invalid only for the current version from disk', () => {

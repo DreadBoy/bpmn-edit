@@ -108,9 +108,45 @@ describe('WebSocket sync', () => {
     const c2 = connect(server.port);
     const init2 = await c2.next('init');
     assert.match(init2.clientId, /^c\d+$/);
-    assert.deepEqual(init2, { type: 'init', xml: variant(1), version: ack.version, name: 'order.bpmn', path: file, clientId: init2.clientId, role: 'local' });
+    assert.match(init2.instance, /^[0-9a-f-]{36}$/);
+    assert.equal(init2.instance, init.instance, 'one session: same instance for every connection');
+    assert.deepEqual(init2, {
+      type: 'init', xml: variant(1), version: ack.version, name: 'order.bpmn', path: file, clientId: init2.clientId, role: 'local',
+      instance: init.instance, saved: ack.version, discards: [], lastDisk: null, lastEdit: ack.version, staleSaves: [],
+      accepted: null,
+    });
     c.ws.close();
     c2.ws.close();
+  });
+
+  it('init tells a page (by its key) which of its updates was accepted last, at which version', async () => {
+    const key = 'pagekey0123456789abcdef';
+    const c = connect(server.port, '127.0.0.1', `/ws?page=${key}`);
+    const init = await c.next('init');
+    assert.equal(init.accepted, null);
+    c.send({ type: 'update', xml: variant(7), baseVersion: init.version, seq: 3 });
+    const ack = await c.next('ack');
+    c.ws.close();
+    const again = connect(server.port, '127.0.0.1', `/ws?page=${key}`);
+    assert.deepEqual((await again.next('init')).accepted, { seq: 3, version: ack.version });
+    const other = connect(server.port, '127.0.0.1', '/ws?page=anotherpage0123456789');
+    assert.equal((await other.next('init')).accepted, null, 'another page');
+    const bad = connect(server.port, '127.0.0.1', '/ws?page=%3Cbad%3E');
+    assert.equal((await bad.next('init')).accepted, null);
+    for (const msg of [
+      { type: 'update', xml: variant(8), baseVersion: ack.version, seq: 0 },
+      { type: 'update', xml: variant(8), baseVersion: ack.version, reapplied: ['x'] },
+      { type: 'reapplied', versions: 'nope' },
+    ]) {
+      again.send(msg);
+      assert.equal((await again.next('error')).code, 'bad-message', JSON.stringify(msg));
+    }
+    again.send({ type: 'reapplied', versions: [2] }); // accepted silently
+    again.send({ type: 'ping' });
+    assert.equal((await again.next()).type, 'pong');
+    for (const x of [again, other, bad]) x.ws.close();
+    await Promise.all([again, other, bad].map((x) => x.closed));
+    await store.flush();
   });
 
   it('rejects malformed and unknown messages with bad-message', async () => {

@@ -166,7 +166,7 @@ let dirty = false;        // edits made since the last send (or import)
 let sendTimer = null;     // pending debounced send
 let sendHeld = false;     // a send came due but has to wait (update in flight, or a rebase is due)
 let sending = false;      // serialising the document for a send
-let inflight = null;      // { edits, xml } of the update sent and not yet answered by 'ack' / 'conflict'
+let inflight = null;      // { edits, xml, seq, reapplied } of the update sent, not yet answered ('ack' / 'conflict')
 let mustRebase = false;   // the host refused our update: re-apply our edits on the newer document
 let unsent = false;       // edits made while disconnected
 let flushRequested = false; // the host is shutting down and waits for 'flushed'
@@ -181,6 +181,21 @@ let replaying = null;     // while re-applying an op: { flowId, spliced } (see a
 let droppedOnFlow = null; // id of the flow the running root command inserted a shape into, if any
 let deleteSeen = null;    // seenOf() the elements the running root delete command removes
 let pendingOverrides = []; // others' concurrent changes our next update removes (see applyOp 'delete')
+// Pending edits (edits this window made that are not known to be on disk), oldest first:
+//   unsavedEdits  accepted by the host ('ack'), not confirmed written yet ('saved')
+//   lostEdits     accepted edits a change on disk replaced before they were written (told by
+//                 'remote-update' with discardedAfter, or by 'init' after a reconnect): not in the
+//                 host's document any more, re-applied like unsent edits
+//   inflight      sent, not answered yet
+//   localEdits    not sent yet (plus `dirty`)
+// The last three are re-applied, in this order, by one path: rebaseLocalEdits (after a 'conflict',
+// a change on disk that discarded accepted edits, or a reconnect to a changed document).
+let unsavedEdits = [];    // [{ version, edits }], see above
+let lostEdits = [];       // edits, see above
+let lostVersions = [];    // versions of the accepted updates lostEdits came from
+let pendingReapplied = []; // such versions re-applied, to tell the host (with the next update, or 'reapplied')
+let updateSeq = 0;        // number of the last update sent (with the page key: see 'init' accepted)
+let hostInstance = null;  // id of the host session the versions in unsavedEdits belong to ('init')
 const recentChanges = new Map(); // element id -> when an update of ours that changed it was accepted
 let queue = Promise.resolve(); // incoming messages and deferred work, strictly in order
 
@@ -208,7 +223,12 @@ function hasPendingSend() {
 
 /** Edits this window has that the host has not (known to have) accepted. */
 function hasUnsavedWork() {
-  return Boolean(hasPendingSend() || mustRebase || localEdits.length);
+  return Boolean(hasPendingSend() || mustRebase || localEdits.length || lostEdits.length);
+}
+
+/** Also edits the host accepted but has not confirmed as written to disk yet ('saved'). */
+function hasUnconfirmedWork() {
+  return hasUnsavedWork() || unsavedEdits.length > 0;
 }
 
 function renderStatus() {
@@ -222,9 +242,9 @@ function renderStatus() {
   statusEl.dataset.state = state;
   statusEl.textContent = STATUS_TEXT[state];
   if (state === 'error') statusEl.title = lastError.message;
-  else if (state === 'disconnected' && (unsent || hasUnsavedWork())) {
-    statusEl.title = 'Connection to local-bpmn lost; recent changes were not saved';
-  } else if (state === 'reconnecting' && hasUnsavedWork()) {
+  else if (state === 'disconnected' && (unsent || hasUnconfirmedWork())) {
+    statusEl.title = 'Connection to local-bpmn lost; recent changes may not have been saved';
+  } else if (state === 'reconnecting' && hasUnconfirmedWork()) {
     statusEl.title = 'Your changes are kept and saved once the connection is back';
   } else statusEl.removeAttribute('title');
   reconnectingEl.hidden = state !== 'reconnecting';
@@ -236,7 +256,7 @@ const NOTICES = {
   reloaded: { text: 'Reloaded from disk' },
   deferred: {
     text: 'Disk changed; reloads after your edit',
-    title: 'If your edit is saved first, it replaces the change made on disk',
+    title: 'Your edit is then re-applied on top of the change made on disk',
   },
   // Same kind (a held-back update), different wording when it comes from another window.
   deferredRemote: {
@@ -333,14 +353,19 @@ function sendNow() {
   const baseVersion = version;
   const overrides = pendingOverrides;
   pendingOverrides = [];
+  const reapplied = pendingReapplied;
+  pendingReapplied = [];
   modeler.saveXML({ format: true }).then(({ xml }) => {
-    const message = { type: 'update', xml, baseVersion };
+    updateSeq += 1;
+    const message = { type: 'update', xml, baseVersion, seq: updateSeq };
     if (overrides.length) message.overrides = overrides;
+    if (reapplied.length) message.reapplied = reapplied;
     if (sendMessage(message)) {
-      inflight = { edits, xml };
+      inflight = { edits, xml, seq: updateSeq, reapplied };
     } else {
       unsent = true;
       localEdits = [...edits, ...localEdits];
+      pendingReapplied = [...reapplied, ...pendingReapplied];
       dirty = true;
     }
   }, (err) => {
@@ -365,7 +390,7 @@ function scheduleSend() {
  */
 function onSendDue() {
   sendTimer = null;
-  if (inflight || sending || mustRebase || (deferredUpdate && deferredUpdate.origin !== 'disk')) {
+  if (inflight || sending || mustRebase || deferredUpdate) {
     sendHeld = true;
     renderStatus();
     settleLocalActivity();
@@ -507,31 +532,26 @@ function settleLocalActivity() {
  * Once the user is done (no label editor, drag or popup menu) and no update is on its way to the
  * host, a held-back remote update is:
  * - dropped if a local edit was accepted by the host after it (higher version; only possible for a
- *   change made on disk, which an edit based on the version before it replaces: last write wins);
+ *   change made on disk the editor could not display, see Session);
  * - shown, with this window's unsent edits re-applied on top, if there are any or the host refused
- *   our update — except for a change on disk with unsent edits, which are sent first (and win, as
- *   above) unless the host refused them;
+ *   our update (a change made on disk is treated like another window's edit: Q2);
  * - otherwise simply shown.
  * Then anything still unsent goes out.
  */
 async function settleNow() {
   if (deferredUpdate && !interactionActive() && !sending && !inflight) {
     const message = deferredUpdate;
-    const unsentEdits = Boolean(dirty || localEdits.length);
-    if (unsentEdits && message.origin === 'disk' && !mustRebase) {
-      if (!sendTimer) sendNow(); // the host accepts it over the change on disk (see Session)
+    const unsentEdits = Boolean(dirty || localEdits.length || lostEdits.length);
+    deferredUpdate = null;
+    if (version !== null && message.version <= version) {
+      console.warn(`local-bpmn: an edit from this window replaced ${describeOrigin(message.origin)}`);
+    } else if (unsentEdits || mustRebase) {
+      await rebaseLocalEdits(message);
     } else {
-      deferredUpdate = null;
-      if (version !== null && message.version <= version) {
-        console.warn(`local-bpmn: an edit from this window replaced ${describeOrigin(message.origin)}`);
-      } else if (unsentEdits || mustRebase) {
-        await rebaseLocalEdits(message);
-      } else {
-        await showRemoteDocument(message);
-      }
+      await showRemoteDocument(message);
     }
   }
-  if (sendHeld && !inflight && !sending && !mustRebase && !(deferredUpdate && deferredUpdate.origin !== 'disk')) {
+  if (sendHeld && !inflight && !sending && !mustRebase && !deferredUpdate) {
     sendNow();
   }
   renderNotice();
@@ -819,7 +839,9 @@ function applyOp(op) {
         const shape = get(entry.id);
         const at = (x, y) => Math.abs(shape.x - x) <= 0.5 && Math.abs(shape.y - y) <= 0.5;
         if (!shape) problems.push({ reason: 'deleted', name: entry.name });
-        else if (at(entry.x + op.delta.x, entry.y + op.delta.y)) continue; // already there (e.g. accepted before a reconnect)
+        // Already where this move puts it (the document already contains this edit: accepted before a
+        // reconnect, or a change on disk made from a copy that has it): nothing to do.
+        else if (at(entry.x + op.delta.x, entry.y + op.delta.y)) continue;
         else if (!at(entry.x, entry.y)) problems.push({ reason: 'changed', name: entry.name });
         else {
           shapes.push(shape);
@@ -993,15 +1015,20 @@ async function replayEdits(edits, message) {
   }
 }
 
-/** Tells the user which of their edits were not applied. */
-function reportProblems(problems) {
+/** Tells the user which of their edits were not applied (`fromDisk`: on top of a change made on disk). */
+function reportProblems(problems, fromDisk = false) {
   if (!problems.length) return;
-  const sentences = problems.map(({ reason, name }) => ({
+  const sentences = problems.map(({ reason, name }) => (fromDisk ? {
+    changed: `Your change to “${name}” was not applied: it was changed on disk at the same time (the file's version was kept)`,
+    deleted: `Your change to “${name}” was not applied: it was deleted on disk`,
+    unsupported: `Your edit (${name}) could not be merged with a change made on disk and was not applied`,
+    failed: `Your change to “${name}” could not be applied on top of a change made on disk`,
+  } : {
     changed: `Your change to “${name}” was not applied: someone else changed it first`,
     deleted: `Your change to “${name}” was not applied: someone else deleted it`,
     unsupported: `Your edit (${name}) could not be merged with someone else's and was not applied`,
     failed: `Your change to “${name}” could not be applied on top of someone else's edit`,
-  }[reason]));
+  })[reason]);
   const unique = [...new Set(sentences)];
   for (const sentence of unique) console.warn(`local-bpmn: ${sentence}`);
   const kind = problems.some((p) => p.reason === 'changed') ? 'conflict' : 'dropped';
@@ -1016,9 +1043,14 @@ function reportProblems(problems) {
 async function rebaseLocalEdits(message) {
   clearTimeout(sendTimer);
   sendTimer = null;
-  const edits = normalizeEdits(localEdits);
+  const edits = normalizeEdits([...lostEdits, ...localEdits]);
+  lostEdits = [];
   localEdits = [];
   mustRebase = false;
+  // The host is told once these are re-applied (with the update below, or 'reapplied'), so it does
+  // not keep them aside for a window that is gone (Q2).
+  pendingReapplied.push(...lostVersions);
+  lostVersions = [];
   if (!(await showRemoteDocument(message))) {
     // The other document cannot be displayed here (should not happen: it was displayed where it
     // was made). Keep this window's document and replace that one explicitly, with an error shown.
@@ -1029,9 +1061,51 @@ async function rebaseLocalEdits(message) {
     return;
   }
   dirty = false;
-  reportProblems(await replayEdits(edits, message));
+  const problems = await replayEdits(edits, message);
+  // A save from an older copy (Q2): its own notice ('kept-aside') says what happened and where the
+  // edits are; a "merged" notice here would be misleading.
+  if (message.origin === 'disk' && !message.stale) reportDiskMerge(edits, problems);
+  else if (message.origin !== 'disk') reportProblems(problems);
   if (dirty) sendNow();
-  else sendHeld = false;
+  else {
+    sendHeld = false;
+    sendReapplied();
+  }
+}
+
+/** Nothing to send after re-applying discarded edits (all already there, or not applicable): say so. */
+function sendReapplied() {
+  if (!pendingReapplied.length || inflight || sending) return; // goes with the update in flight's successor
+  if (sendMessage({ type: 'reapplied', versions: pendingReapplied })) pendingReapplied = [];
+}
+
+/**
+ * After re-applying this window's edits on top of a change made on disk (Q2): says what happened.
+ * Edits that could not be applied are reported as such; a delete that removed an element changed on
+ * disk says so too (the file's change to it is gone); otherwise the merge is confirmed.
+ */
+function reportDiskMerge(edits, problems) {
+  if (problems.length) {
+    reportProblems(problems, true);
+    return;
+  }
+  if (pendingOverrides.length) {
+    const sentences = pendingOverrides.map(({ name, id, kind }) => (kind === 'connection'
+      ? `Your delete of “${name || id}” also removed a connection added on disk`
+      : `Your delete of “${name || id}” removed a change made to it on disk`));
+    for (const sentence of sentences) console.warn(`local-bpmn: ${sentence}`);
+    showToast('conflict', sentences.length > 1 ? `${sentences[0]} (+${sentences.length - 1} more)` : sentences[0], sentences);
+    return;
+  }
+  // dirty: something was re-applied (an edit the change on disk already contained needs no notice).
+  if (edits.length && dirty) showToast('merged', 'The file was changed on disk; your edits were applied on top of that change');
+}
+
+/** Says that a save from an older copy replaced the latest saved edits, kept next to the file as `name`. */
+function showStaleSaveNotice(name) {
+  const text = `The file was saved on disk from an older copy, without the latest changes; they were saved next to it as ${name}`;
+  console.warn(`local-bpmn: ${text}`);
+  showToast('conflict', text);
 }
 
 /** Fetches the host's current document (used if a newer one is needed but was not received). */
@@ -1095,6 +1169,7 @@ async function handleMessage(message) {
       everSynced = true;
       clearReconnect();
       if (!rendered) {
+        hostInstance = message.instance ?? null;
         try {
           await importDiagram(message.xml);
           version = message.version;
@@ -1110,15 +1185,19 @@ async function handleMessage(message) {
     case 'ack':
       rememberChanges(inflight?.edits ?? []);
       if (inflight) syncedXml = inflight.xml;
+      // Kept until the host has written them, in case a change on disk replaces them first (Q2).
+      if (inflight?.edits?.length) unsavedEdits.push({ version: message.version, edits: inflight.edits });
       inflight = null;
       advanceVersion(message.version);
       lastError = null;
+      sendReapplied();
       settleLocalActivity();
       break;
     case 'conflict': {
       // The host has a newer document (sent to us as 'remote-update' before this): re-apply the
       // refused edits, and whatever was edited since, on top of it.
       localEdits = [...(inflight?.edits ?? []), ...localEdits];
+      pendingReapplied = [...(inflight?.reapplied ?? []), ...pendingReapplied];
       inflight = null;
       mustRebase = true;
       if (!deferredUpdate || deferredUpdate.version < message.version) {
@@ -1133,7 +1212,10 @@ async function handleMessage(message) {
     }
     case 'error':
       // 'write-failed' is pushed by the host on its own; other errors answer our update.
-      if (message.code !== 'write-failed') inflight = null;
+      if (message.code !== 'write-failed') {
+        pendingReapplied = [...(inflight?.reapplied ?? []), ...pendingReapplied];
+        inflight = null;
+      }
       lastError = { code: message.code, message: message.message };
       console.warn(`local-bpmn: ${message.code}: ${message.message}`);
       settleLocalActivity();
@@ -1141,7 +1223,26 @@ async function handleMessage(message) {
     case 'flush':
       flushForShutdown();
       break;
+    case 'saved':
+      unsavedEdits = unsavedEdits.filter((entry) => entry.version > message.version);
+      break;
+    case 'kept-aside':
+      // Another program saved the file from a copy older than the latest saved edits (Q2): the
+      // file keeps that save (shown as "Reloaded from disk"); the edits are in a file next to it.
+      if (message.reason === 'stale-save' && typeof message.name === 'string') showStaleSaveNotice(message.name);
+      break;
     case 'remote-update':
+      if (message.origin === 'disk' && Number.isInteger(message.discardedAfter)) {
+        // The file changed on disk before our accepted edits were written: they are not in this
+        // document. Re-apply them on top of it (Q2), like edits the host refused.
+        const lost = unsavedEdits.filter((entry) => entry.version > message.discardedAfter);
+        unsavedEdits = [];
+        if (lost.length) {
+          lostEdits.push(...lost.flatMap((entry) => entry.edits));
+          lostVersions.push(...lost.map((entry) => entry.version));
+          mustRebase = true;
+        }
+      }
       await applyRemoteUpdate(message);
       break;
     case 'welcome':
@@ -1280,30 +1381,56 @@ function checkRole(role, reconnected) {
  *   a 'conflict'; ops already in the document are no-ops, edits that cannot be re-applied are
  *   reported, deleted elements stay deleted.
  * Version numbers start again after a restart of the host, so the old version is forgotten.
+ * Accepted edits not confirmed on disk (unsavedEdits) are first sorted out (reconcileAccepted): those
+ * a change on disk discarded while this window was away join the edits to re-apply (Q2).
  */
 async function resync(message) {
   flushRequested = false;
   lastError = null;
   deferredUpdate = null;
+  const sameHost = hostInstance !== null && message.instance === hostInstance;
+  hostInstance = message.instance ?? null;
+  const base = version;
   const sent = inflight;
-  if (inflight) {
-    localEdits = [...inflight.edits, ...localEdits];
+  // The host remembers the newest update it accepted from this page (by its number): an update in
+  // flight whose 'ack' was lost is then known to be accepted, at that version, and is handled like
+  // the other accepted edits below (never re-applied unless a change on disk discarded it).
+  const accepted = sameHost && sent && message.accepted?.seq === sent.seq ? message.accepted : null;
+  if (accepted) {
+    rememberChanges(sent.edits);
+    if (sent.edits.length) unsavedEdits.push({ version: accepted.version, edits: sent.edits });
+    syncedXml = sent.xml;
     inflight = null;
   }
+  const lostOnDisk = reconcileAccepted(message, sameHost);
+  if (inflight) {
+    localEdits = [...inflight.edits, ...localEdits];
+    pendingReapplied = [...inflight.reapplied, ...pendingReapplied];
+    inflight = null;
+  }
+  // What replaced this window's document while it was away, for the wording of notices: only
+  // changes on disk (Q2), or (also) other windows' edits.
+  const own = accepted ? accepted.version : base;
+  const onlyDisk = sameHost && base !== null && Number.isInteger(message.lastDisk) && message.lastDisk > base
+    && !(Number.isInteger(message.lastEdit) && message.lastEdit > own);
   version = null;
   if (!mustRebase && message.xml === syncedXml) {
     version = message.version; // nothing changed at the host: our edits (if any) apply as they are
-  } else if (!mustRebase && sent && message.xml === sent.xml) {
+  } else if (!mustRebase && !accepted && sent && message.xml === sent.xml) {
     // The update in flight had been accepted (its 'ack' was lost with the connection).
     localEdits = localEdits.slice(sent.edits.length);
     rememberChanges(sent.edits);
+    if (sameHost && sent.edits.length) unsavedEdits.push({ version: message.version, edits: sent.edits });
     syncedXml = sent.xml;
     version = message.version;
   } else if (!localEdits.length && !dirty && !mustRebase && !interactionActive()) {
     await showRemoteDocument(message);
   } else {
-    if (localEdits.length) mustRebase = true;
-    deferredUpdate = { type: 'remote-update', xml: message.xml, version: message.version, origin: 'host' };
+    if (localEdits.length || lostEdits.length) mustRebase = true;
+    // 'disk': accepted edits of ours were replaced by a change on disk (merged / disk wording, Q2).
+    deferredUpdate = {
+      type: 'remote-update', xml: message.xml, version: message.version, origin: lostOnDisk || onlyDisk ? 'disk' : 'host',
+    };
   }
   if (version !== null && (dirty || localEdits.length)) {
     dirty = true;
@@ -1311,6 +1438,44 @@ async function resync(message) {
   }
   unsent = false;
   await settleNow();
+  sendReapplied();
+  // A save from an older copy replaced written edits while this window was away: say so now.
+  const missed = sameHost && base !== null && Array.isArray(message.staleSaves)
+    ? message.staleSaves.filter((entry) => Number.isInteger(entry?.version) && entry.version > base && typeof entry.name === 'string')
+    : [];
+  if (missed.length) showStaleSaveNotice(missed.at(-1).name);
+}
+
+/**
+ * On a new connection: what became of the accepted edits waiting for 'saved' (unsavedEdits), from
+ * the host's 'init' (`instance`, `saved`, `discards`, see src/server.js). Same host session: edits a
+ * change on disk discarded (version inside a discards range) move to lostEdits to be re-applied;
+ * edits up to `saved` are on disk and forgotten; the rest are still waiting for the host's write
+ * (they are in its document) and keep waiting for 'saved'. Another host session (local-bpmn was
+ * restarted): versions mean nothing any more and that host wrote or kept aside what it had accepted
+ * when it stopped, so they are forgotten. Returns whether edits were moved to lostEdits.
+ */
+function reconcileAccepted(message, sameHost) {
+  if (!sameHost) {
+    unsavedEdits = [];
+    lostVersions = []; // that host is gone; its versions mean nothing here (the edits stay in lostEdits)
+    pendingReapplied = [];
+    return false;
+  }
+  const discards = Array.isArray(message.discards) ? message.discards : [];
+  const saved = Number.isInteger(message.saved) ? message.saved : -Infinity;
+  const lost = [];
+  const waiting = [];
+  for (const entry of unsavedEdits) {
+    if (discards.some(({ after, version: at }) => after < entry.version && entry.version < at)) lost.push(entry);
+    else if (entry.version > saved) waiting.push(entry);
+  }
+  unsavedEdits = waiting;
+  if (!lost.length) return false;
+  lostEdits.push(...lost.flatMap((entry) => entry.edits));
+  lostVersions.push(...lost.map((entry) => entry.version));
+  mustRebase = true;
+  return true;
 }
 
 /** Starts or continues reconnecting after the connection was lost; `failed`: an attempt failed. */
@@ -1385,7 +1550,12 @@ function endSession(reason, detail) {
   overlayTitleEl.textContent = copy.title;
   let text = (!isCollaborator && copy.local) || copy.text;
   if (reason === 'other-file' && detail) text = `local-bpmn now edits ${detail} here.`;
+  // The host writes (or keeps aside) what it accepted when it ends the session or stops sharing;
+  // otherwise accepted edits not confirmed on disk may be lost too.
   if (hasUnsavedWork() || unsent) text += ' Your latest changes could not be saved.';
+  else if (unsavedEdits.length && reason !== 'ended' && reason !== 'share-stopped') {
+    text += ' Your latest changes may not have been saved.';
+  }
   overlayTextEl.textContent = text;
   const canRetry = reason === 'unreachable' || (reason === 'ended' && !isCollaborator);
   overlayActionEl.hidden = !canRetry;
@@ -1446,7 +1616,9 @@ function connectionLost(failedAttempt, code = null) {
 function socketUrl() {
   const url = new URL('ws', location.href);
   url.protocol = location.protocol === 'https:' ? 'wss:' : 'ws:';
-  url.search = hostSecret ? `?host=${encodeURIComponent(hostSecret)}` : '';
+  url.search = '';
+  if (hostSecret) url.searchParams.set('host', hostSecret);
+  url.searchParams.set('page', pageKey); // see 'init' accepted
   url.hash = '';
   return url.href;
 }

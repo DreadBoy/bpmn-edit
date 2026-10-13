@@ -22,7 +22,9 @@ local-bpmn: editing path/to/file.bpmn at http://localhost:3000/?host=<secret>
 ```
 
 Keep the terminal open while you edit. Press **Ctrl-C** to stop: open editors send their last edits, everything
-is written to disk, and every window (collaborators included) shows "Session ended".
+is written to disk, and every window (collaborators included) shows "Session ended". A second Ctrl-C stops
+waiting for the editors but still finishes writing to disk (including the last check described under
+[Saving and changes on disk](#saving-and-changes-on-disk)); a third one exits at once.
 
 Options:
 
@@ -49,6 +51,49 @@ local-bpmn does not create new files.
 - If the file on disk becomes invalid (e.g. half-written or not BPMN), the editor keeps showing the last good
   version and says so; nothing is written until you edit again. If the file is deleted, your next edit
   recreates it.
+- A save on disk that races an edit in the browser (your IDE saves while an edit is still on its way to the
+  file) is never overwritten: the change on disk is taken as the newer version and the browser edits not yet
+  written are re-applied on top of it, element by element, as for two windows (see
+  [Concurrent editing](#concurrent-editing)). The window whose edits were re-applied says "The file was
+  changed on disk; your edits were applied on top of that change". If the same label or position was changed
+  on both sides, the file's version is kept and that window says "Your change to “…” was not applied: it was
+  changed on disk at the same time (the file's version was kept)" ("…it was deleted on disk" if the element
+  is gone). This also holds when you press Ctrl-C right after the save: local-bpmn checks the file once more
+  and lets the open windows re-apply their edits before the last write. A window that was disconnected
+  meanwhile re-applies them when it reconnects. A program that saves slowly in place (the file is
+  half-written for a while) and finishes after local-bpmn replaced the half-written file with your edit
+  is handled the same way, also when it finishes writing through the file it had open. So is a program
+  that deletes or moves the file away and then writes its copy, if that copy arrives within 2 s of
+  local-bpmn recreating the file with your edit.
+- A save from an older copy shortly after local-bpmn wrote your edits (an editor that read the file before
+  they reached it and saves without reloading) replaces them on disk. local-bpmn compares the save with
+  its recent writes element by element (by id; formatting does not count). Recent writes means each
+  write less than 5 s after the one before, with no other program's change in between. The save lands
+  within 5 s of the last of those writes. It counts as such a save if an element they changed is back
+  as it was before them, or as it was after only some of them: the old name of an element you renamed,
+  an element you deleted, or no trace of an element you created. Then the file keeps that save (it may be deliberate, e.g. a revert), your
+  latest version is saved next to it (see below), and every window says "The file was saved on disk
+  from an older copy, without the latest changes; they were saved next to it as <file name>". A
+  window that was disconnected is told when it reconnects. Edits that were still waiting to be
+  written are re-applied on top of that save as usual; the side file has them too. An element the
+  other program changed in its own way (neither as before nor as yours) does not count. A revert of
+  your last edits within those 5 s gives the same notice and side file.
+- When an edit cannot be re-applied by anyone (its window has closed and has not reconnected within
+  20 s, or local-bpmn is stopped before that, or the file changes again during shutdown), the file keeps
+  the version on disk and the editor's version is saved next to it as
+  `<name>.local-bpmn-unsaved-<yyyymmdd-hhmmss>.bpmn` (it shows up in `git status`); the terminal prints a
+  warning with the file name. These files are never deleted automatically. The same happens at Ctrl-C less
+  than 2 s after local-bpmn replaced a half-written file or recreated a deleted one, in case the program
+  that was saving it finishes later from an older copy; the half-written file local-bpmn had replaced is
+  then also kept, as `<name>.local-bpmn-replaced-<yyyymmdd-hhmmss>.bpmn`, so that a program still writing
+  into it through the file it has open finishes its save there. If the file became half-written or disappeared
+  less than 2 s before Ctrl-C (another program is rewriting it), local-bpmn does not write over it:
+  edits still to be written are saved next to it instead. A save made right after local-bpmn's last
+  write, or while the file is being rewritten like that, is checked once more before exiting. If it
+  does not have every element local-bpmn's recent writes changed in the form they wrote (e.g. it comes
+  from an older copy), or is still being written about 1 s later, your version is saved next to it too. This check runs 300 ms
+  after the last write, so Ctrl-C takes up to 300 ms longer when it writes edits or comes right after
+  a write, and up to about 1.3 s while another program is writing the file.
 - Several windows (yours or collaborators') can edit at the same time; see [Concurrent editing](#concurrent-editing).
 
 ## Sharing
@@ -112,16 +157,39 @@ Things to know:
   instructions and a DOCTYPE are not kept. Commit the file before the first edit if you want a clean diff.
 - Concurrent editing (below) is not a CRDT; some edits can be refused with a notice instead of merged.
 - Undo history is reset whenever another window's change or a change on disk is shown.
-- A change made on disk at about the same time as an edit in the browser: one of the two wins and the other
-  is lost.
-  - If the browser's edit was based on the version from before the disk change, the edit overwrites the
-    change made on disk. The terminal prints "an edit from the browser replaced a change made on disk". If
-    the change on disk arrived while you were still dragging or editing a label, the toolbar shows "Disk
-    changed; reloads after your edit" (its tooltip says your edit replaces the change on disk if it is saved
-    first) and the browser console logs a warning.
-  - If the disk change arrives while the accepted edit is still waiting to be written (250 ms), the disk
-    version wins and the edit is lost. The editors show "Reloaded from disk"; only the terminal says that an
-    edit was dropped ("a pending save from the editor was discarded").
+- Saves on disk racing a browser edit (see [Saving and changes on disk](#saving-and-changes-on-disk)) have
+  some remaining gaps:
+  - A save landing in the instant between local-bpmn's last check of the file and its rename (normally well
+    under a millisecond) is overwritten without notice.
+  - A save from a stale copy: a program reads the file, local-bpmn then writes your edit, and the program
+    later writes back its older copy. An example is an IDE whose buffer was loaded before your edit
+    reached the file and that saves without reloading. That save is the newer one on disk, so it replaces
+    your edit. Within 5 s of local-bpmn's write this is noticed (see
+    [Saving and changes on disk](#saving-and-changes-on-disk)); a stale save later than that, one that
+    does not bring back anything the writes changed, one after a write that replaced a half-written or
+    missing file (there is nothing to compare with), or one after local-bpmn has stopped (at Ctrl-C it
+    looks once more 300 ms after its last write) is not: every window shows "Reloaded from disk" and
+    nothing else tells you the edit is gone. How often this happens depends entirely on the timing
+    between the other program's read and its write. It is the same as two editors saving the same file
+    one after the other. The editor's undo cannot bring the edit back (its history is reset when a
+    change on disk is shown). Redo the edit, or restore it from git or from the other program's undo or
+    local history. Reloading the file in the other program before saving there avoids it.
+  - The check for saves from an older copy compares elements by id and ignores indentation, line
+    endings, attribute order and `<a></a>` versus `<a/>`. A program that rewrites attribute values or
+    text in another form (e.g. other character escapes) can make a save that does contain your edit
+    look different; at Ctrl-C (where an element changed again by the other program also counts) this
+    gives a needless side file.
+  - A program that leaves the file half-written, waits more than 2 s after local-bpmn replaced it with a
+    browser edit, and only then finishes its save from an older copy replaces that edit; the editors only
+    show "Reloaded from disk". If it finishes through the file it had open and pauses that long, its own
+    change is lost instead. If local-bpmn is stopped while such a program is still writing, your edit is
+    kept next to the file and the program's save ends up in the kept `….local-bpmn-replaced-….bpmn` file
+    (if it writes through the file it had open) or in the file itself (if it writes by name).
+  - A save that is valid for less than about 150 ms before the same program breaks the file again is not
+    seen; the file has it again once that program saves again.
+  - A change on disk is merged only for the edits concurrent editing re-applies (labels, moves, new
+    elements and connections, deletes); other racing browser edits (resize, bendpoints, type changes, …) are
+    dropped with a notice.
 - Only one file per session.
 
 ### Concurrent editing
