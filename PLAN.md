@@ -174,6 +174,16 @@ implement the decision if it changes anything. These steps are as mandatory as t
     pause-and-ask). Record in `docs/decisions.md`, implement, E2E-verify the chosen behaviour.
 
 - [ ] **Q4. Noisy first `git diff` (formatting churn)** (after S3)
+  - **Measured** (branch `worktree-agent-add099222bc18c4f9`, `docs/q4-diff-churn.md`, verified on 12 real-world
+    fixtures in `test/fixtures/q4/`): first save of a one-word rename produces 3–898 unrelated diff lines; later
+    saves ≤1. **Silent information loss**: XML comments, processing instructions, DOCTYPE; a DOCTYPE entity gets
+    corrupted to literal text. Recommendation: (c) server-side 3-way minimal-diff writer patching changed elements
+    into the original text, verified against the bpmn-js model, falling back to (b) "preserve header/EOL/indent".
+  - [ ] **Q4-impl** (after Q2; touches the write path). **E2E acceptance** over every file in `test/fixtures/q4`:
+    one-label rename ≤1 unrelated line on first and later saves; zero information loss (comments, PIs,
+    DOCTYPE/entities, CDATA, unknown extensions, prefixes, defaults, number spelling); EOL/indent/quotes/attr order/
+    XML decl/final newline unchanged outside edited elements; 40 px move → no DI reordering, ≤16 lines; every write
+    passes model check, 0 fallbacks on structural stress edits. Record decision in `docs/decisions.md`.
   - Observed in S2: the first save rewrites the multi-line `<bpmn:definitions>` header onto one line (bpmn-js
     serialisation), so users see unrelated diff lines. Experiment: take BPMN files saved by Camunda Modeler,
     bpmn.io demo and a hand-formatted one; make one trivial edit through the UI; count diff lines unrelated to the
