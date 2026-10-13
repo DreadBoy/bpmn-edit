@@ -794,6 +794,33 @@ Re-run of the earlier probes on the final code:
 - X7 checkout: 20/20 side files, the expected visible notice for reverts.
 - Z2 0 lost; S1 collaborator notice without paths 10/10; races 0 loss, 0 side files.
 
+### After landing on main: DEF-E1
+
+**DEF-E1: a save from an older copy that also changed the element we changed was not noticed.** A
+task renamed in the browser, written; 0.2–2.5 s later an IDE saves the copy it read before that
+write, with its own change to the same task (added `<bpmn:documentation>`, or a new
+`<bpmn:outgoing>`). `looksStale` compared whole elements: the task's form in the save was neither
+its base form nor ours, so it counted as a concurrent change. The file kept the save with the old
+name, the windows showed only "Reloaded from disk", and the rename was gone (10/10, silently).
+- Fix (`src/elements.js`, `looksStale`): for an element the save changed in its own way, its parts
+  are compared too: each attribute (the element name included) and each child without an id
+  (bounds, waypoints, incoming / outgoing, documentation, …, as a multiset). The save is old if a
+  part our writes changed has the value (or count) it had before our latest write, i.e. in the
+  chain's base or in one of our earlier writes, and not ours. A part changed by the other program
+  only, or a part we changed that it changed again to something else (renamed again), still makes a
+  concurrent change. Elements with a duplicate id are compared as a whole, as before.
+  `containsChanges` (Ctrl-C) already caught this case.
+- Policy: unchanged, the stale-save branch of R2 / DEF-B. The file keeps the save (it may be
+  deliberate, and it carries the other program's own change), our latest version is kept next to it
+  and every window shows the older-copy notice naming the side file; edits not written yet are
+  re-applied on top as usual. Merging our written edits into the save per element was not taken, for
+  the reason given in R2 (it would undo deliberate reverts).
+- Tests: unit "looksStale: an older copy that also changed an element we changed still counts as
+  old" (documentation, outgoing, moved bounds, an added outgoing missing, a copy from between, an
+  added attribute missing, renamed again, fresh copies). E2E "a save from an older copy that also
+  changed the task renamed in the browser (documentation / outgoing): the rename is kept next to it"
+  (fails on the code before the fix: no side file).
+
 ### Known limits
 
 - The pre-write check and the rename are separate steps. A save renamed over the file between the

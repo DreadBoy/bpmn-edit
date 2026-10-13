@@ -673,6 +673,38 @@ describe('createFileStore watching', () => {
     assert.equal(looksStale('<a><t id="1" name="x"/>', before, ours), true, 'not readable: keep a copy');
   });
 
+  it('looksStale: an older copy that also changed an element we changed still counts as old (per attribute and child)', () => {
+    // DEF-E1: we renamed the task; the other program saves its older copy with its own change to that
+    // same task (documentation, a new outgoing): the old name is back, so the save is old.
+    const base = '<p id="p">\n  <t id="1" name="x">\n    <in>f0</in>\n  </t>\n</p>\n';
+    const ours = base.replace('name="x"', 'name="y"');
+    const doc = (xml) => xml.replace('<in>f0</in>', '<in>f0</in><documentation>D</documentation>');
+    const out = (xml) => xml.replace('<in>f0</in>', '<in>f0</in><out>f9</out>');
+    assert.equal(looksStale(doc(base), base, ours), true, 'old name, with documentation added');
+    assert.equal(looksStale(out(base), base, ours), true, 'old name, with an outgoing added');
+    assert.equal(looksStale(doc(ours), base, ours), false, 'fresh copy, with documentation added');
+    assert.equal(looksStale(doc(base).replace('name="x"', 'name="z"'), base, ours), false, 'renamed again: concurrent');
+    // Children we changed count the same way: a moved shape's bounds back as they were.
+    const shapeBase = '<s id="s_di"><b x="1" y="1"/></s>';
+    const shapeOurs = '<s id="s_di"><b x="5" y="1"/></s>';
+    assert.equal(looksStale('<s id="s_di" stroke="red"><b x="1" y="1"/></s>', shapeBase, shapeOurs), true, 'old bounds, new colour');
+    assert.equal(looksStale('<s id="s_di" stroke="red"><b x="5" y="1"/></s>', shapeBase, shapeOurs), false, 'our bounds, new colour');
+    // A child we added (an outgoing of an appended flow) missing from an element the save changed.
+    const appended = base.replace('<in>f0</in>', '<in>f0</in><out>f1</out>');
+    assert.equal(looksStale(doc(base), base, appended), true, 'our outgoing missing, documentation added');
+    assert.equal(looksStale(doc(appended), base, appended), false, 'our outgoing there, documentation added');
+    // A copy from between two of our writes, with its own change to the element: old too.
+    const middle = base.replace('name="x"', 'name="m"');
+    const twice = base.replace('name="x"', 'name="n"');
+    assert.equal(looksStale(doc(middle), base, twice, [middle]), true, 'from between, with documentation added');
+    // An attribute we added (base: absent) is missing again.
+    const marked = base.replace('<t id="1"', '<t id="1" default="f0"');
+    assert.equal(looksStale(doc(base), base, marked), true, 'attribute we added missing');
+    // Duplicate ids are compared as a whole only.
+    const dup = '<p id="p"><t id="1" name="x"/><t id="1" name="q"/></p>';
+    assert.equal(looksStale(dup.replace('name="q"/>', 'name="q"><d/></t>'), dup, dup.replace('name="x"', 'name="y"')), false);
+  });
+
   it('containsChanges: every element our write changed has our form in the save (element level, by id)', () => {
     const base = '<p id="p">\n  <t id="1" name="x"/>\n  <e id="2"><b x="1"/></e>\n</p>\n';
     const ours = '<p id="p">\n  <t id="1" name="y"/>\n</p>\n'; // renamed 1, deleted 2

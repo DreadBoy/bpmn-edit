@@ -72,12 +72,15 @@ local-bpmn does not create new files.
   write less than 5 s after the one before, with no other program's change in between. The save lands
   within 5 s of the last of those writes. It counts as such a save if an element they changed is back
   as it was before them, or as it was after only some of them: the old name of an element you renamed,
-  an element you deleted, or no trace of an element you created. Then the file keeps that save (it may be deliberate, e.g. a revert), your
+  an element you deleted, or no trace of an element you created. This also holds when the other program
+  changed that element too: a task you renamed that comes back with its old name and documentation the
+  other program added counts as such a save. Then the file keeps that save (it may be deliberate, e.g. a revert), your
   latest version is saved next to it (see below), and every window says "The file was saved on disk
   from an older copy, without the latest changes; they were saved next to it as <file name>". A
   window that was disconnected is told when it reconnects. Edits that were still waiting to be
   written are re-applied on top of that save as usual; the side file has them too. An element the
-  other program changed in its own way (neither as before nor as yours) does not count. A revert of
+  other program changed in its own way counts only if something you changed in it is back as it was
+  (not if, e.g., it renamed the task you renamed to yet another name). A revert of
   your last edits within those 5 s gives the same notice and side file.
 - When an edit cannot be re-applied by anyone (its window has closed and has not reconnected within
   20 s, or local-bpmn is stopped before that, or the file changes again during shutdown), the file keeps

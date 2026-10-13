@@ -904,6 +904,45 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     expect(errors).toEqual([]);
   });
 
+  for (const change of ['documentation', 'outgoing']) {
+    test(`a save from an older copy that also changed the task renamed in the browser (${change}): the rename is kept next to it`, async ({ browser }) => {
+      // DEF-E1: the save changes the same element the browser just renamed, so it is not the old
+      // element as a whole; its old name still makes it an old copy.
+      await start();
+      const [A, B] = await open(browser);
+      const errors = [...collectPageErrors(A), ...collectPageErrors(B)];
+      await renameInBrowser(A, 'Ship order now');
+      await expect.poll(async () => nameInXml(await disk(), 'Task_ShipOrder'), { timeout: 3000 }).toBe('Ship order now');
+      await delay(5500); // that write is no longer recent: the IDE's copy below starts a new chain
+      const copy = await disk(); // the IDE's buffer, loaded before the next browser edit
+      const t0 = Date.now();
+
+      await renameInBrowser(A, 'Ship parcel');
+      await expect.poll(async () => nameInXml(await disk(), 'Task_ShipOrder'), { timeout: 3000 }).toBe('Ship parcel');
+      await delay(200);
+      const own = change === 'documentation'
+        ? '<bpmn:documentation>Use the tracked service</bpmn:documentation>'
+        : '<bpmn:outgoing>Flow_Extra</bpmn:outgoing>';
+      const stale = copy.replace(/(<bpmn:task id="Task_ShipOrder" name="[^"]*">)/, `$1\n      ${own}`);
+      expect(stale).not.toBe(copy);
+      await writeFile(fixture.file, stale); // saved without reloading, with its own change to that task
+
+      await expect.poll(async () => (await unsavedFiles(fixture.dir)).length, { timeout: 3000 }).toBe(1);
+      const [name] = await unsavedFiles(fixture.dir);
+      for (const page of [A, B]) {
+        await expect(toast(page)).toHaveText(
+          `The file was saved on disk from an older copy, without the latest changes; they were saved next to it as ${name}`,
+        );
+        await expect(label(page, 'Task_ShipOrder')).toHaveText('Ship order now'); // the file's version is shown
+      }
+      expect(await disk()).toBe(stale);
+      expect(nameInXml(await readFile(join(fixture.dir, name), 'utf8'), 'Task_ShipOrder')).toBe('Ship parcel');
+      expect((await toastsSince(A, t0)).map((t) => t.kind)).toContain('conflict');
+      expect(cli.stderr()).toContain(name);
+      expect(errors).toEqual([]);
+    });
+  }
+
   test('normal use with an IDE that reloads before it saves gives no stale-save notice', async ({ browser }) => {
     await start();
     const [A] = await open(browser, 1);
