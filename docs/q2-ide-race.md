@@ -151,3 +151,41 @@ The measurement spec above, re-run after this round: a–d 15/15, 15/15, 15/15 a
 changes on disk, no silent loss, nothing kept aside. New E2E case in
 `test/e2e/q2-ide-race.spec.js`: half-written file, browser edit written over it, then the IDE
 finishes its save; both changes are kept and window A shows the merged toast.
+
+## Round 4: the unconfirmed window
+
+The round-3 check (verifier script `run4.mjs`) found two defects in the 2 s "unconfirmed" window.
+
+- **D1, Ctrl-C while the IDE has broken the file again.** The IDE writes half its copy; the host
+  writes a browser edit over it (unconfirmed); 200–1000 ms later the IDE writes a partial file
+  again; SIGINT. Before: exit 0 at once, no stderr, no side file, the edit nowhere (17/17).
+  Shutdown ignored the unconfirmed write because nothing was pending. Fix: flush() keeps an
+  unconfirmed write aside when the file no longer holds it. Also, during the session an unconfirmed
+  write is now only confirmed once the file holds it at the end of the wait (before, the timer
+  confirmed it regardless and a later save of the IDE's copy replaced the edit silently). The wait
+  now restarts with each write.
+- **D2, false conflict toast.** File broken; window A drags "Ship order" 70 px, which the host writes
+  over it; an IDE that reloaded the file (so its copy has the move) saves a rename 350–1400 ms
+  later. Before: A showed "Your change to “Ship order” was not applied: it was changed on disk…"
+  though the move was on disk and in both windows (10/10). Fix: re-applying a move whose shapes are
+  already at the target counts as applied (labels, create, connect and delete were already
+  idempotent).
+- Also, right before the rename the host now re-stats the file synchronously and checks again if
+  it changed during the check, narrowing the remaining check-to-rename gap (see Known limits in
+  `docs/decisions.md`).
+
+| Verifier run (`run4.mjs`) | Before | After |
+|---|---|---|
+| ctrlCInv (partial again, SIGINT 0–60 ms later) | 0/10 ok | 10/10 ok (file left as the IDE's partial, edit in side file) |
+| ctrlCInv late (SIGINT 200–600 ms later) | 0/4 ok | 6/6 ok |
+| ctrlCInv noFinish (IDE never finishes) | 0/3 ok | 6/6 edit kept aside; the script flags 1 because it expects the IDE's change on disk, which the IDE never wrote |
+| freshMove (D2) | 0/10 ok | 10/10 ok, no toast |
+| slow 1500 / multi / close / ctrlC / ctrlCNoIde / closeNoIde / delRec / freshLabel | ok | 6/6 each |
+| slow 2500 (IDE finishes 2.5 s after the host's write, file untouched meanwhile) | silent 6/6 | silent 4/4: known limit, unchanged |
+
+Older scripts re-run: `run2.mjs invSlow` 6/6 ok; `run3.mjs flips` slow 7/10, all 3 flags being the
+short-lived-save transient (known limit, final file complete), no losses.
+
+New E2E cases: Ctrl-C after the slow save broke the file again (file left alone, edit kept aside,
+stderr names it), and a save that already contains a move made over a broken file (no conflict or
+dropped toast, move and rename both on disk).

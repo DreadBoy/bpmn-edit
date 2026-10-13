@@ -277,11 +277,20 @@ How it works:
   means another program is still writing (e.g. truncated and about to be rewritten), so the host
   waits until the file settles (no stat shortcut in that state).
 - Slow saves (`src/file.js`, `confirmMs`, 2 s): a write that replaced a missing or invalid file is
-  not reported as saved until the file has kept it for 2 s (another missing/invalid observation
-  restarts the wait). If a valid save arrives meanwhile (an IDE finishing a slow save from its own
-  copy, without the browser edit), it is treated like a change that replaced a pending write: the
-  edits are re-applied on top of it in their windows (merged toast), or kept aside if their window
-  has closed.
+  not reported as saved until the file has held our content for 2 s. The wait restarts with every
+  further write of ours and with every missing/invalid observation, and if the file does not hold
+  our content when it ends (the other program broke it again), the write stays unconfirmed for as
+  long as that lasts (the windows keep the "not valid BPMN" notice). If a valid save arrives while
+  unconfirmed (an IDE finishing a slow save from its own copy, without the browser edit), it is
+  treated like a change that replaced a pending write: the edits are re-applied on top of it in their
+  windows (merged toast), or kept aside if their window has closed. If the host shuts down while
+  unconfirmed and the file does not hold our content, flush() keeps it aside (side file + stderr).
+- Re-applying is idempotent (`web/app.js`): a label already at its new text, a created element or
+  connection already there, a deleted element already gone, and (new) a moved shape already at its
+  target position count as applied, with no toast. Before, a change on disk that already contained a
+  move (an IDE that reloaded the host's write) gave a false "changed on disk" conflict toast.
+- Replacing the file: right before the rename, the store re-stats the file synchronously and checks
+  again if it changed while being checked, so the remaining gap is the rename call itself.
 - Unwritten accepted edits: when a change on disk replaces a pending write, the session marks the
   disk version with `discardedAfter` (the last version that is on disk). The host also tells the
   windows when versions are on disk (`saved`), so each window keeps the edits of its acknowledged
@@ -313,24 +322,31 @@ wins, conflict toast with the exact text, file not overwritten later); Ctrl-C ri
 (both kept, exit 0); Ctrl-C with no window left (file keeps the save, edit kept aside, untracked in
 `git status`); a valid save just before the host write after the file was invalid, and after it was
 deleted (both kept); a slow save that finishes after the host wrote a browser edit over the
-half-written file (both kept, merged toast); a save replacing the unwritten edit of a window that
+half-written file (both kept, merged toast); Ctrl-C after the slow save broke the file again (file
+left alone, edit kept aside); a save that already contains a move made over a broken file (no false
+conflict toast); a save replacing the unwritten edit of a window that
 closed (edit kept aside, file keeps the save). The two S3 tests that asserted last-write-wins now assert that both changes are
 kept.
 
 ### Known limits
 
-- The pre-write check and the rename are two steps: a save landing in the microseconds between them is
-  still overwritten. The watcher then reads our content and reports nothing.
-- A broken file that has been quiet for the settle delay (150 ms) is replaced by the next browser
-  edit, as before. If the program that broke it finishes its save more than 2 s later (`confirmMs`),
-  that save replaces the browser edit like any save of a stale copy: every window reloads it ("Reloaded
-  from disk") but nobody is told the edit is gone. At shutdown a file still being written is left
-  alone and the editor's version is kept aside.
-- A save that is valid for less than the settle delay before the same program breaks the file
+- The pre-write check and the rename are separate steps. A save landing between the last check
+  (a synchronous stat) and the rename is overwritten, and the watcher then reads our content and
+  reports nothing. The gap is the rename call: normally well under a millisecond, but it grows under
+  heavy load (before the re-stat was added, a verifier run lost one IDE save in 20 heavily loaded
+  "invalid/valid flip" trials this way, with the gap spanning a whole file read).
+- A broken file that has been quiet for the settle delay is replaced by the next browser edit, as
+  before. If the program that broke it then leaves our content alone for 2 s (`confirmMs`) and only
+  afterwards finishes its save from its own copy, that save replaces the browser edit like any save of
+  a stale copy: every window reloads it ("Reloaded from disk") but nobody is told the edit is gone
+  (verifier: 4/4 with the IDE finishing 2.5 s after the host's write). While the file stays broken
+  (or is broken again) the write is not confirmed, so that case is merged or kept aside.
+- A save that is valid for less than the settle delay plus the watcher's latency (about 150 ms plus
+  a few ms to tens of ms) before the same program breaks the file
   again is never seen by the host. When the host then replaces the broken file it writes its last
   known valid version plus the browser edits, so `git diff` briefly lacks that short-lived save
-  until the program saves again (seen in 1 of 10 rapid "invalid/valid" flip trials; the final file
-  had everything).
+  until the program saves again (seen in 1–3 of 10 rapid "invalid/valid" flip trials; the final file
+  had everything every time).
 - With edits in two windows, a window re-applying an op on an element another window created (and
   has not re-created yet on top of the change on disk) is told the element was "deleted on disk";
   the wording is wrong in that case (inferred from the code, not reproduced).

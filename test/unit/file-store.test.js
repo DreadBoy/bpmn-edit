@@ -448,6 +448,29 @@ describe('createFileStore watching', () => {
     assert.deepEqual(saved, [variant(3)]);
   });
 
+  it('an unconfirmed write the file no longer holds stays unconfirmed, and flush() keeps it aside', async () => {
+    await start({ debounceMs: 0, settleMs: 50, confirmMs: 200 });
+    const saved = [];
+    const asides = [];
+    store.on('saved', ({ xml }) => saved.push(xml));
+    store.on('kept-aside', (a) => asides.push(a));
+    let reported = next('external-invalid');
+    await writeFile(file, original.slice(0, 200));
+    await reported;
+    store.write(variant(1));
+    await next('written');
+    reported = next('external-invalid');
+    await writeFile(file, original.slice(0, 300)); // broken again by the other program
+    await reported;
+    await delay(400);
+    assert.deepEqual(saved, [], 'never confirmed: the file does not hold it');
+    await store.unwatch();
+    await store.flush();
+    assert.equal(await readFile(file, 'utf8'), original.slice(0, 300));
+    assert.equal(asides.length, 1);
+    assert.equal(await readFile(asides[0].path, 'utf8'), variant(1));
+  });
+
   it('does not replace an invalid file that is still changing (waits until it settles)', async () => {
     await start({ debounceMs: 0, settleMs: 300 });
     const reported = next('external-invalid');

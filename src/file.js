@@ -2,6 +2,7 @@
 // for changes made on disk by other programs (IDE saves, git checkout, ...).
 import { watch as chokidarWatch } from 'chokidar';
 import { createHash, randomBytes } from 'node:crypto';
+import { statSync } from 'node:fs';
 import { EventEmitter } from 'node:events';
 import { open, readFile, realpath, rename, stat, unlink } from 'node:fs/promises';
 import { basename, dirname, extname, join } from 'node:path';
@@ -165,6 +166,11 @@ function sameStat(a, b) {
   return a !== null && b !== null && a.ino === b.ino && a.size === b.size && a.mtimeMs === b.mtimeMs;
 }
 
+/** sameStat, where null means "missing": two missing files are the same too. */
+function sameOrBothMissing(a, b) {
+  return (a === null && b === null) || sameStat(a, b);
+}
+
 /**
  * Debounced, serialised, atomic writer for one file.
  *
@@ -222,6 +228,16 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
   let checkingNow = false;   // checkNow() is running (shutdown)
   const savingAside = new Set(); // keepAside() calls still running (flush() waits for them)
   let provisional = null;    // { xml, timer } our writes over a missing/invalid file, not confirmed yet
+  let checkedStat = null;    // stat seen by the last externalContent() (null: missing)
+
+  /** The file's stat right now (synchronously), or null if it is missing. */
+  function currentStat() {
+    try {
+      return statKey(statSync(targetPath));
+    } catch {
+      return null;
+    }
+  }
   let unclaimedXml = null;   // write checkNow() dropped for a change on disk; saved aside by flush()
                              // unless new content is written meanwhile (the edits were re-applied)
 
@@ -233,8 +249,10 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
   async function externalContent() {
     let info;
     let xml;
+    checkedStat = null;
     try {
       info = statKey(await stat(targetPath));
+      checkedStat = info;
       if (diskXml !== null && sameStat(info, diskStat)) return null;
       xml = await readFile(targetPath, 'utf8');
     } catch (err) {
@@ -280,7 +298,12 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       } finally {
         await handle.close();
       }
-      const external = await externalContent();
+      let external = await externalContent();
+      // Narrow the gap to the rename: if the file changed while it was being checked (read), check
+      // again (a synchronous stat, so nothing else runs between it and starting the rename).
+      for (let i = 0; i < 3 && external === null && !sameOrBothMissing(currentStat(), checkedStat); i++) {
+        external = await externalContent();
+      }
       if (external !== null) {
         await unlink(tmp).catch(() => {});
         return { external };
@@ -371,9 +394,13 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
   }
 
   function confirmProvisional() {
+    provisional.timer = null;
     const { xml } = provisional;
+    // Only once the file holds our content: if the other program broke it again meanwhile, our
+    // write stays unconfirmed until its save arrives (re-applied on top), or flush() keeps it aside.
+    if (xml !== diskXml) return;
     provisional = null;
-    if (xml === diskXml) store.emit('saved', { xml });
+    store.emit('saved', { xml });
   }
 
   /** Ends the unconfirmed state (see confirmLater); returns the unconfirmed content, or null. */
@@ -405,7 +432,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       lastWrite = { xml, hash: sha256(xml), mtimeMs: result.stat.mtimeMs, size: result.stat.size };
       store.emit('written', lastWrite);
       if (replacesUnknown) confirmLater(xml);
-      else if (provisional) provisional.xml = xml; // still unconfirmed, like the write before it
+      else if (provisional) confirmLater(xml); // still unconfirmed, like the write before it: wait again
       else store.emit('saved', { xml });
       setDiskOk(); // e.g. our write recreated a deleted file
     } catch (err) {
@@ -618,8 +645,15 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
           }
           if (pendingXml !== null) ready = true;
           const active = kick();
-          if (!active) return;
+          if (!active) break;
           await active;
+        }
+        // An unconfirmed write over a broken file (see confirmLater) that the file no longer holds
+        // (another program broke or replaced it again, and nobody re-applied it): keep it aside.
+        if (provisional) {
+          const current = await readFile(targetPath, 'utf8').catch(() => null);
+          const unconfirmed = dropProvisional();
+          if (current !== unconfirmed) await keepAside(unconfirmed);
         }
       } finally {
         flushing -= 1;

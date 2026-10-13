@@ -7,7 +7,7 @@ import { expect, test } from '@playwright/test';
 import { readFile, unlink, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 import { collectPageErrors, startCli } from './helpers/cli.js';
-import { expectNoTempFiles, git, label, status, typeLabel } from './helpers/editor.js';
+import { dragBy, expectNoTempFiles, git, label, status, typeLabel } from './helpers/editor.js';
 import {
   ackAfter, asideFiles, ideRename, nameInXml, openWindow, renameInXml, setupRepoWithAutocrlf, toastsSince, windowNames,
 } from './helpers/q2.js';
@@ -166,6 +166,57 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     }
     await expect(toast(A)).toHaveAttribute('data-kind', 'merged');
     expect(await asideFiles(fixture.dir)).toEqual([]);
+    expect(errors).toEqual([]);
+  });
+
+  test('Ctrl-C while the slow save has broken the file again: the edit written over it is kept next to the file', async ({ browser }) => {
+    await start();
+    const [A] = await open(browser, 1);
+    const original = await disk();
+    const ideCopy = renameInXml(original, 'Task_CheckStock', 'Check stock levels');
+
+    await writeFile(fixture.file, ideCopy.slice(0, ideCopy.length / 2));
+    await expect(A.locator('#notice')).toHaveAttribute('data-kind', 'invalid', { timeout: 2000 });
+    await renameInBrowser(A, 'Ship parcel');
+    await expect.poll(async () => nameInXml(await disk(), 'Task_ShipOrder'), { timeout: 2000 }).toBe('Ship parcel');
+    await delay(300);
+    const broken = ideCopy.slice(0, 1000);
+    await writeFile(fixture.file, broken); // the IDE is at it again
+    await delay(50);
+    cli.child.kill('SIGINT');
+    expect(await cli.exited).toEqual({ code: 0, signal: null });
+
+    expect(await disk()).toBe(broken); // left alone: the IDE is still writing it
+    const aside = await asideFiles(fixture.dir);
+    expect(aside).toHaveLength(1);
+    expect(nameInXml(await readFile(join(fixture.dir, aside[0]), 'utf8'), 'Task_ShipOrder')).toBe('Ship parcel');
+    expect(cli.stderr()).toContain(`the editor's version was saved to ${join(fixture.dir, aside[0])}`);
+  });
+
+  test('a save on disk that already contains the edit (IDE reloaded it) does not report a false conflict', async ({ browser }) => {
+    await start();
+    const [A, B] = await open(browser);
+    const errors = [...collectPageErrors(A), ...collectPageErrors(B)];
+    const original = await disk();
+    const shipY = (xml) => Number(/id="Task_ShipOrder_di"[^>]*>\s*<dc:Bounds x="[^"]+" y="([^"]+)"/.exec(xml)?.[1]);
+    const y0 = shipY(original);
+
+    await writeFile(fixture.file, original.slice(0, original.length / 2));
+    await expect(A.locator('#notice')).toHaveAttribute('data-kind', 'invalid', { timeout: 2000 });
+    const t0 = Date.now();
+    await dragBy(A, 'Task_ShipOrder', 70);
+    await expect.poll(async () => shipY(await disk()), { timeout: 2000 }).toBeGreaterThan(y0 + 40);
+    const moved = shipY(await disk());
+    await delay(400);
+    await ideRename(fixture.file, 'Task_CheckStock', 'Check stock levels'); // from the reloaded file
+
+    await expect(label(A, 'Task_CheckStock')).toHaveText('Check stock levels', { timeout: 3000 });
+    await expect(label(B, 'Task_CheckStock')).toHaveText('Check stock levels');
+    await delay(1000);
+    const xml = await disk();
+    expect(nameInXml(xml, 'Task_CheckStock')).toBe('Check stock levels');
+    expect(shipY(xml)).toBe(moved);
+    expect((await toastsSince(A, t0)).filter((t) => t.kind === 'conflict' || t.kind === 'dropped')).toEqual([]);
     expect(errors).toEqual([]);
   });
 

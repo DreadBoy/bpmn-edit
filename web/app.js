@@ -700,6 +700,8 @@ function applyOp(op) {
       for (const entry of op.from) {
         const shape = get(entry.id);
         if (!shape) problems.push({ reason: 'deleted', name: entry.name });
+        // Already where this move puts it (e.g. the document already contains this edit): nothing to do.
+        else if (Math.abs(shape.x - entry.x - op.delta.x) <= 0.5 && Math.abs(shape.y - entry.y - op.delta.y) <= 0.5) continue;
         else if (Math.abs(shape.x - entry.x) > 0.5 || Math.abs(shape.y - entry.y) > 0.5) problems.push({ reason: 'changed', name: entry.name });
         else {
           shapes.push(shape);
