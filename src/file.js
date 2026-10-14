@@ -386,7 +386,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     }
   }
 
-  /** `<name>.local-bpmn-<kind>-<time>[-n].bpmn` next to the file, for attempt `n` (1, 2, …). */
+  /** `<name>.bpmn-edit-<kind>-<time>[-n].bpmn` next to the file, for attempt `n` (1, 2, …). */
   function asideName(kind, n) {
     const ext = extname(path);
     const stem = basename(path, ext === '.bpmn' ? ext : '');
@@ -394,7 +394,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     const pad = (x) => String(x).padStart(2, '0');
     const time = `${now.getFullYear()}${pad(now.getMonth() + 1)}${pad(now.getDate())}-`
       + `${pad(now.getHours())}${pad(now.getMinutes())}${pad(now.getSeconds())}`;
-    return join(dirname(path), `${stem}.local-bpmn-${kind}-${time}${n > 1 ? `-${n}` : ''}.bpmn`);
+    return join(dirname(path), `${stem}.bpmn-edit-${kind}-${time}${n > 1 ? `-${n}` : ''}.bpmn`);
   }
 
   /**
@@ -437,7 +437,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     file.link = null;
   }
 
-  /** Saves `xml` next to the file as <name>.local-bpmn-unsaved-<time>.bpmn; resolves to its path. */
+  /** Saves `xml` next to the file as <name>.bpmn-edit-unsaved-<time>.bpmn; resolves to its path. */
   async function saveAside(xml) {
     for (let n = 1; ; n++) {
       const aside = asideName('unsaved', n);
@@ -489,36 +489,36 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       aside = await saveAside(xml);
     } catch (err) {
       log(other
-        ? `local-bpmn: warning: another program's save of ${path} could not be kept (${err.message})\n`
-        : `local-bpmn: warning: ${path} changed on disk, but the editor's version could not be saved next to it `
+        ? `bpmn-edit: warning: another program's save of ${path} could not be kept (${err.message})\n`
+        : `bpmn-edit: warning: ${path} changed on disk, but the editor's version could not be saved next to it `
           + `(${err.message})${unconfirmed ? '' : '; writing it to the file instead'}\n`);
       return false;
     }
     if (other) {
-      log(`local-bpmn: warning: another program finished saving ${path} into the broken file the editor had `
+      log(`bpmn-edit: warning: another program finished saving ${path} into the broken file the editor had `
         + `replaced, while the file changed again; that save was saved to ${aside}\n`);
     } else if (stale) {
-      log(`local-bpmn: warning: ${path} was saved on disk from a copy without the editor's last changes; `
+      log(`bpmn-edit: warning: ${path} was saved on disk from a copy without the editor's last changes; `
         + `the file keeps that save, the editor's version was saved to ${aside}\n`);
     } else if (leftAlone) {
-      log(`local-bpmn: warning: another program is rewriting ${path} (it was ${diskState === 'missing' ? 'deleted' : 'broken'} `
-        + `just now); local-bpmn left it alone and saved the editor's version to ${aside}\n`);
+      log(`bpmn-edit: warning: another program is rewriting ${path} (it was ${diskState === 'missing' ? 'deleted' : 'broken'} `
+        + `just now); bpmn-edit left it alone and saved the editor's version to ${aside}\n`);
     } else if (busy) {
-      log(`local-bpmn: warning: another program was still writing ${path} when local-bpmn stopped, after `
+      log(`bpmn-edit: warning: another program was still writing ${path} when bpmn-edit stopped, after `
         + `the editor's last save; the editor's version was saved to ${aside}\n`);
     } else if (overwritten) {
-      log(`local-bpmn: warning: another program saved ${path} right after the editor's last save, from a copy `
+      log(`bpmn-edit: warning: another program saved ${path} right after the editor's last save, from a copy `
         + `without the editor's last changes; the file keeps that save, the editor's version was saved to ${aside}\n`);
     } else if (unconfirmed && kind === 'raced') {
-      log(`local-bpmn: warning: another program was writing ${path} while the editor replaced it; `
+      log(`bpmn-edit: warning: another program was writing ${path} while the editor replaced it; `
         + `the editor's version was also saved to ${aside}\n`);
     } else if (unconfirmed) {
       const ago = since === null ? '' : ` ${((Date.now() - since) / 1000).toFixed(1)} s ago`;
       const what = kind === 'recreated' ? `recreated the deleted ${basename(path)}` : `replaced the broken ${basename(path)}`;
-      log(`local-bpmn: warning: the editor ${what}${ago}; `
+      log(`bpmn-edit: warning: the editor ${what}${ago}; `
         + `its version was also saved to ${aside} (in case another program finishes an older save)\n`);
     } else {
-      log(`local-bpmn: warning: ${path} changed on disk while the editor's last changes were being saved; `
+      log(`bpmn-edit: warning: ${path} changed on disk while the editor's last changes were being saved; `
         + `the file keeps the version on disk, the editor's version was saved to ${aside}\n`);
     }
     store.emit('kept-aside', { path: aside, xml, ...(stale ? { reason: 'stale' } : {}) });
@@ -555,7 +555,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
   function watchReplaced() {
     if (replacedTimer) return;
     replacedTimer = setInterval(() => {
-      checkReplaced().catch((err) => log(`local-bpmn: error while checking ${path}: ${err.message}\n`));
+      checkReplaced().catch((err) => log(`bpmn-edit: error while checking ${path}: ${err.message}\n`));
     }, REPLACED_POLL_MS);
     replacedTimer.unref?.();
   }
@@ -687,7 +687,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     try {
       result = await writeAtomically(xml);
     } catch (err) {
-      log(`local-bpmn: warning: could not put back the save another program made to ${path} (${err.message})\n`);
+      log(`bpmn-edit: warning: could not put back the save another program made to ${path} (${err.message})\n`);
     } finally {
       inFlightXml = null;
     }
@@ -705,7 +705,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     lastWrite = { xml, hash: sha256(xml), mtimeMs: result.stat.mtimeMs, size: result.stat.size };
     blockedByDisk = false;
     chainOpen = false; // another program's save: our next write starts a new chain
-    log(`local-bpmn: warning: another program finished saving ${path} after the editor had replaced the `
+    log(`bpmn-edit: warning: another program finished saving ${path} after the editor had replaced the `
       + 'half-written file; its save was put back in place\n');
     store.emit('written', lastWrite);
     setDiskOk();
@@ -820,7 +820,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     } catch (err) {
       const error = new Error(`Could not write ${path}: ${err.message}`, { cause: err });
       error.code = err.code;
-      log(`local-bpmn: ${error.message}\n`);
+      log(`bpmn-edit: ${error.message}\n`);
       store.emit('write-error', error);
     } finally {
       inFlightXml = null;
@@ -919,7 +919,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
           store.emit('external-missing');
         }
       } else {
-        log(`local-bpmn: could not read ${path} after it changed on disk: ${err.message}\n`);
+        log(`bpmn-edit: could not read ${path} after it changed on disk: ${err.message}\n`);
       }
       return;
     }
@@ -990,7 +990,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
         try {
           await checkDisk();
         } catch (err) {
-          log(`local-bpmn: error while checking ${path}: ${err.message}\n`);
+          log(`bpmn-edit: error while checking ${path}: ${err.message}\n`);
         }
       } while (recheck && watcher);
     })().finally(() => { checking = null; });
@@ -1047,8 +1047,8 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
         const unconfirmed = dropProvisional();
         await keepAside(unconfirmed, { unconfirmed: current === unconfirmed, since, kind });
         for (const file of kept) {
-          log(`local-bpmn: warning: the half-written ${basename(path)} the editor replaced was kept as ${file.link}; `
-            + 'if the program that was writing it finishes its save after local-bpmn stopped, that save ends up there\n');
+          log(`bpmn-edit: warning: the half-written ${basename(path)} the editor replaced was kept as ${file.link}; `
+            + 'if the program that was writing it finishes its save after bpmn-edit stopped, that save ends up there\n');
         }
       } else if (lastWrite !== null && lastWriteAt !== null && postCheckedFor !== lastWriteAt
         && (Date.now() - lastWriteAt < REPLACED_WATCH_MS
@@ -1156,7 +1156,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       watcher.on('all', (event) => {
         if (event === 'add' || event === 'change' || event === 'unlink') onFsEvent();
       });
-      watcher.on('error', (err) => log(`local-bpmn: file watcher error: ${err.message}\n`));
+      watcher.on('error', (err) => log(`bpmn-edit: file watcher error: ${err.message}\n`));
       const current = watcher;
       await new Promise((resolveReady) => current.once('ready', resolveReady));
     },

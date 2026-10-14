@@ -29,7 +29,7 @@
 //   --probe-old2-s <n>     same for tunnel #2 (default 60)
 //   --gap-s <n>            minimum seconds between stopping tunnel #1 and opening tunnel #2 (default 150)
 //   --port <n>             CLI port (default 3917)
-//   --home <dir>           cloudflared cache home (default: LOCAL_BPMN_HOME or ~/.local-bpmn)
+//   --home <dir>           cloudflared cache home (default: BPMN_EDIT_HOME or ~/.bpmn-edit)
 //   --single               open only tunnel #1 (skip the restart part)
 //
 // Output files in --out: events.jsonl (timeline), startup.json, poll.jsonl, ws.jsonl, browser.jsonl,
@@ -45,7 +45,7 @@ import WebSocket from 'ws';
 import { cloudflareProvider, probeTunnelDns, startTunnel } from '../src/tunnel.js';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
-const CLI = join(ROOT, 'bin', 'local-bpmn.js');
+const CLI = join(ROOT, 'bin', 'bpmn-edit.js');
 const FIXTURE = join(ROOT, 'test', 'fixtures', 'order.bpmn');
 const LABELS = ['Order received', 'Check stock', 'In stock?', 'Ship order', 'Cancel order', 'Order shipped', 'Order cancelled'];
 
@@ -112,7 +112,7 @@ function startCli(n) {
     child.stdout.on('data', (d) => {
       tee('stdout')(d);
       stdout += d;
-      const m = /^local-bpmn: editing .+ at (http:\/\/\S+)$/m.exec(stdout);
+      const m = /^bpmn-edit: editing .+ at (http:\/\/\S+)$/m.exec(stdout);
       if (m) resolveStart({ child, exited, url: m[1], port: Number(new URL(m[1]).port) });
     });
     child.on('exit', () => reject(new Error(`CLI ${n} exited early; see ${log}`)));

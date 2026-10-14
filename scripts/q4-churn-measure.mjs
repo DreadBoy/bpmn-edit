@@ -1,8 +1,8 @@
 // Q4 experiment, step 1 of 2: capture what the real editor writes to disk after small UI edits.
 //
 // For every fixture in test/fixtures/q4/ (or the names given as arguments):
-//   1. copy it into a fresh git repo under $Q4_WORK (default: $TMPDIR/local-bpmn-q4) and commit it;
-//   2. start the real CLI on it (node bin/local-bpmn.js <file> --no-open) and open the URL in real
+//   1. copy it into a fresh git repo under $Q4_WORK (default: $TMPDIR/bpmn-edit-q4) and commit it;
+//   2. start the real CLI on it (node bin/bpmn-edit.js <file> --no-open) and open the URL in real
 //      Chrome (Playwright, channel 'chrome', headless);
 //   3. save 1: double-click task A, select all, type a new name, press Enter; wait until the file
 //      on disk changed and is stable; record git diff (plain, --stat, -w, --word-diff); commit;
@@ -22,7 +22,7 @@ import { startCli } from '../test/e2e/helpers/cli.js';
 const ROOT = new URL('..', import.meta.url).pathname;
 const FIXTURES = join(ROOT, 'test', 'fixtures', 'q4');
 const EVIDENCE = join(ROOT, 'docs', 'q4-evidence');
-const WORK = process.env.Q4_WORK || join(tmpdir(), 'local-bpmn-q4');
+const WORK = process.env.Q4_WORK || join(tmpdir(), 'bpmn-edit-q4');
 
 // Task A (renamed in save 1 and moved in save 3) and task B (renamed in save 2) per fixture.
 // Fixtures not listed use the first two named tasks found in the diagram.
@@ -38,7 +38,7 @@ const DEFAULT_TARGETS = ['Task_CheckStock', 'Task_ShipOrder'];
 const NAME_1 = 'Q4 first rename';
 const NAME_2 = 'Q4 zweite Änderung';
 
-const GIT = ['-c', 'user.name=q4 experiment', '-c', 'user.email=q4@local-bpmn.invalid', '-c', 'commit.gpgsign=false',
+const GIT = ['-c', 'user.name=q4 experiment', '-c', 'user.email=q4@bpmn-edit.invalid', '-c', 'commit.gpgsign=false',
   '-c', 'core.autocrlf=false', '-c', 'core.safecrlf=false'];
 const git = (dir, ...args) => execFileSync('git', [...GIT, ...args], { cwd: dir, encoding: 'utf8', maxBuffer: 64 << 20 });
 

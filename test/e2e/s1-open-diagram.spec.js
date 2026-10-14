@@ -40,7 +40,7 @@ test.describe('S1: open a diagram in the browser', () => {
     await page.goto(cli.url);
 
     await expect(page.locator('#file-name')).toHaveText('order.bpmn');
-    await expect(page).toHaveTitle('order.bpmn — local-bpmn');
+    await expect(page).toHaveTitle('order.bpmn — bpmn-edit');
 
     const canvas = page.locator('#canvas');
     const canvasBox = await canvas.boundingBox();

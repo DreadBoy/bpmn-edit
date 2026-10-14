@@ -3,20 +3,20 @@
 // https://<name>.trycloudflare.com URL. Tests then send requests to localhost with that Host header and a
 // Cloudflare header (cf-ray) to act as a collaborator coming through the tunnel.
 //
-// Selected only by the CLI's environment at startup (LOCAL_BPMN_TEST_TUNNEL); nothing reachable over HTTP
+// Selected only by the CLI's environment at startup (BPMN_EDIT_TEST_TUNNEL); nothing reachable over HTTP
 // can switch it on. Modes:
 //   fake                 every start succeeds
 //   rate-limited         every start fails with TUNNEL_RATE_LIMITED (Cloudflare's HTTP 429)
 //   rate-limited-once    the first start fails with TUNNEL_RATE_LIMITED, later ones succeed
 //   fail                 every start fails with a generic error
-// LOCAL_BPMN_TEST_TUNNEL_DELAY_MS (default 600) is how long a start takes.
+// BPMN_EDIT_TEST_TUNNEL_DELAY_MS (default 600) is how long a start takes.
 import { randomBytes } from 'node:crypto';
 
 export const TEST_TUNNEL_MODES = ['fake', 'rate-limited', 'rate-limited-once', 'fail'];
 
 export function testProviderFactory(mode, { delayMs = 600 } = {}) {
   if (!TEST_TUNNEL_MODES.includes(mode)) {
-    throw new Error(`LOCAL_BPMN_TEST_TUNNEL must be one of ${TEST_TUNNEL_MODES.join(', ')}`);
+    throw new Error(`BPMN_EDIT_TEST_TUNNEL must be one of ${TEST_TUNNEL_MODES.join(', ')}`);
   }
   let starts = 0;
   const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));

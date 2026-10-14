@@ -59,7 +59,7 @@ describe('WebSocket sync', () => {
   let server;
 
   before(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-ws-'));
+    dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-ws-'));
     file = join(dir, 'order.bpmn');
     await copyFile(FIXTURE, file);
     store = createFileStore(file, { debounceMs: 60_000 });
@@ -235,7 +235,7 @@ describe('live sync between clients', () => {
   let server;
 
   before(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-ws-'));
+    dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-ws-'));
     const file = join(dir, 'order.bpmn');
     await copyFile(FIXTURE, file);
     store = createFileStore(file, { debounceMs: 60_000 });
@@ -347,7 +347,7 @@ describe('live sync between clients', () => {
 
 describe('server close', () => {
   it('disconnects WebSocket clients and stops listening', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'local-bpmn-ws-'));
+    const dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-ws-'));
     const file = join(dir, 'order.bpmn');
     await copyFile(FIXTURE, file);
     const server = createServer({ filePath: file, port: 0 });
@@ -366,7 +366,7 @@ describe('server close', () => {
 
 describe('changes on disk', () => {
   it('pushes remote-update and file-status to clients, and file-status to new clients', async () => {
-    const dir = await mkdtemp(join(tmpdir(), 'local-bpmn-ws-'));
+    const dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-ws-'));
     const file = join(dir, 'order.bpmn');
     await copyFile(FIXTURE, file);
     const server = createServer({ filePath: file, port: 0 }); // creates and watches its own store

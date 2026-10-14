@@ -1,7 +1,7 @@
 // Request classification and secret checks for the security model (PLAN.md, "Security model"):
 //
 // - Host secret: random, created at startup, shown only in the URL the CLI prints/opens. The host's page
-//   sends it on host-only calls (`X-Local-Bpmn-Host` header) and on its WebSocket handshake (`?host=`).
+//   sends it on host-only calls (`X-Bpmn-Edit-Host` header) and on its WebSocket handshake (`?host=`).
 // - Session token: created when sharing starts, rotated when it stops; collaborators use `/s/<token>/`.
 // - A request carrying a Cloudflare header (`cf-connecting-ip` / `cf-ray`) came through the tunnel. The
 //   tunnel's cloudflared connects from 127.0.0.1, so the remote address cannot tell host and collaborator
@@ -11,7 +11,7 @@
 import { randomBytes, timingSafeEqual } from 'node:crypto';
 
 /** Header carrying the host secret on host-only HTTP calls. */
-export const HOST_SECRET_HEADER = 'x-local-bpmn-host';
+export const HOST_SECRET_HEADER = 'x-bpmn-edit-host';
 /** Query parameter carrying the host secret (page URL printed by the CLI, WebSocket handshake). */
 export const HOST_SECRET_PARAM = 'host';
 

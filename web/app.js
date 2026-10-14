@@ -60,10 +60,10 @@ const STATUS_TEXT = {
 };
 
 /**
- * Connection timing; tests may shorten it by defining `window.localBpmnTestConnection` before the
+ * Connection timing; tests may shorten it by defining `window.bpmnEditTestConnection` before the
  * page runs ({ heartbeatMs, delays, jitter, giveUpAttempts, giveUpMs, tunnelGoneMs }).
  */
-const testConnection = window.localBpmnTestConnection ?? {};
+const testConnection = window.bpmnEditTestConnection ?? {};
 const reconnectPolicy = { ...RECONNECT, ...testConnection };
 const heartbeatMs = testConnection.heartbeatMs ?? HEARTBEAT_MS;
 
@@ -90,7 +90,7 @@ const overlayActionEl = document.getElementById('session-overlay-action');
 
 /** Collaborator page (`/s/<token>/`): never has host powers. */
 const isCollaborator = location.pathname.startsWith('/s/');
-const HOST_SECRET_KEY = 'local-bpmn:host-secret';
+const HOST_SECRET_KEY = 'bpmn-edit:host-secret';
 let hostSecret = takeHostSecret();
 
 /** Forgets a host secret the host no longer accepts (it is from an earlier run of the CLI). */
@@ -143,7 +143,7 @@ let clientId = null;      // assigned by the host in 'init'
 
 // Exposed for tests and debugging.
 window.bpmnModeler = modeler;
-window.localBpmn = Object.freeze({
+window.bpmnEdit = Object.freeze({
   /** This window's id in the session (from the host), or null before 'init'. */
   get clientId() { return clientId; },
 });
@@ -243,7 +243,7 @@ function renderStatus() {
   statusEl.textContent = STATUS_TEXT[state];
   if (state === 'error') statusEl.title = lastError.message;
   else if (state === 'disconnected' && (unsent || hasUnconfirmedWork())) {
-    statusEl.title = 'Connection to local-bpmn lost; recent changes may not have been saved';
+    statusEl.title = 'Connection to bpmn-edit lost; recent changes may not have been saved';
   } else if (state === 'reconnecting' && hasUnconfirmedWork()) {
     statusEl.title = 'Your changes are kept and saved once the connection is back';
   } else statusEl.removeAttribute('title');
@@ -419,7 +419,7 @@ async function importDiagram(xml) {
   importing = true;
   try {
     const { warnings } = await modeler.importXML(xml);
-    if (warnings.length) console.warn('local-bpmn: diagram imported with warnings', warnings);
+    if (warnings.length) console.warn('bpmn-edit: diagram imported with warnings', warnings);
   } finally {
     importing = false;
   }
@@ -493,7 +493,7 @@ async function showRemoteDocument(message) {
     await importDiagram(message.xml);
   } catch (err) {
     // Never leave the editor blank or broken: go back to what was shown before.
-    console.warn('local-bpmn: could not show the changed document', err);
+    console.warn('bpmn-edit: could not show the changed document', err);
     try {
       await importDiagram(previousXml);
     } catch {
@@ -544,7 +544,7 @@ async function settleNow() {
     const unsentEdits = Boolean(dirty || localEdits.length || lostEdits.length);
     deferredUpdate = null;
     if (version !== null && message.version <= version) {
-      console.warn(`local-bpmn: an edit from this window replaced ${describeOrigin(message.origin)}`);
+      console.warn(`bpmn-edit: an edit from this window replaced ${describeOrigin(message.origin)}`);
     } else if (unsentEdits || mustRebase) {
       await rebaseLocalEdits(message);
     } else {
@@ -958,7 +958,7 @@ function applyOpChecked(op, touched) {
   });
   const missedSplice = Boolean(op.flowId) && !spliced;
   if (!foreign.length && !missedSplice) return result;
-  console.warn(`local-bpmn: re-applying an edit (${op.kind}) ${missedSplice ? 'could not drop it onto the same flow'
+  console.warn(`bpmn-edit: re-applying an edit (${op.kind}) ${missedSplice ? 'could not drop it onto the same flow'
     : `would also have changed ${foreign.join(', ')}`}; it was undone`);
   commandStack.undo();
   return { problems: [...result.problems, { reason: 'failed', name: op.name || op.from?.[0]?.name || op.kind }], kept: null };
@@ -997,7 +997,7 @@ async function replayEdits(edits, message) {
           problems.push(...result.problems);
           if (result.kept) kept.push(result.kept);
         } catch (err) {
-          console.error('local-bpmn: could not re-apply an edit', op, err);
+          console.error('bpmn-edit: could not re-apply an edit', op, err);
           failedAt = key;
           break;
         }
@@ -1030,7 +1030,7 @@ function reportProblems(problems, fromDisk = false) {
     failed: `Your change to “${name}” could not be applied on top of someone else's edit`,
   })[reason]);
   const unique = [...new Set(sentences)];
-  for (const sentence of unique) console.warn(`local-bpmn: ${sentence}`);
+  for (const sentence of unique) console.warn(`bpmn-edit: ${sentence}`);
   const kind = problems.some((p) => p.reason === 'changed') ? 'conflict' : 'dropped';
   showToast(kind, unique.length > 1 ? `${unique[0]} (+${unique.length - 1} more)` : unique[0], unique);
 }
@@ -1093,7 +1093,7 @@ function reportDiskMerge(edits, problems) {
     const sentences = pendingOverrides.map(({ name, id, kind }) => (kind === 'connection'
       ? `Your delete of “${name || id}” also removed a connection added on disk`
       : `Your delete of “${name || id}” removed a change made to it on disk`));
-    for (const sentence of sentences) console.warn(`local-bpmn: ${sentence}`);
+    for (const sentence of sentences) console.warn(`bpmn-edit: ${sentence}`);
     showToast('conflict', sentences.length > 1 ? `${sentences[0]} (+${sentences.length - 1} more)` : sentences[0], sentences);
     return;
   }
@@ -1104,7 +1104,7 @@ function reportDiskMerge(edits, problems) {
 /** Says that a save from an older copy replaced the latest saved edits, kept next to the file as `name`. */
 function showStaleSaveNotice(name) {
   const text = `The file was saved on disk from an older copy, without the latest changes; they were saved next to it as ${name}`;
-  console.warn(`local-bpmn: ${text}`);
+  console.warn(`bpmn-edit: ${text}`);
   showToast('conflict', text);
 }
 
@@ -1142,7 +1142,7 @@ function notifyOverrides(overrides) {
   const sentences = ours.map(({ name, id, kind }) => (kind === 'connection'
     ? `Your connection to “${name || id}” was removed: someone else deleted it at the same time`
     : `Your change to “${name || id}” was undone: someone else deleted it at the same time`));
-  for (const sentence of sentences) console.warn(`local-bpmn: ${sentence}`);
+  for (const sentence of sentences) console.warn(`bpmn-edit: ${sentence}`);
   for (const { id } of ours) recentChanges.delete(id);
   showToast('conflict', sentences.length > 1 ? `${sentences[0]} (+${sentences.length - 1} more)` : sentences[0], sentences);
 }
@@ -1152,7 +1152,7 @@ async function handleMessage(message) {
     case 'init': {
       const identity = message.path || message.name || null;
       if (fileIdentity !== null && identity !== fileIdentity) {
-        // A different local-bpmn now runs on this address (restarted on another file): never mix
+        // A different bpmn-edit now runs on this address (restarted on another file): never mix
         // this window's document into it.
         endSession('other-file', message.name);
         break;
@@ -1161,7 +1161,7 @@ async function handleMessage(message) {
       if (message.name) {
         fileNameEl.textContent = message.name;
         fileNameEl.title = message.path || message.name;
-        document.title = `${message.name} — local-bpmn`;
+        document.title = `${message.name} — bpmn-edit`;
       }
       clientId = message.clientId ?? null;
       checkRole(message.role, everSynced);
@@ -1217,7 +1217,7 @@ async function handleMessage(message) {
         inflight = null;
       }
       lastError = { code: message.code, message: message.message };
-      console.warn(`local-bpmn: ${message.code}: ${message.message}`);
+      console.warn(`bpmn-edit: ${message.code}: ${message.message}`);
       settleLocalActivity();
       break;
     case 'flush':
@@ -1278,7 +1278,7 @@ async function shareRequest(method) {
   const response = await fetch('api/share', {
     method,
     cache: 'no-store',
-    headers: { 'X-Local-Bpmn-Host': hostSecret },
+    headers: { 'X-Bpmn-Edit-Host': hostSecret },
   });
   let body = null;
   try {
@@ -1368,7 +1368,7 @@ function checkRole(role, reconnected) {
   shareEl.hidden = true;
   hideShareError();
   if (reconnected) {
-    showToast('info', 'local-bpmn was restarted. This tab can still edit; to share, open the link printed in the terminal.');
+    showToast('info', 'bpmn-edit was restarted. This tab can still edit; to share, open the link printed in the terminal.');
   }
 }
 
@@ -1451,7 +1451,7 @@ async function resync(message) {
  * the host's 'init' (`instance`, `saved`, `discards`, see src/server.js). Same host session: edits a
  * change on disk discarded (version inside a discards range) move to lostEdits to be re-applied;
  * edits up to `saved` are on disk and forgotten; the rest are still waiting for the host's write
- * (they are in its document) and keep waiting for 'saved'. Another host session (local-bpmn was
+ * (they are in its document) and keep waiting for 'saved'. Another host session (bpmn-edit was
  * restarted): versions mean nothing any more and that host wrote or kept aside what it had accepted
  * when it stopped, so they are forgotten. Returns whether edits were moved to lostEdits.
  */
@@ -1520,17 +1520,17 @@ const ENDED_TEXT = {
   ended: {
     title: 'Session ended',
     text: 'The host closed this session.',
-    local: 'local-bpmn was stopped. Run it again and open the link it prints, or reconnect once it runs again.',
+    local: 'bpmn-edit was stopped. Run it again and open the link it prints, or reconnect once it runs again.',
   },
   'link-gone': { title: 'Session ended', text: 'This link no longer works. Ask the host for a new link.' },
   unreachable: { title: 'Session ended', text: 'Lost the connection to the host and could not reconnect.' },
-  'other-file': { title: 'Session ended', text: 'local-bpmn now edits another file here.' },
+  'other-file': { title: 'Session ended', text: 'bpmn-edit now edits another file here.' },
 };
 
 /**
  * The session is over for this window: stop reconnecting, close the connection and say so in an
  * overlay (the diagram stays visible behind it). Local windows (not collaborators) can try to
- * reconnect from there, e.g. after the host restarted local-bpmn.
+ * reconnect from there, e.g. after the host restarted bpmn-edit.
  */
 function endSession(reason, detail) {
   if (ended) return;
@@ -1549,7 +1549,7 @@ function endSession(reason, detail) {
   overlayEl.dataset.reason = reason;
   overlayTitleEl.textContent = copy.title;
   let text = (!isCollaborator && copy.local) || copy.text;
-  if (reason === 'other-file' && detail) text = `local-bpmn now edits ${detail} here.`;
+  if (reason === 'other-file' && detail) text = `bpmn-edit now edits ${detail} here.`;
   // The host writes (or keeps aside) what it accepted when it ends the session or stops sharing;
   // otherwise accepted edits not confirmed on disk may be lost too.
   if (hasUnsavedWork() || unsent) text += ' Your latest changes could not be saved.';
@@ -1582,7 +1582,7 @@ function startHeartbeat() {
     if (!isOpen()) return;
     if (lastPingAt !== null && lastReceivedAt < lastPingAt) {
       // Nothing (not even the 'pong') since the last ping: the connection is dead without a close.
-      console.warn('local-bpmn: no answer from the host; reconnecting');
+      console.warn('bpmn-edit: no answer from the host; reconnecting');
       const old = socket;
       socket = null;
       old.close();

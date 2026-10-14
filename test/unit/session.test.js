@@ -173,7 +173,7 @@ describe('Session and changes on disk', () => {
     assert.equal(session.reportUnreadable(3, 'no diagram to display'), true);
     assert.equal(session.applyUpdate(variant(3), 2, 'a'), 4);
     assert.equal(logs.length, 1);
-    assert.match(logs[0], /^local-bpmn: warning: an edit from the browser replaced a change made on disk that the editor could not display/);
+    assert.match(logs[0], /^bpmn-edit: warning: an edit from the browser replaced a change made on disk that the editor could not display/);
     assert.throws(() => session.applyUpdate(variant(4), 2, 'b'), (err) => err.code === 'conflict');
   });
 

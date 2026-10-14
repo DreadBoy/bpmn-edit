@@ -1,4 +1,4 @@
-# local-bpmn
+# bpmn-edit
 
 A single `npx` command that opens a BPMN file from your repo in a browser-based editor, saves changes back to disk, and lets you invite collaborators with a link.
 
@@ -13,7 +13,7 @@ A single `npx` command that opens a BPMN file from your repo in a browser-based 
 ### Host flow
 
 ```
-npx local-bpmn flows/order.bpmn
+npx bpmn-edit flows/order.bpmn
 ```
 
 1. Starts a local HTTP + WebSocket server (e.g. `localhost:3000`).
@@ -70,7 +70,7 @@ npx local-bpmn flows/order.bpmn
 ### Tunnel (share)
 
 - **Cloudflare quick tunnels** via `cloudflared`: no account, random public HTTPS URL, WebSocket support.
-  - Fetch the platform binary on first use (cache in `~/.local-bpmn/`), or use an npm wrapper that does this.
+  - Fetch the platform binary on first use (cache in `~/.bpmn-edit/`), or use an npm wrapper that does this.
   - Alternatives behind the same interface: `ngrok` (account, stable domains), `localtunnel`, `bore`.
 - Security: public URL + unguessable session token in the path; host can revoke by restarting the share. Optional `--password`.
 - Tailscale Funnel as a later option for teams already on Tailscale.
@@ -85,8 +85,8 @@ npx local-bpmn flows/order.bpmn
 ## Package layout
 
 ```
-local-bpmn/
-  bin/local-bpmn.js        # CLI entry
+bpmn-edit/
+  bin/bpmn-edit.js         # CLI entry
   src/server.js            # http + ws
   src/file.js              # read/write/watch
   src/tunnel.js            # cloudflared lifecycle

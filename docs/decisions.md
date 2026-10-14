@@ -15,7 +15,7 @@ p95 edit-to-visible latency above 500 ms on the large diagram means switching to
 ### Experiment
 
 `test/e2e/q1-sync.measure.spec.js` (not part of the regular suite; run with
-`LOCAL_BPMN_MEASURE=1 LOCAL_BPMN_MEASURE_OUT=<dir> npx playwright test q1-sync.measure`). It starts the
+`BPMN_EDIT_MEASURE=1 BPMN_EDIT_MEASURE_OUT=<dir> npx playwright test q1-sync.measure`). It starts the
 real CLI, opens 2 or 3 separate Chrome contexts (1280×800) and makes every edit with the real mouse and
 keyboard; state is only read with `page.evaluate`. macOS, Google Chrome via Playwright, everything on
 localhost.
@@ -182,7 +182,7 @@ Why this and not the alternatives:
   need jsdom. Latency does not require it (p95 388 ms on 304 elements, dominated by the debounce).
 - The chosen design reuses the existing full-XML protocol (one new message type, one optional field), keeps the host a
   dumb, ordered version store, and confines merge logic to the op capture/re-apply that already
-  existed. The recorded ops are also the natural input for the Yjs upgrade path in `local-bpmn.md`:
+  existed. The recorded ops are also the natural input for the Yjs upgrade path in `bpmn-edit.md`:
   they are already id-based element operations, the mapping to a `Y.Map` of elements needs.
 
 ### Known limits
@@ -330,12 +330,12 @@ How it works:
   version was kept)" (`conflict`), "…it was deleted on disk" (`dropped`). A delete re-applied over an
   element that was changed on disk says so in the deleting window ("Your delete of “…” removed a
   change made to it on disk").
-- Shutdown (`bin/local-bpmn.js`; full order with S7/S8 below): after the windows sent their last edits, the host
+- Shutdown (`bin/bpmn-edit.js`; full order with S7/S8 below): after the windows sent their last edits, the host
   checks the file at once (`session.checkDisk()` → `store.checkNow()`, no settle delay). If a change
   replaced unwritten edits, the windows get it, re-apply and send again (second drain, 1 s max) before
   the final write. If nobody re-applied them (no window left, or the drain timed out), or the file
   changes between that check and the final write, the file keeps its content and the editor's
-  version is saved next to it as `<name>.local-bpmn-unsaved-<yyyymmdd-hhmmss>.bpmn` (shows up in
+  version is saved next to it as `<name>.bpmn-edit-unsaved-<yyyymmdd-hhmmss>.bpmn` (shows up in
   `git status`), with a stderr warning naming the file.
 
 Verified by `test/e2e/q2-ide-race.spec.js` (regular suite): accepted edit + IDE save of another
@@ -379,7 +379,7 @@ close 4002) and merged after them. What the merge decided:
   the window moves its `unsavedEdits` inside a discard range to `lostEdits` (re-applied, "merged"
   toast and disk wording since the cause was a change on disk), forgets those up to `saved`, and keeps
   the rest waiting (they are in the host's document; a later `discardedAfter` still finds them). With
-  another `instance` (local-bpmn restarted) `unsavedEdits` are forgotten: the old host wrote them or kept
+  another `instance` (bpmn-edit restarted) `unsavedEdits` are forgotten: the old host wrote them or kept
   them aside when it stopped. `lostEdits`, `inflight` and `localEdits` are never written by anyone but
   this window, so they survive any reconnect and are re-applied as in S8.
   So nothing confirmed written is re-applied (no resurrection), nothing is applied twice (an update
@@ -388,7 +388,7 @@ close 4002) and merged after them. What the merge decided:
   offline edits are kept. E2E: `q2-ide-race.spec.js`, "…window that was disconnected: it re-applies it
   on reconnect, with its offline edit" and "an edit already written before the connection dropped is
   not re-applied after a reconnect".
-- Shutdown order (`bin/local-bpmn.js`): stop accepting → drain (windows send their edits) → check the
+- Shutdown order (`bin/bpmn-edit.js`): stop accepting → drain (windows send their edits) → check the
   file now (`session.checkDisk()`) and, if a change replaced accepted edits, drain again so the windows
   re-apply them → stop watching → `endSession` (4002 to every window) → stop the share and do the final
   write (`store.flush()`, which keeps the editor's version aside if the file changed meanwhile) → exit.
@@ -453,7 +453,7 @@ discard. Fix (`src/session.js`):
   for, the document is dropped.
 - If an origin of an unresolved discard is gone (closed, or terminated by the keepalive), the
   document is kept aside after a grace period of 20 s (`REAPPLY_GRACE_MS`;
-  `LOCAL_BPMN_REAPPLY_GRACE_MS`, hidden, for tests), unless a reconnected window re-applies first.
+  `BPMN_EDIT_REAPPLY_GRACE_MS`, hidden, for tests), unless a reconnected window re-applies first.
   At shutdown, after the windows had their chance (both drains, then `endSession`), every unresolved
   discard is kept aside (`keepUnapplied()`).
 - stderr names the case: "…changed on disk before the latest edits were saved, and the window that
@@ -542,7 +542,7 @@ element came back, with no side file and no stderr line. Before: 10/10 (`x-adv` 
   alone for 50 ms, at most 1 s more) before it is judged. Before, two half-written saves that then
   finished with our edit gave redundant side files and a misleading "the file keeps that save".
   If the file is still being written at the deadline, ours is kept aside with "another program was
-  still writing … when local-bpmn stopped".
+  still writing … when bpmn-edit stopped".
 - After: X2 delete 0/10 lost, 10/10 kept aside. X2 rename: 2/10 lost, and only where the IDE wrote
   314–344 ms after SIGINT, i.e. after the re-check or after exit (the stale-copy limit below);
   every save inside the window was caught. `c-ctrlc` afterSigint: 0/12 lost, 0 redundant side
@@ -598,7 +598,7 @@ afterSigint on the fixes above).
   file, gone after exit: 1/12 IDE changes lost (afterSigint, slow descriptor).
   - Fix: `flush({ final: true })` (only the CLI's shutdown) leaves a file that became broken or
     disappeared less than `confirmMs` ago to the program rewriting it. The pending edits are kept
-    aside ("another program is rewriting … local-bpmn left it alone").
+    aside ("another program is rewriting … bpmn-edit left it alone").
 - After: Z2 by path 0/10 lost (side file with the edit 10/10); afterSigint 0/12 lost.
 - Tests: E2E "Ctrl-C while another program is rewriting the file from an older copy: the written
   edit is kept next to it" and "Ctrl-C while another program has just begun a slow in-place save:
@@ -650,7 +650,7 @@ disabled.
   unlinked file after exit. Before: Z2 by descriptor 7/10 IDE changes lost.
 - Fix:
   - Right before the rename that replaces a broken file, the file gets a second name, a hard link
-    `<name>.local-bpmn-replaced-<time>.bpmn`. It is made synchronously, checked to be the same inode
+    `<name>.bpmn-edit-replaced-<time>.bpmn`. It is made synchronously, checked to be the same inode
     as the file that was checked, and made before the rename because macOS cannot link an open,
     unlinked file.
   - The link is removed when the write is confirmed, when a save found there is put back, when a save
@@ -864,7 +864,7 @@ reaches the canvas".
   file is unconfirmed: if the program pauses for longer than `confirmMs` (2 s) after its last write
   into the replaced file before finishing, or never writes there again after our rename until then,
   its save is lost as in the limit above. If the host is stopped while the program is still writing
-  into the replaced file, its save ends up in the kept `….local-bpmn-replaced-….bpmn` (fourth check,
+  into the replaced file, its save ends up in the kept `….bpmn-edit-replaced-….bpmn` (fourth check,
   R1), not in the file itself: the user has to look there.
 - The host remembers only the newest accepted update per page and only for the last 1000 pages; an
   older page key falls back to S8's behaviour (the update in flight is re-applied).
@@ -878,7 +878,7 @@ reaches the canvas".
 - Conflict detection is per property (label text, position) as in Q1; a change on disk to other
   attributes of an element the browser edits at the same time is kept (the browser op only touches
   its own property), but the browser cannot report it.
-- A save from a stale copy: another program reads the file, local-bpmn writes a browser edit, and the
+- A save from a stale copy: another program reads the file, bpmn-edit writes a browser edit, and the
   program later writes its older copy back (an IDE buffer loaded before the edit reached the file,
   saved without reloading). That save is newer on disk and replaces the edit. How often this happens
   depends only on the timing of the other program's read and write (verifiers saw 2 to 5 of 10 with
@@ -932,10 +932,10 @@ rate limiting.
 
 Persistent links are out of scope for v1. A quick tunnel gets a new hostname on every start, so every
 Share (and every CLI restart) gives a new link, and the old one stops working at once (Cloudflare error
-1033, which local-bpmn cannot customise). The README (S9) has to say so: collaborators need the new link.
+1033, which bpmn-edit cannot customise). The README (S9) has to say so: collaborators need the new link.
 
 Why: the only way to a stable hostname is a named tunnel, which needs the user's own Cloudflare account and
-domain plus a browser login or dashboard token, so `npx local-bpmn` cannot set it up for anyone, and the
+domain plus a browser login or dashboard token, so `npx bpmn-edit` cannot set it up for anyone, and the
 session token in `/s/<token>` would also have to be persisted across restarts. If ever wanted, it is a
 separate opt-in feature (e.g. a `--tunnel-token` option running `cloudflared tunnel run --token`), not
 something to block v1 on. Within one run the quick tunnel's HTTP path was stable, which is what v1 needs.
@@ -952,7 +952,7 @@ tunnel stays connected (or recovers transparently). S7 wires sharing up without 
   guarantee ("for testing and development"), and Cloudflare rate-limits their creation per IP (HTTP 429;
   ~5 in a burst locked tunnels out for more than 35 min). The Share UI reports this as such and lets the
   user retry; it never retries on its own.
-- Quick tunnels allow at most 200 in-flight requests and no Server-Sent Events (local-bpmn uses neither).
+- Quick tunnels allow at most 200 in-flight requests and no Server-Sent Events (bpmn-edit uses neither).
 - The 125 s cut is attributed to Cloudflare's proxy read timeout by the matching number only.
 
 ## S5/S6: presence protocol
@@ -1024,7 +1024,7 @@ How the security model of `PLAN.md` is implemented (`src/security.js`, `src/serv
   prints and opens, `http://localhost:PORT/?host=<secret>`. The page moves it out of the address bar at
   once (`history.replaceState`, which also rewrites the history entry) into `sessionStorage`, so a reload
   keeps host powers but the secret is not bookmarked, shown on screen or copied with the URL. It is sent
-  only to the same origin: in an `X-Local-Bpmn-Host` header on `/api/share` and as `?host=` on the
+  only to the same origin: in an `X-Bpmn-Edit-Host` header on `/api/share` and as `?host=` on the
   WebSocket URL. Every response carries `Referrer-Policy: no-referrer` (and the page a matching meta tag),
   so neither the secret nor a collaborator's session token leaks to bpmn.io through the watermark link.
   Collaborators never receive it: nothing the server sends contains it, and a socket opened under
@@ -1046,7 +1046,7 @@ How the security model of `PLAN.md` is implemented (`src/security.js`, `src/serv
   `path` in `init` or `api/file`, and a failed save is reported as "Could not save <name> on the host's
   machine (<code>)" instead of the file system message (which names the directory). The host's own
   windows keep the full path (tooltip, errors).
-- **Tests without Cloudflare**: `LOCAL_BPMN_TEST_TUNNEL=fake | rate-limited | rate-limited-once | fail`
+- **Tests without Cloudflare**: `BPMN_EDIT_TEST_TUNNEL=fake | rate-limited | rate-limited-once | fail`
   in the CLI's environment swaps in a stand-in provider (`src/test-tunnel.js`) that opens nothing and
   hands out a made-up `*.trycloudflare.com` URL; tests then send the Cloudflare headers to localhost
   themselves. It can only be chosen at startup through the environment, never over HTTP.
@@ -1060,13 +1060,13 @@ Known limits:
 - Anyone who can read the terminal output or the process list while the browser is launched sees the
   secret; that is the same user on the same machine.
 - Stopping the CLI while a tunnel is still starting does not wait for it: the tunnel module kills
-  cloudflared on exit, and a partly downloaded binary leaves a temporary directory in `~/.local-bpmn/bin`
+  cloudflared on exit, and a partly downloaded binary leaves a temporary directory in `~/.bpmn-edit/bin`
   (`.cloudflared-*`) that is not cleaned up.
 
 ## S8: keepalive, reconnect and the end of a session
 
 Implemented in `src/server.js` (keepalive, close codes, `role` in `init`, `endSession`), `src/presence.js`
-(replacing a reconnected page's entry), `bin/local-bpmn.js` (shutdown order), `web/app.js` (reconnect,
+(replacing a reconnected page's entry), `bin/bpmn-edit.js` (shutdown order), `web/app.js` (reconnect,
 re-sync, overlay) and `web/connection-shared.js` (the numbers below, shared by host and page).
 
 ### Keepalive
@@ -1074,7 +1074,7 @@ re-sync, overlay) and `web/connection-shared.js` (the numbers below, shared by h
 - The host sends a WebSocket ping to every socket every **30 s** and terminates a socket that has not
   answered the previous ping (pong, or any message) by the next tick, so a dead connection is gone after
   30–60 s. That also removes connections that died without closing from the users list (backlog item from
-  S5/S6). `LOCAL_BPMN_KEEPALIVE_MS` (hidden, for tests; 0 = off) changes the interval.
+  S5/S6). `BPMN_EDIT_KEEPALIVE_MS` (hidden, for tests; 0 = off) changes the interval.
 - Why 30 s: Cloudflare cuts an idle WebSocket through the quick tunnel after ~125 s (Q3); 30 s leaves room
   for a lost ping and slow networks while adding one small frame per socket and half minute.
 - The page also sends `{ type: 'ping' }` every 30 s and expects the `pong` (or any message) before the
@@ -1095,7 +1095,7 @@ re-sync, overlay) and `web/connection-shared.js` (the numbers below, shared by h
 | Code | Sent when | Page shows | Reconnects |
 |---|---|---|---|
 | 4001 `share-stopped` | Stop sharing (S7), to collaborators of that link | overlay "Sharing stopped" — "The host stopped sharing. This link no longer works." | no |
-| 4002 `session-ended` | host Ctrl-C / SIGTERM, after the editors flushed their edits (and re-applied them on a last-moment change on disk, Q2) and before the tunnel stops | overlay "Session ended"; collaborators "The host closed this session.", local windows a hint to run local-bpmn again plus a **Reconnect** button | no (only on Reconnect) |
+| 4002 `session-ended` | host Ctrl-C / SIGTERM, after the editors flushed their edits (and re-applied them on a last-moment change on disk, Q2) and before the tunnel stops | overlay "Session ended"; collaborators "The host closed this session.", local windows a hint to run bpmn-edit again plus a **Reconnect** button | no (only on Reconnect) |
 | anything else (1006, 1001, …) | network, tunnel, killed host process | "Reconnecting…" banner, status "Reconnecting…" | yes |
 
 The shutdown order matters: the host now calls `endSession()` (4002 to every socket, waits up to 1 s for
@@ -1154,7 +1154,7 @@ duplicate, even before the keepalive would notice the old connection. The key is
 - After a restart on the same port (Ctrl-C then start again, or the process killed and started again while
   the tab is still retrying), the host's tab reconnects and keeps its edits, but **as a plain local
   editor**: its host secret belongs to the old run, so the host does not accept it (`init` now says
-  `role: 'local'`). The page forgets the stale secret, hides Share and says "local-bpmn was restarted. This
+  `role: 'local'`). The page forgets the stale secret, hides Share and says "bpmn-edit was restarted. This
   tab can still edit; to share, open the link printed in the terminal." A stale secret never grants host
   rights (it is compared with the new run's secret only; there is nothing persisted).
 - Collaborators of the old run cannot get back in: the old token does not exist in the new run (404 on the
@@ -1179,15 +1179,15 @@ duplicate, even before the keepalive would notice the old connection. The key is
   `LICENSE`), `README.md` and `LICENSE` (npm adds `package.json`). Tests, fixtures, `scripts/`, `docs/`,
   `test-results/` and local tool directories are not shipped: 33 files, ~397 kB packed, ~1.2 MB unpacked
   (`npm pack --dry-run`), most of it the vendored bpmn-js build and its font.
-- `src/test-tunnel.js` (the stand-in tunnel provider for tests, S7) **is shipped**. `bin/local-bpmn.js`
+- `src/test-tunnel.js` (the stand-in tunnel provider for tests, S7) **is shipped**. `bin/bpmn-edit.js`
   imports it statically, so leaving it out would break the installed CLI at startup. Making the import
   dynamic so the file could be dropped was not worth it: it is 2.4 kB, opens no network connection, and is
-  used only when `LOCAL_BPMN_TEST_TUNNEL` is set in the CLI's environment (never over HTTP), in which case
+  used only when `BPMN_EDIT_TEST_TUNNEL` is set in the CLI's environment (never over HTTP), in which case
   the CLI says "TEST MODE" on stderr. Shipping it also means the E2E suite runs exactly the code users get.
-- Hidden, environment-only knobs that ship but are not in the README: `LOCAL_BPMN_CLOUDFLARED_URL_BASE`
-  (where `cloudflared` is downloaded from; default: the latest GitHub release), `LOCAL_BPMN_KEEPALIVE_MS`,
-  `LOCAL_BPMN_REAPPLY_GRACE_MS` (Q2),
-  `LOCAL_BPMN_TEST_TUNNEL`, plus the hidden `--write-delay` option.
+- Hidden, environment-only knobs that ship but are not in the README: `BPMN_EDIT_CLOUDFLARED_URL_BASE`
+  (where `cloudflared` is downloaded from; default: the latest GitHub release), `BPMN_EDIT_KEEPALIVE_MS`,
+  `BPMN_EDIT_REAPPLY_GRACE_MS` (Q2),
+  `BPMN_EDIT_TEST_TUNNEL`, plus the hidden `--write-delay` option.
 - Q3 wrap-up: the README states that every Share and every restart gives a new link and that persistent
   links are out of scope for v1 (see Q3 above).
 
@@ -1199,12 +1199,12 @@ with no per-test opt-in. v1 support stays Chrome-only; the other two guard again
 breakage. Still one worker: specs start CLIs on random ports, but several windows per test and
 timing-sensitive sync checks were only measured serially.
 
-- Whole matrix: `LOCAL_BPMN_SKIP_TUNNEL_E2E=1 npm run test:e2e`.
+- Whole matrix: `BPMN_EDIT_SKIP_TUNNEL_E2E=1 npm run test:e2e`.
 - One browser: `npx playwright test --project=chrome` (or `firefox`, `webkit`); several projects can be
   given. Combine with a file or `-g` as usual.
 - The real-tunnel specs (`s7-share-tunnel`, `s8-keepalive-tunnel`) run in Chrome only, also without
-  `LOCAL_BPMN_SKIP_TUNNEL_E2E` (Cloudflare rate-limits quick tunnels, so the matrix never starts more).
-  Measurement specs stay behind `LOCAL_BPMN_MEASURE`.
+  `BPMN_EDIT_SKIP_TUNNEL_E2E` (Cloudflare rate-limits quick tunnels, so the matrix never starts more).
+  Measurement specs stay behind `BPMN_EDIT_MEASURE`.
 
 ### Triage of the first matrix run
 
@@ -1215,7 +1215,7 @@ timing-sensitive sync checks were only measured serially.
 | s5-toolbar-layout: both tests | WebKit (fires in all three) | Product: re-fitting the users list changed its height (18 px "+N" vs 19 px own entry), so its ResizeObserver reported "ResizeObserver loop completed with undelivered notifications". Only Playwright's WebKit reports it as a page error. | Fixed in `web/presence.css`: the list has a fixed height. |
 | s7-share: host shares … Copy … | Firefox, WebKit | Harness: Playwright knows `clipboard-read`/`clipboard-write` only in Chromium; WebKit knows `clipboard-read` only; Firefox neither (and allows both after a click). | Permissions per browser in the test. |
 | s8-session: host process killed and restarted … | Firefox | Harness: Firefox words the failed WebSocket handshakes while the host is down differently ("can’t establish a connection to the server at ws://…", now and then "The connection to ws://… was interrupted while the page was loading."). | Added to the expected-while-down messages. |
-| s8-session: a dropped connection …; heartbeat … | WebKit | Harness: with `page.routeWebSocket` (the test's proxy), when the host terminates the server half of a connection whose page half is already closed, Playwright's WebKit logs "WebSocket connection … failed: The network connection was lost." for the page. Reproduced without local-bpmn. WebKit logs the same message whenever the server terminates a live socket abruptly, proxied or not (its benign counterpart of Chrome's "WebSocket connection failed"). | That exact message is ignored for proxied pages in WebKit only. |
+| s8-session: a dropped connection …; heartbeat … | WebKit | Harness: with `page.routeWebSocket` (the test's proxy), when the host terminates the server half of a connection whose page half is already closed, Playwright's WebKit logs "WebSocket connection … failed: The network connection was lost." for the page. Reproduced without bpmn-edit. WebKit logs the same message whenever the server terminates a live socket abruptly, proxied or not (its benign counterpart of Chrome's "WebSocket connection failed"). | That exact message is ignored for proxied pages in WebKit only. |
 | s5-toolbar-layout: both tests | WebKit | Too slow, not wrong: they wait for rendered frames many times over (the sweep: ~400 widths), and headless WebKit's frames take about twice as long as Chrome's; 14-57 s (busy machine) against the 30 s limit, Chrome 10-16 s. | `test.slow()` in WebKit (90 s), called in each test (a describe-level `test.slow()` with a `browserName` callback runs as a beforeAll hook and does not extend the tests' timeout). |
 | q1-concurrency: rapid back-and-forth edits … | Firefox (once) | Harness race: a remote update re-renders the diagram between finding a shape and measuring it, so `boundingBox()` was `null`. | `center()` (and `dragBy`) measure again until the shape is on screen. |
 | q2-ide-race (merged after S10): the five tests whose window goes through the test's WebSocket proxy and that check its page errors (reconnect, lost ack, …) | WebKit | Harness: the same `page.routeWebSocket` artefact as in s8-session above ("WebSocket connection … failed: The network connection was lost." for the proxied page once its cut connection is terminated); 3 of the 5 failed in the first run. | The same filter, for the proxied page only and in WebKit only: `proxiedPageErrors` moved to `test/e2e/helpers/cli.js`, used by both specs. |

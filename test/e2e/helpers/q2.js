@@ -103,7 +103,7 @@ export async function settleWindows(pages, quietMs = 1200) {
 
 /** Files next to the target that hold a version kept aside (see src/file.js, saveAside). */
 export async function asideFiles(dir) {
-  return (await readdir(dir)).filter((n) => /\.local-bpmn-.+\.bpmn$/.test(n));
+  return (await readdir(dir)).filter((n) => /\.bpmn-edit-.+\.bpmn$/.test(n));
 }
 
 export { label };

@@ -164,7 +164,7 @@ test.describe('S4: live sync between several browser windows', () => {
   test('create, move, delete and connect in A show up in B, on disk and in git diff', async ({ browser }) => {
     const [a, b] = await openWindows(browser, 2);
 
-    const ids = await Promise.all([a, b].map((w) => w.page.evaluate(() => window.localBpmn.clientId)));
+    const ids = await Promise.all([a, b].map((w) => w.page.evaluate(() => window.bpmnEdit.clientId)));
     expect(ids[0]).toMatch(/^c\d+$/);
     expect(ids[1]).toMatch(/^c\d+$/);
     expect(ids[0]).not.toBe(ids[1]);
@@ -418,7 +418,7 @@ test.describe('S4: live sync between several browser windows', () => {
       expect(w.ws.count('received', 'remote-update')).toBe(1);
       expect(w.ws.count('sent', 'update')).toBe(0);
       expect(w.ws.frames.received.find((m) => m.type === 'remote-update').origin)
-        .toBe(await a.page.evaluate(() => window.localBpmn.clientId));
+        .toBe(await a.page.evaluate(() => window.bpmnEdit.clientId));
     }
     expect(await disk()).toBe(xml);
     const now = await stat(fixture.file);

@@ -17,7 +17,7 @@ describe('createFileStore', () => {
   const log = (m) => logs.push(m);
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-store-'));
+    dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-store-'));
     file = join(dir, 'order.bpmn');
     await copyFile(FIXTURE, file);
     logs = [];
@@ -178,7 +178,7 @@ describe('createFileStore', () => {
     assert.equal(errors.length, 1);
     assert.match(errors[0].message, new RegExp(`^Could not write ${file}: `));
     assert.equal(logs.length, 1);
-    assert.match(logs[0], /^local-bpmn: Could not write /);
+    assert.match(logs[0], /^bpmn-edit: Could not write /);
     assert.equal(await readFile(file, 'utf8'), original);
     assert.equal(store.diskXml, original);
 
@@ -227,7 +227,7 @@ describe('createFileStore watching', () => {
   }
 
   beforeEach(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-watch-'));
+    dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-watch-'));
     file = join(dir, 'order.bpmn');
     await copyFile(FIXTURE, file);
     logs = [];
@@ -377,10 +377,10 @@ describe('createFileStore watching', () => {
     await store.flush();
     assert.equal(await readFile(file, 'utf8'), variant(2), 'the change on disk is kept');
     assert.equal(asides.length, 1);
-    assert.match(asides[0].path, /order\.local-bpmn-unsaved-\d{8}-\d{6}\.bpmn$/);
+    assert.match(asides[0].path, /order\.bpmn-edit-unsaved-\d{8}-\d{6}\.bpmn$/);
     assert.equal(await readFile(asides[0].path, 'utf8'), variant(1), 'the editor version is saved aside');
     assert.equal(logs.length, 1);
-    assert.match(logs[0], /^local-bpmn: warning: .* changed on disk while the editor's last changes were being saved; .*saved to .*local-bpmn-unsaved/);
+    assert.match(logs[0], /^bpmn-edit: warning: .* changed on disk while the editor's last changes were being saved; .*saved to .*bpmn-edit-unsaved/);
     assert.equal(store.pending, false);
   });
 
@@ -631,7 +631,7 @@ describe('createFileStore watching', () => {
     await handle.close();
     assert.deepEqual(await changed, { xml: ide, discarded: true });
     assert.equal(await readFile(file, 'utf8'), ide);
-    assert.deepEqual((await readdir(dir)).filter((n) => n.includes('.local-bpmn-replaced-')), []);
+    assert.deepEqual((await readdir(dir)).filter((n) => n.includes('.bpmn-edit-replaced-')), []);
   });
 
   it('a second flush() waits for the one running and keeps nothing aside twice', async () => {
@@ -823,17 +823,17 @@ describe('createFileStore watching', () => {
     assert.equal(await readFile(file, 'utf8'), variant(1));
     assert.equal(asides.length, 1);
     assert.equal(await readFile(asides[0].path, 'utf8'), variant(1));
-    assert.match(logs.at(-2), /the editor replaced the broken order\.bpmn \d+\.\d s ago; its version was also saved to .*local-bpmn-unsaved/);
+    assert.match(logs.at(-2), /the editor replaced the broken order\.bpmn \d+\.\d s ago; its version was also saved to .*bpmn-edit-unsaved/);
     // The half-written file it replaced is kept under a second name (its writer may finish after exit).
-    const replaced = (await readdir(dir)).filter((n) => /^order\.local-bpmn-replaced-\d{8}-\d{6}\.bpmn$/.test(n));
+    const replaced = (await readdir(dir)).filter((n) => /^order\.bpmn-edit-replaced-\d{8}-\d{6}\.bpmn$/.test(n));
     assert.equal(replaced.length, 1);
     assert.equal(await readFile(join(dir, replaced[0]), 'utf8'), original.slice(0, 200));
-    assert.match(logs.at(-1), /the half-written order\.bpmn the editor replaced was kept as .*order\.local-bpmn-replaced-/);
+    assert.match(logs.at(-1), /the half-written order\.bpmn the editor replaced was kept as .*order\.bpmn-edit-replaced-/);
   });
 
   it('the second name of a replaced broken file is removed once the write is confirmed, or a save there put back', async () => {
     await start({ debounceMs: 0, settleMs: 50, confirmMs: 300 });
-    const replacedFiles = async () => (await readdir(dir)).filter((n) => n.includes('.local-bpmn-replaced-'));
+    const replacedFiles = async () => (await readdir(dir)).filter((n) => n.includes('.bpmn-edit-replaced-'));
     let reported = next('external-invalid');
     await writeFile(file, original.slice(0, 200));
     await reported;

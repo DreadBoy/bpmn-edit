@@ -19,9 +19,9 @@ const STOP_GRACE_MS = 3_000;
 /** The binary download fails if no response arrives, or the body stalls, for this long. */
 const DOWNLOAD_STALL_MS = 30_000;
 
-/** Directory holding local-bpmn's own state (binary cache etc.). */
+/** Directory holding bpmn-edit's own state (binary cache etc.). */
 export function defaultHome() {
-  return process.env.LOCAL_BPMN_HOME || path.join(homedir(), '.local-bpmn');
+  return process.env.BPMN_EDIT_HOME || path.join(homedir(), '.bpmn-edit');
 }
 
 /** Which cloudflared release asset fits this machine. Throws for unsupported platforms. */
@@ -51,8 +51,8 @@ export function assetFor(platform = process.platform, arch = process.arch) {
   }
 }
 
-/** Download URL for a release asset; LOCAL_BPMN_CLOUDFLARED_URL_BASE overrides the release location. */
-export function downloadUrl(asset, baseUrl = process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE || DEFAULT_URL_BASE) {
+/** Download URL for a release asset; BPMN_EDIT_CLOUDFLARED_URL_BASE overrides the release location. */
+export function downloadUrl(asset, baseUrl = process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE || DEFAULT_URL_BASE) {
   return `${baseUrl.replace(/\/+$/, '')}/${asset}`;
 }
 
@@ -289,7 +289,7 @@ const ERROR_BODY_LIMIT = 64 * 1024;
  */
 export function probeHttps(url, { address, timeoutMs = 5_000 } = {}) {
   return new Promise((resolve, reject) => {
-    const options = { method: 'GET', timeout: timeoutMs, headers: { 'user-agent': 'local-bpmn' } };
+    const options = { method: 'GET', timeout: timeoutMs, headers: { 'user-agent': 'bpmn-edit' } };
     if (address) {
       options.lookup = (_host, opts, cb) => (opts?.all ? cb(null, [{ address, family: 4 }]) : cb(null, address, 4));
     }

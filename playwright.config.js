@@ -3,7 +3,7 @@ import { defineConfig, devices } from '@playwright/test';
 export default defineConfig({
   testDir: 'test/e2e',
   // Measurement specs (*.measure.spec.js) are long-running experiments, run only on request.
-  testIgnore: process.env.LOCAL_BPMN_MEASURE ? [] : ['**/*.measure.spec.js'],
+  testIgnore: process.env.BPMN_EDIT_MEASURE ? [] : ['**/*.measure.spec.js'],
   timeout: 30_000,
   expect: { timeout: 5_000 },
   fullyParallel: false,

@@ -5,7 +5,7 @@ import { readdir } from 'node:fs/promises';
 import { TEMP_FILE_RE } from '../../../src/file.js';
 import { copyFixture } from './cli.js';
 
-const GIT = ['-c', 'user.name=local-bpmn tests', '-c', 'user.email=tests@local-bpmn.invalid', '-c', 'commit.gpgsign=false'];
+const GIT = ['-c', 'user.name=bpmn-edit tests', '-c', 'user.email=tests@bpmn-edit.invalid', '-c', 'commit.gpgsign=false'];
 
 /** Runs git in `dir` with a fixed test identity; returns stdout. */
 export function git(dir, ...args) {

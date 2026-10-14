@@ -139,7 +139,7 @@ export class ShareManager extends EventEmitter {
       const message = code === 'TUNNEL_RATE_LIMITED'
         ? 'Cloudflare is limiting new quick tunnels from this network right now (HTTP 429). Wait a few minutes, then try Share again.'
         : `Could not start the public tunnel: ${firstLine(err.message).replace(/^Tunnel failed to start: /, '')}`;
-      this.#log(`local-bpmn: sharing failed: ${err.message}\n`);
+      this.#log(`bpmn-edit: sharing failed: ${err.message}\n`);
       this.#state = 'error';
       this.#error = { code, message };
       this.#emitStatus();
@@ -157,14 +157,14 @@ export class ShareManager extends EventEmitter {
     this.#state = 'active';
     this.#progress = null;
     tunnel.process?.once('exit', () => this.#onTunnelExit(tunnel));
-    this.#log(`local-bpmn: sharing at ${this.#url}\n`);
+    this.#log(`bpmn-edit: sharing at ${this.#url}\n`);
     this.#emitStatus();
     return this.status();
   }
 
   #onTunnelExit(tunnel) {
     if (this.#tunnel !== tunnel) return; // stopped on purpose
-    this.#log('local-bpmn: the tunnel stopped unexpectedly; the shared link no longer works\n');
+    this.#log('bpmn-edit: the tunnel stopped unexpectedly; the shared link no longer works\n');
     this.#revoke();
     this.#state = 'error';
     this.#error = { code: 'TUNNEL_EXITED', message: 'The public tunnel stopped unexpectedly. Share again to get a new link.' };
@@ -201,8 +201,8 @@ export class ShareManager extends EventEmitter {
     this.#progress = null;
     if (changed) this.#emitStatus();
     if (tunnel) {
-      await tunnel.stop().catch((err) => this.#log(`local-bpmn: could not stop the tunnel: ${err.message}\n`));
-      this.#log('local-bpmn: sharing stopped\n');
+      await tunnel.stop().catch((err) => this.#log(`bpmn-edit: could not stop the tunnel: ${err.message}\n`));
+      this.#log('bpmn-edit: sharing stopped\n');
     }
     return this.status();
   }

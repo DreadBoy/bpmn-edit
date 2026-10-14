@@ -22,7 +22,7 @@ test.describe('S5: connected-users list', () => {
   test.beforeEach(async () => {
     fixture = await setupRepo();
     // Stand-in tunnel (src/test-tunnel.js), for the test of a collaborator joining through a share link.
-    cli = await startCli(fixture.file, { cwd: fixture.dir, env: { LOCAL_BPMN_TEST_TUNNEL: 'fake', LOCAL_BPMN_TEST_TUNNEL_DELAY_MS: '100' } });
+    cli = await startCli(fixture.file, { cwd: fixture.dir, env: { BPMN_EDIT_TEST_TUNNEL: 'fake', BPMN_EDIT_TEST_TUNNEL_DELAY_MS: '100' } });
     contexts = [];
     windows = [];
   });
@@ -68,7 +68,7 @@ test.describe('S5: connected-users list', () => {
     expect(listB[0].self).toBe(true);
     expect(listB[0].id).toBe(listA[1].id);
     expect(listA[0].id).toBe(listB[1].id);
-    expect(listA[0].id).toBe(await a.page.evaluate(() => window.localBpmn.clientId));
+    expect(listA[0].id).toBe(await a.page.evaluate(() => window.bpmnEdit.clientId));
     for (const [mine, theirs] of [[listA[0], listB[1]], [listB[0], listA[1]]]) {
       expect(mine.name).toMatch(/^[A-Z][a-z]+ [A-Z][a-z]+$/); // a friendly random name such as "Curious Otter"
       expect(theirs.name).toBe(mine.name);

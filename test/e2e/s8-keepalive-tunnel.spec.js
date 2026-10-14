@@ -6,7 +6,7 @@
 // host pings every socket every 30 s, the page sends a heartbeat every 30 s. Next to the page, a plain
 // WebSocket client joins through the same link and sends nothing at all, so whether the host's
 // WebSocket pings alone keep a connection open is measured too (it is logged, not asserted).
-// Set LOCAL_BPMN_SKIP_TUNNEL_E2E=1 to skip (offline, or to spare the rate limit).
+// Set BPMN_EDIT_SKIP_TUNNEL_E2E=1 to skip (offline, or to spare the rate limit).
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
 import { readFile } from 'node:fs/promises';
@@ -34,7 +34,7 @@ function cloudflaredPids(port) {
 test.describe('S8: keepalive through a real Cloudflare tunnel', () => {
   // Chrome only, so the browser matrix (S10) never starts more tunnels.
   test.skip(({ browserName }) => browserName !== 'chromium', 'real Cloudflare tunnels are rate-limited; run once in Chrome');
-  test.skip(process.env.LOCAL_BPMN_SKIP_TUNNEL_E2E === '1', 'LOCAL_BPMN_SKIP_TUNNEL_E2E=1');
+  test.skip(process.env.BPMN_EDIT_SKIP_TUNNEL_E2E === '1', 'BPMN_EDIT_SKIP_TUNNEL_E2E=1');
   test.setTimeout(420_000);
 
   let fixture;

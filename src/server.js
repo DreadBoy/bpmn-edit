@@ -6,7 +6,7 @@
 //   127.0.0.1 / [::1] with our port, or the active tunnel hostname) and, if it has an Origin, come
 //   from one of those; otherwise 421 / 403 (DNS rebinding, other web sites).
 // - Local requests (no Cloudflare header): the editor at `/`, `/api/file`, `/ws`. Host-only calls
-//   (`/api/share`) also need the host secret in the `X-Local-Bpmn-Host` header (403 otherwise); a
+//   (`/api/share`) also need the host secret in the `X-Bpmn-Edit-Host` header (403 otherwise); a
 //   WebSocket opened with `?host=<secret>` is the host's and receives 'share' messages.
 // - The same editor is served under `/s/<token>/` (assets, `api/file`, `ws` relative to it) while
 //   sharing is active with that token; `/s/<token>` redirects there.
@@ -240,7 +240,7 @@ async function serveStatic(res, urlPath, method) {
 }
 
 /**
- * Creates the local-bpmn server for a single file.
+ * Creates the bpmn-edit server for a single file.
  *
  * With the default host 'localhost' it listens on both loopback addresses (127.0.0.1 and ::1, the
  * latter if IPv6 is available) on the same port. Browsers resolve "localhost" to either, so binding
@@ -445,7 +445,7 @@ export function createServer({
       try {
         handleMessage(ws, data, isBinary);
       } catch (err) {
-        process.stderr.write(`local-bpmn: error handling message: ${err.message}\n`);
+        process.stderr.write(`bpmn-edit: error handling message: ${err.message}\n`);
         sendError(ws, 'internal', 'Internal server error');
       }
     });

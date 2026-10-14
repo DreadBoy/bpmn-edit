@@ -1,7 +1,7 @@
 // Q2 measurements: an edit in the browser racing a save of a different change made on disk by
 // another program (an IDE). Not part of the regular suite (see playwright.config.js); run with
 //
-//   LOCAL_BPMN_MEASURE=1 LOCAL_BPMN_MEASURE_OUT=/some/dir npx playwright test q2-ide-race.measure
+//   BPMN_EDIT_MEASURE=1 BPMN_EDIT_MEASURE_OUT=/some/dir npx playwright test q2-ide-race.measure
 //
 // Real CLI, two Chrome windows (A edits, B watches), the file in a temp git repo (core.autocrlf=false).
 // The browser edit renames "Ship order" in window A with the real keyboard/mouse; the "IDE save" reads
@@ -17,9 +17,9 @@ import {
 } from './helpers/q2.js';
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-const TRIALS = Number(process.env.LOCAL_BPMN_MEASURE_TRIALS || 15);
-const SIGINT_TRIALS = Number(process.env.LOCAL_BPMN_MEASURE_SIGINT_TRIALS || 10);
-const OUT = process.env.LOCAL_BPMN_MEASURE_OUT;
+const TRIALS = Number(process.env.BPMN_EDIT_MEASURE_TRIALS || 15);
+const SIGINT_TRIALS = Number(process.env.BPMN_EDIT_MEASURE_SIGINT_TRIALS || 10);
+const OUT = process.env.BPMN_EDIT_MEASURE_OUT;
 
 const UI = 'Task_ShipOrder';
 const DISK = 'Task_CheckStock';

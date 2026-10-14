@@ -1,10 +1,10 @@
 {
-  "name": "local-bpmn",
-  "version": "0.1.0",
-  "description": "Open a local BPMN file in a browser-based editor, save changes back to disk, and share a live editing session.",
+  "name": "bpmn-edit",
+  "version": "1.0.0",
+  "description": "Open a BPMN file from disk in a browser-based editor, save changes back to disk, and share a live editing session.",
   "type": "module",
   "bin": {
-    "local-bpmn": "bin/local-bpmn.js"
+    "bpmn-edit": "bin/bpmn-edit.js"
   },
   "files": [
     "bin/",
@@ -16,8 +16,11 @@
   "engines": {
     "node": ">=20.19"
   },
+  "publishConfig": {
+    "access": "public"
+  },
   "scripts": {
-    "start": "node bin/local-bpmn.js",
+    "start": "node bin/bpmn-edit.js",
     "vendor": "node scripts/vendor.js",
     "test": "node --test test/unit/*.test.js",
     "test:e2e": "playwright test"
@@ -30,6 +33,14 @@
   ],
   "author": "Matic Leva",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/DreadBoy/bpmn-edit.git"
+  },
+  "homepage": "https://github.com/DreadBoy/bpmn-edit#readme",
+  "bugs": {
+    "url": "https://github.com/DreadBoy/bpmn-edit/issues"
+  },
   "dependencies": {
     "chokidar": "^5.0.0",
     "commander": "^14.0.3",

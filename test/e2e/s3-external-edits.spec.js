@@ -117,7 +117,7 @@ test.describe('S3: external edits show up in the browser', () => {
     await expect(status(page)).toHaveAttribute('data-state', 'saved');
 
     await expectNoWriteBack(fixture.file, changed, info);
-    expect(cli.stderr()).toContain('local-bpmn: reloaded order.bpmn (changed on disk)');
+    expect(cli.stderr()).toContain('bpmn-edit: reloaded order.bpmn (changed on disk)');
     // The "reloaded" notice goes away on its own.
     await expect(notice(page)).toBeHidden({ timeout: 3000 });
     expect(errors).toEqual([]);
@@ -205,7 +205,7 @@ test.describe('S3: external edits show up in the browser', () => {
     await delay(STABLE_MS);
     expect(await exists(fixture.file)).toBe(false);
     expect(cli.child.exitCode).toBeNull();
-    expect(cli.stderr()).toContain('local-bpmn: order.bpmn was deleted on disk');
+    expect(cli.stderr()).toContain('bpmn-edit: order.bpmn was deleted on disk');
 
     // Recreated externally with a modified diagram.
     const recreated = withName(original, 'Ship order', 'Ship today');

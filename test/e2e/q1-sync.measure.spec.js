@@ -1,10 +1,10 @@
 // Q1 measurements: full-XML sync with 2 and 3 windows on the small fixture and a large generated
 // diagram. Not part of the regular suite (see playwright.config.js); run with
 //
-//   LOCAL_BPMN_MEASURE=1 LOCAL_BPMN_MEASURE_OUT=/some/dir npx playwright test q1-sync.measure
+//   BPMN_EDIT_MEASURE=1 BPMN_EDIT_MEASURE_OUT=/some/dir npx playwright test q1-sync.measure
 //
 // Every edit is made with the real mouse/keyboard; state is only read via page.evaluate. Results are
-// printed and, with LOCAL_BPMN_MEASURE_OUT, written as JSON (one file per configuration).
+// printed and, with BPMN_EDIT_MEASURE_OUT, written as JSON (one file per configuration).
 import { expect, test } from '@playwright/test';
 import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
@@ -13,7 +13,7 @@ import { collectPageErrors, copyFixture, startCli } from './helpers/cli.js';
 import { emptyCanvasPoint, shape, status } from './helpers/editor.js';
 
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
-const TRIALS = Number(process.env.LOCAL_BPMN_MEASURE_TRIALS || 1);
+const TRIALS = Number(process.env.BPMN_EDIT_MEASURE_TRIALS || 1);
 
 test.use({ actionTimeout: 10_000 });
 
@@ -275,9 +275,9 @@ for (const diagram of ['small', 'large']) {
         await fixture.cleanup();
       }
       console.log(JSON.stringify(result));
-      if (process.env.LOCAL_BPMN_MEASURE_OUT) {
-        await mkdir(process.env.LOCAL_BPMN_MEASURE_OUT, { recursive: true });
-        await writeFile(join(process.env.LOCAL_BPMN_MEASURE_OUT, `${diagram}-${n}.json`), JSON.stringify(result, null, 2));
+      if (process.env.BPMN_EDIT_MEASURE_OUT) {
+        await mkdir(process.env.BPMN_EDIT_MEASURE_OUT, { recursive: true });
+        await writeFile(join(process.env.BPMN_EDIT_MEASURE_OUT, `${diagram}-${n}.json`), JSON.stringify(result, null, 2));
       }
     });
   }

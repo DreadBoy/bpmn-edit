@@ -76,32 +76,32 @@ describe('assetFor / downloadUrl / defaultHome', () => {
   });
 
   it('builds download URLs, honouring the env override', () => {
-    const saved = process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE;
+    const saved = process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE;
     try {
-      delete process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE;
+      delete process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE;
       assert.equal(
         downloadUrl('cloudflared-linux-amd64'),
         'https://github.com/cloudflare/cloudflared/releases/latest/download/cloudflared-linux-amd64',
       );
-      process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE = 'http://127.0.0.1:1/x/';
+      process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE = 'http://127.0.0.1:1/x/';
       assert.equal(downloadUrl('a.tgz'), 'http://127.0.0.1:1/x/a.tgz');
       assert.equal(downloadUrl('a.tgz', 'http://example.test/y'), 'http://example.test/y/a.tgz');
     } finally {
-      if (saved === undefined) delete process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE;
-      else process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE = saved;
+      if (saved === undefined) delete process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE;
+      else process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE = saved;
     }
   });
 
-  it('defaultHome honours LOCAL_BPMN_HOME', () => {
-    const saved = process.env.LOCAL_BPMN_HOME;
+  it('defaultHome honours BPMN_EDIT_HOME', () => {
+    const saved = process.env.BPMN_EDIT_HOME;
     try {
-      process.env.LOCAL_BPMN_HOME = '/some/where';
+      process.env.BPMN_EDIT_HOME = '/some/where';
       assert.equal(defaultHome(), '/some/where');
-      delete process.env.LOCAL_BPMN_HOME;
-      assert.match(defaultHome(), /\.local-bpmn$/);
+      delete process.env.BPMN_EDIT_HOME;
+      assert.match(defaultHome(), /\.bpmn-edit$/);
     } finally {
-      if (saved === undefined) delete process.env.LOCAL_BPMN_HOME;
-      else process.env.LOCAL_BPMN_HOME = saved;
+      if (saved === undefined) delete process.env.BPMN_EDIT_HOME;
+      else process.env.BPMN_EDIT_HOME = saved;
     }
   });
 });
@@ -109,7 +109,7 @@ describe('assetFor / downloadUrl / defaultHome', () => {
 describe('findOnPath', () => {
   let dir;
   before(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-path-'));
+    dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-path-'));
     await mkdir(join(dir, 'a'));
     await mkdir(join(dir, 'b'));
     await writeFile(join(dir, 'a', 'tool'), FAKE_BINARY, { mode: 0o644 }); // not executable
@@ -145,7 +145,7 @@ describe('ensureCloudflared', () => {
   let workDir;
 
   before(async () => {
-    workDir = await mkdtemp(join(tmpdir(), 'local-bpmn-dl-'));
+    workDir = await mkdtemp(join(tmpdir(), 'bpmn-edit-dl-'));
     // A tgz shaped like the real darwin asset: a single `cloudflared` binary at the root.
     const src = join(workDir, 'src');
     await mkdir(src);
@@ -268,18 +268,18 @@ describe('ensureCloudflared', () => {
     }
   });
 
-  it('honours LOCAL_BPMN_CLOUDFLARED_URL_BASE', async () => {
+  it('honours BPMN_EDIT_CLOUDFLARED_URL_BASE', async () => {
     const home = await freshHome();
-    const saved = process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE;
-    process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE = `${base}/bogus`;
+    const saved = process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE;
+    process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE = `${base}/bogus`;
     try {
       await assert.rejects(
         ensureCloudflared({ home, usePath: false, platform: 'linux', arch: 'x64' }),
         /\/bogus\/cloudflared-linux-amd64: HTTP 404/,
       );
     } finally {
-      if (saved === undefined) delete process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE;
-      else process.env.LOCAL_BPMN_CLOUDFLARED_URL_BASE = saved;
+      if (saved === undefined) delete process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE;
+      else process.env.BPMN_EDIT_CLOUDFLARED_URL_BASE = saved;
     }
     assert.deepEqual(await readdir(join(home, 'bin')), []);
   });

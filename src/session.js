@@ -92,11 +92,11 @@ export class Session extends EventEmitter {
           const gone = [...waiting.versions.values()].filter(({ origin }) => this.#gone.has(origin));
           const name = store.path ?? 'the file';
           if (gone.length === waiting.versions.size) {
-            this.#log(`local-bpmn: warning: ${name} changed on disk before the latest edits were saved, and the `
+            this.#log(`bpmn-edit: warning: ${name} changed on disk before the latest edits were saved, and the `
               + `window that made them is disconnected: they are re-applied if it reconnects within `
               + `${Math.round(this.#graceMs / 1000)} s, otherwise the editor's version is saved next to the file\n`);
           } else {
-            this.#log(`local-bpmn: warning: ${name} changed on disk before the latest edits were saved; `
+            this.#log(`bpmn-edit: warning: ${name} changed on disk before the latest edits were saved; `
               + 'the windows that made them re-apply them on top of the change\n');
           }
           if (gone.length) this.#armGrace(waiting);
@@ -144,7 +144,7 @@ export class Session extends EventEmitter {
   /**
    * What a (re)connecting client needs to sort out its accepted edits that it has not seen written
    * ('saved') yet, e.g. after its connection dropped (Q2 with S8's re-sync):
-   * - `instance`: id of this session; versions from another one (local-bpmn restarted) mean nothing;
+   * - `instance`: id of this session; versions from another one (bpmn-edit restarted) mean nothing;
    * - `saved`: every version up to this is on disk (or was replaced there by a change on disk);
    * - `discards`: [{ after, version }] the accepted updates with a version between `after` and
    *   `version` (exclusive) were replaced by the change on disk at `version` before they were
@@ -204,7 +204,7 @@ export class Session extends EventEmitter {
         { version: this.#version });
     }
     if (baseVersion < this.#version) {
-      this.#log('local-bpmn: warning: an edit from the browser replaced a change made on disk that the editor could not display\n');
+      this.#log('bpmn-edit: warning: an edit from the browser replaced a change made on disk that the editor could not display\n');
     }
     this.#xml = xml;
     this.#version += 1;

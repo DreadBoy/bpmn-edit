@@ -13,7 +13,7 @@ quick tunnels take to come up, and how stable they are over ~30 minutes. Decide 
 | cloudflared | 2026.10.0 (built 2026-10-05), downloaded by `ensureCloudflared()` into a scratch cache (`--home`), not on PATH |
 | Node | v22.22.2 |
 | Browser | Google Chrome 155.0.8059.40, headless, via Playwright 1.64.0 (`channel: 'chrome'`) |
-| Target | real CLI: `node bin/local-bpmn.js <scratch copy of test/fixtures/order.bpmn> --no-open --port 3917` |
+| Target | real CLI: `node bin/bpmn-edit.js <scratch copy of test/fixtures/order.bpmn> --no-open --port 3917` |
 | Tunnel | `startTunnel()` from `src/tunnel.js` (Cloudflare quick tunnel, `retries: 0`, `timeoutMs: 90000`) pointed at the CLI's port. The CLI has no share flag/endpoint yet (S7 not wired), so the tunnel is started by the script, not through the UI. "Stop as a user would" = `tunnel.stop()` and SIGINT (Ctrl-C) to the CLI at the same moment, which is what the S7 wiring will do. |
 | Script | `scripts/measure-tunnel.js` (default options: 31 min window, 20 s poll interval, 120 s old-URL probe, 150 s gap before tunnel #2, 60 s probe of tunnel #2's old URL). Dry-run first with `--local` (no tunnel). |
 | Tunnels opened | **2** in the measurement run — #1 spawned 23:09:18.034Z, #2 spawned 23:42:56.748Z (33.6 min apart). No 429 / rate limiting seen. A separate, independent verification run opened one more tunnel at 23:47:51.866Z (its own script; log `docs/q3-tunnel-evidence/verify.jsonl`); it is reported as sample #3 below. |
@@ -106,7 +106,7 @@ Quick tunnels (what `src/tunnel.js` uses), from [Quick Tunnels](https://develope
 - "Quick Tunnels are for testing and development." "For production, create a Cloudflare Tunnel."
 - "Quick Tunnels have no uptime guarantee."
 - "Each Quick Tunnel supports up to 200 in-flight requests." "Additional requests return a `429` response."
-- "Quick Tunnels do not support Server-Sent Events (SSE)." (local-bpmn uses WebSockets, which worked.)
+- "Quick Tunnels do not support Server-Sent Events (SSE)." (bpmn-edit uses WebSockets, which worked.)
 - "The hostname changes each time you create a Quick Tunnel." "For stable hostnames and production traffic,
   create a Cloudflare Tunnel."
 - "You do not need a Cloudflare account or domain." The URL stops working when the process stops.
@@ -138,10 +138,10 @@ A stable hostname needs a named Cloudflare Tunnel. Two ways:
    accepts `tunnel run --token` / `--token-file` / `$TUNNEL_TOKEN` (`cloudflared tunnel run --help`).
 
 Either way the user needs a Cloudflare account and their own domain on Cloudflare; nothing about it can be done
-for them by `npx local-bpmn`. No account actions were taken for this experiment.
+for them by `npx bpmn-edit`. No account actions were taken for this experiment.
 
 A stable hostname alone would not be enough: a link that survives a restart would also need the session token
-in `/s/<token>` to persist across restarts (local-bpmn.md, Open questions: "Whether to persist session tokens so
+in `/s/<token>` to persist across restarts (bpmn-edit.md, Open questions: "Whether to persist session tokens so
 a restart keeps the same link").
 
 Related, for the WebSocket drops above: Cloudflare's [connection limits](https://developers.cloudflare.com/fundamentals/reference/connection-limits/)
@@ -152,7 +152,7 @@ the matching number, not something the docs state.
 ## Observations
 
 1. Every share/restart gives a new random hostname; the old one answers 530/1033 immediately and keeps
-   resolving in DNS. A collaborator holding the old link sees a Cloudflare error page, not local-bpmn.
+   resolving in DNS. A collaborator holding the old link sees a Cloudflare error page, not bpmn-edit.
 2. Startup is about 6.5–7 s to a working public URL with a cached binary (three samples: 6479, 6849, 7054 ms),
    about 5–5.6 s of which is cloudflared obtaining the quick tunnel. This is at the low end of the 7–13 s noted
    in PLAN.md S7.
@@ -176,7 +176,7 @@ Reasons from the data:
 - The restart problem is inherent to quick tunnels (new hostname every time, old one 530/1033), and the only fix
   is a named tunnel, which requires the user to have a Cloudflare account, a domain on Cloudflare, a browser
   login (`cert.pem`) or dashboard token, and a DNS route — plus a session token that persists across restarts.
-  That cannot be automated by `npx local-bpmn` and is a separate, opt-in feature (e.g. a later
+  That cannot be automated by `npx bpmn-edit` and is a separate, opt-in feature (e.g. a later
   `--tunnel-token` / `--hostname` option that runs `cloudflared tunnel run --token`), not something to block v1
   on.
 - Within one CLI run, the quick tunnel's **HTTP** path was stable: up in about 6.5–7 s, 0 HTTP failures over
@@ -191,7 +191,7 @@ Reasons from the data:
 - **Client reconnect with re-sync (S8):** after a drop, the page must reconnect with backoff and re-sync the
   document; today one idle drop leaves the collaborator "Disconnected" for good.
 
-Also for S8: a collaborator reloading an old link gets Cloudflare's 1033 page, which local-bpmn cannot
+Also for S8: a collaborator reloading an old link gets Cloudflare's 1033 page, which bpmn-edit cannot
 customise; the README note above is the mitigation.
 
 ## Appendix: evidence

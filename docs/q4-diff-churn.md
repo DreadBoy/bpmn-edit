@@ -1,6 +1,6 @@
 # Q4: formatting churn in the first `git diff`
 
-**Question.** When a user opens a `.bpmn` file written by another tool and makes one small edit in local-bpmn, how
+**Question.** When a user opens a `.bpmn` file written by another tool and makes one small edit in bpmn-edit, how
 many diff lines have nothing to do with the edit? Is any information lost? What should we do about it?
 
 **Short answer.** It depends on where the file came from. A file already written by the current bpmn-js (e.g. after one save) shows 0–1
@@ -33,7 +33,7 @@ The app saves with `modeler.saveXML({ format: true })` (`web/app.js`). The CLI w
 For each fixture in `test/fixtures/q4/`:
 
 1. Copy the fixture into a fresh git repo and commit it.
-2. Start the real CLI (`node bin/local-bpmn.js <file> --no-open --port <random>`) and open its URL in real Chrome.
+2. Start the real CLI (`node bin/bpmn-edit.js <file> --no-open --port <random>`) and open its URL in real Chrome.
    Check that the file on disk is unchanged after opening. Save bpmn-js's serialisation of the unedited diagram
    (`0b-bpmnjs-baseline.bpmn`, read-only; used as the merge base by the writer prototypes).
 3. **Save 1:** double-click task A, select all, type `Q4 first rename`, press Enter. Wait until the file on disk
@@ -61,7 +61,7 @@ Definitions (per save):
 ```sh
 npm install
 node scripts/q4-make-fixtures.mjs                 # optional: regenerate the constructed fixtures
-Q4_WORK=$TMPDIR/local-bpmn-q4 node scripts/q4-churn-measure.mjs   # ~2 min; real CLI + real Chrome
+Q4_WORK=$TMPDIR/bpmn-edit-q4 node scripts/q4-churn-measure.mjs   # ~2 min; real CLI + real Chrome
 node scripts/q4-churn-analyse.mjs                 # -> docs/q4-evidence/results.json, analyse.log
 node docs/q4-evidence/prototypes/run-options.mjs  # options (a)-(d) -> options.json, options/, options-run.log
 node docs/q4-evidence/prototypes/stress.mjs       # structural edits for option (c) -> options-stress.json/.log

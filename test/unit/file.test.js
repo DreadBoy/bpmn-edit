@@ -9,7 +9,7 @@ const FIXTURE = new URL('../fixtures/order.bpmn', import.meta.url);
 
 describe('readBpmnFile', () => {
   let dir;
-  before(async () => { dir = await mkdtemp(join(tmpdir(), 'local-bpmn-unit-')); });
+  before(async () => { dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-unit-')); });
   after(async () => { await rm(dir, { recursive: true, force: true }); });
 
   it('returns the XML of a valid BPMN file', async () => {

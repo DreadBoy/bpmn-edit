@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Dev-only: open a quick tunnel to a local port and keep it up until Ctrl-C.
 //   node scripts/try-tunnel.js <port>
-// Pointed at a local-bpmn server, every request answers 421: since S7 the server only accepts the tunnel
+// Pointed at a bpmn-edit server, every request answers 421: since S7 the server only accepts the tunnel
 // hostname it started itself (Share button). Use the Share button there instead.
 import { startTunnel } from '../src/tunnel.js';
 

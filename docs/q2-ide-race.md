@@ -7,9 +7,9 @@ change are at the end of this file.
 ## Method
 
 `test/e2e/q2-ide-race.measure.spec.js` (not part of the regular suite; run with
-`LOCAL_BPMN_MEASURE=1 LOCAL_BPMN_MEASURE_OUT=<dir> npx playwright test q2-ide-race.measure`).
+`BPMN_EDIT_MEASURE=1 BPMN_EDIT_MEASURE_OUT=<dir> npx playwright test q2-ide-race.measure`).
 
-- Real CLI (`node bin/local-bpmn.js`, default write debounce 250 ms, settle delay 150 ms), Google Chrome
+- Real CLI (`node bin/bpmn-edit.js`, default write debounce 250 ms, settle delay 150 ms), Google Chrome
   via Playwright (`channel: 'chrome'`), macOS. The file is `test/fixtures/order.bpmn` in a fresh git
   repo with `core.autocrlf=false` set explicitly.
 - Two browser windows (separate contexts). Window A makes the browser edit: double-click
@@ -69,7 +69,7 @@ document, which is what makes the loss hard to notice. The browser only ever sho
    warning), and `web/app.js` `settleNow()` deliberately sends unsent edits over a disk change instead
    of re-applying them on it. The whole browser document, built on the old file, replaces the IDE
    save.
-4. **Shutdown** (d): `bin/local-bpmn.js` `shutdown()` calls `store.unwatch()`, which cancels the
+4. **Shutdown** (d): `bin/bpmn-edit.js` `shutdown()` calls `store.unwatch()`, which cancels the
    pending settle check, then `store.flush()` writes the pending edit: same as 2.
 
 ## Results after the change
@@ -93,7 +93,7 @@ See `docs/decisions.md`, Q2, for the policy. Same spec, same trial counts, final
   d 10/10, i.e. whenever accepted edits were re-applied.)
 
 An intermediate run (before shutdown re-checked the file) had a-c identical and d at 0/10 merged,
-10/10 "disk change kept, browser version saved next to it" (`order.local-bpmn-unsaved-<time>.bpmn`):
+10/10 "disk change kept, browser version saved next to it" (`order.bpmn-edit-unsaved-<time>.bpmn`):
 that is now the fallback when no window is left to re-apply the edit (covered by
 `test/e2e/q2-ide-race.spec.js`).
 

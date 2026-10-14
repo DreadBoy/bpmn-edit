@@ -17,7 +17,7 @@ import {
   MAX_ID_LENGTH, MAX_NAME_LENGTH, MAX_SELECTION, PALETTE, cleanName, isColor,
 } from './presence-shared.js';
 
-const STORAGE_KEY = 'local-bpmn.user';
+const STORAGE_KEY = 'bpmn-edit.user';
 
 /** A selection is sent this long after it last changed (an import clears and restores it at once). */
 const SELECTION_DELAY_MS = 50;

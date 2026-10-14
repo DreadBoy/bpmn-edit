@@ -1,5 +1,5 @@
 // S7: sharing via a public link — everything that does not need Cloudflare. The CLI runs with a stand-in
-// tunnel (LOCAL_BPMN_TEST_TUNNEL, src/test-tunnel.js) that hands out a made-up *.trycloudflare.com URL
+// tunnel (BPMN_EDIT_TEST_TUNNEL, src/test-tunnel.js) that hands out a made-up *.trycloudflare.com URL
 // without opening a tunnel. A collaborator "coming through the tunnel" is simulated by sending the
 // Cloudflare headers (cf-ray / cf-connecting-ip) directly to localhost. The real tunnel is covered by
 // s7-share-tunnel.spec.js.
@@ -66,7 +66,7 @@ test.describe('S7: share via public link (stand-in tunnel)', () => {
 
   async function start(mode = 'fake', delayMs = 1500) {
     fixture = await copyFixture('order.bpmn');
-    cli = await startCli(fixture.file, { env: { LOCAL_BPMN_TEST_TUNNEL: mode, LOCAL_BPMN_TEST_TUNNEL_DELAY_MS: String(delayMs) } });
+    cli = await startCli(fixture.file, { env: { BPMN_EDIT_TEST_TUNNEL: mode, BPMN_EDIT_TEST_TUNNEL_DELAY_MS: String(delayMs) } });
   }
 
   const disk = () => readFile(fixture.file, 'utf8');
@@ -86,11 +86,11 @@ test.describe('S7: share via public link (stand-in tunnel)', () => {
 
     // No secret, a wrong one, or the secret only in the URL: refused, and nothing was started.
     expect((await request.post(`${cli.baseUrl}api/share`)).status()).toBe(403);
-    expect((await request.post(`${cli.baseUrl}api/share`, { headers: { 'X-Local-Bpmn-Host': 'wrong' } })).status()).toBe(403);
+    expect((await request.post(`${cli.baseUrl}api/share`, { headers: { 'X-Bpmn-Edit-Host': 'wrong' } })).status()).toBe(403);
     expect((await request.post(`${cli.baseUrl}api/share?host=${cli.hostSecret}`)).status()).toBe(403);
     expect((await request.delete(`${cli.baseUrl}api/share`)).status()).toBe(403);
     expect((await request.get(`${cli.baseUrl}api/share`)).status()).toBe(403);
-    const state = await request.get(`${cli.baseUrl}api/share`, { headers: { 'X-Local-Bpmn-Host': cli.hostSecret } });
+    const state = await request.get(`${cli.baseUrl}api/share`, { headers: { 'X-Bpmn-Edit-Host': cli.hostSecret } });
     expect(await state.json()).toEqual({ state: 'idle' });
     expect(cli.stderr()).not.toContain('sharing at');
   });
@@ -98,7 +98,7 @@ test.describe('S7: share via public link (stand-in tunnel)', () => {
   test('Cloudflare headers mark a request as remote: only /s/<token>/ works, never the host API', async ({ request }) => {
     await start('fake', 100);
     const remote = (extra = {}) => ({ headers: { ...CF_HEADERS, ...extra } });
-    const hostHeader = { 'X-Local-Bpmn-Host': cli.hostSecret };
+    const hostHeader = { 'X-Bpmn-Edit-Host': cli.hostSecret };
 
     // Before sharing: nothing exists for a remote caller.
     expect((await request.get(cli.baseUrl, remote())).status()).toBe(404);
@@ -291,7 +291,7 @@ test.describe('S7: share via public link (stand-in tunnel)', () => {
     await typeLabel(page, 'Task_CheckStock', 'Edited right before Ctrl-C');
     cli.child.kill('SIGINT');
     expect(await cli.exited).toEqual({ code: 0, signal: null });
-    expect(cli.stderr()).toContain('local-bpmn: sharing stopped');
+    expect(cli.stderr()).toContain('bpmn-edit: sharing stopped');
     expect(await disk()).toContain('name="Edited right before Ctrl-C"');
   });
 

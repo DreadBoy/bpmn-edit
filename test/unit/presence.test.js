@@ -102,7 +102,7 @@ describe('presence over WebSocket', () => {
   let server;
 
   before(async () => {
-    dir = await mkdtemp(join(tmpdir(), 'local-bpmn-presence-'));
+    dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-presence-'));
     const file = join(dir, 'order.bpmn');
     await copyFile(FIXTURE, file);
     server = createServer({ filePath: file, session: new Session({ xml: await readFile(file, 'utf8') }), port: 0 });

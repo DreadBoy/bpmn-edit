@@ -19,14 +19,14 @@ import {
 const delay = (ms) => new Promise((r) => setTimeout(r, ms));
 const IDS = ['Task_ShipOrder', 'Task_CheckStock'];
 
-/** Side files holding the editor's version (`<name>.local-bpmn-unsaved-<time>.bpmn`). */
+/** Side files holding the editor's version (`<name>.bpmn-edit-unsaved-<time>.bpmn`). */
 async function unsavedFiles(dir) {
-  return (await asideFiles(dir)).filter((n) => /\.local-bpmn-unsaved-\d{8}-\d{6}(-\d+)?\.bpmn$/.test(n));
+  return (await asideFiles(dir)).filter((n) => /\.bpmn-edit-unsaved-\d{8}-\d{6}(-\d+)?\.bpmn$/.test(n));
 }
 
-/** Broken files the host replaced, kept under a second name at Ctrl-C (`<name>.local-bpmn-replaced-<time>.bpmn`). */
+/** Broken files the host replaced, kept under a second name at Ctrl-C (`<name>.bpmn-edit-replaced-<time>.bpmn`). */
 async function replacedFiles(dir) {
-  return (await asideFiles(dir)).filter((n) => /\.local-bpmn-replaced-\d{8}-\d{6}(-\d+)?\.bpmn$/.test(n));
+  return (await asideFiles(dir)).filter((n) => /\.bpmn-edit-replaced-\d{8}-\d{6}(-\d+)?\.bpmn$/.test(n));
 }
 
 /** Reconnect schedule for windows whose connection the test cuts (see web/app.js, S8). */
@@ -332,8 +332,8 @@ test.describe('Q2: browser edits racing a save on disk', () => {
   });
 
   test('a save on disk replacing the unwritten edit of a window that has closed: the edit is kept next to the file', async ({ browser }) => {
-    // The edit waits for its window to reconnect (LOCAL_BPMN_REAPPLY_GRACE_MS, default 20 s) first.
-    await start({ writeDelay: 2000, env: { LOCAL_BPMN_REAPPLY_GRACE_MS: '500' } });
+    // The edit waits for its window to reconnect (BPMN_EDIT_REAPPLY_GRACE_MS, default 20 s) first.
+    await start({ writeDelay: 2000, env: { BPMN_EDIT_REAPPLY_GRACE_MS: '500' } });
     const [A, B] = await open(browser);
     const errorsB = collectPageErrors(B);
 
@@ -417,7 +417,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
   /** Opens a window whose WebSocket goes through proxy(); resolves to { page, net }. */
   async function openProxied(browser) {
     const context = await browser.newContext();
-    await context.addInitScript((p) => { window.localBpmnTestConnection = p; }, PATIENT);
+    await context.addInitScript((p) => { window.bpmnEditTestConnection = p; }, PATIENT);
     const page = await context.newPage();
     windows.push({ context, page });
     await instrument(page);
@@ -538,7 +538,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
   });
 
   test('a window the host saw disconnect re-applies its discarded edit on reconnect: no copy is kept aside', async ({ browser, browserName }) => {
-    await start({ writeDelay: 2000, env: { LOCAL_BPMN_REAPPLY_GRACE_MS: '3000' } });
+    await start({ writeDelay: 2000, env: { BPMN_EDIT_REAPPLY_GRACE_MS: '3000' } });
     windows = [];
     const { page: A, net } = await openProxied(browser);
     const errors = collectPageErrors(A);
@@ -770,7 +770,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
   });
 
   test('a collaborator claiming another window\'s discarded versions does not stop them from being kept aside', async ({ browser }) => {
-    await start({ writeDelay: 2000, env: { LOCAL_BPMN_TEST_TUNNEL: 'fake', LOCAL_BPMN_TEST_TUNNEL_DELAY_MS: '100' } });
+    await start({ writeDelay: 2000, env: { BPMN_EDIT_TEST_TUNNEL: 'fake', BPMN_EDIT_TEST_TUNNEL_DELAY_MS: '100' } });
     const [H] = await open(browser, 1);
     await H.locator('#share-start').click();
     await expect(H.locator('#share-url')).toBeVisible({ timeout: 5000 });
@@ -817,7 +817,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
       await expect(A.locator('#notice')).toBeVisible(); // seen half-written
       cli.child.kill('SIGINT');
       expect(await cli.exited).toEqual({ code: 0, signal: null });
-      await ide.write(stale.slice(400), 400); // it finishes after local-bpmn has exited
+      await ide.write(stale.slice(400), 400); // it finishes after bpmn-edit has exited
     } finally {
       await ide.close();
     }
@@ -826,7 +826,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     const aside = await asideFiles(fixture.dir);
     expect(aside).toHaveLength(1);
     expect(nameInXml(await readFile(join(fixture.dir, aside[0]), 'utf8'), 'Task_ShipOrder')).toBe('Ship parcel');
-    expect(cli.stderr()).toContain(`another program was still writing ${fixture.file} when local-bpmn stopped`);
+    expect(cli.stderr()).toContain(`another program was still writing ${fixture.file} when bpmn-edit stopped`);
     expect(errors).toEqual([]);
   });
 
@@ -843,7 +843,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
       await ide.write(next.slice(0, half));
       cli.child.kill('SIGINT');
       expect(await cli.exited).toEqual({ code: 0, signal: null });
-      await ide.write(next.slice(half), half); // it finishes after local-bpmn has exited
+      await ide.write(next.slice(half), half); // it finishes after bpmn-edit has exited
     } finally {
       await ide.close();
     }
@@ -852,7 +852,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     const aside = await asideFiles(fixture.dir);
     expect(aside).toHaveLength(1);
     expect(nameInXml(await readFile(join(fixture.dir, aside[0]), 'utf8'), 'Task_ShipOrder')).toBe('Ship parcel');
-    expect(cli.stderr()).toContain(`another program is rewriting ${fixture.file} (it was broken just now); local-bpmn left it alone`);
+    expect(cli.stderr()).toContain(`another program is rewriting ${fixture.file} (it was broken just now); bpmn-edit left it alone`);
     expect(errors).toEqual([]);
   });
 
@@ -1003,7 +1003,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
       await expect.poll(async () => nameInXml(await disk(), 'Task_ShipOrder'), { timeout: 3000 }).toBe('Ship parcel');
       cli.child.kill('SIGINT');
       expect(await cli.exited).toEqual({ code: 0, signal: null });
-      await ide.write(next.slice(half), half); // the IDE finishes after local-bpmn has exited
+      await ide.write(next.slice(half), half); // the IDE finishes after bpmn-edit has exited
     } finally {
       await ide.close();
     }
@@ -1148,7 +1148,7 @@ test.describe('Q2: browser edits racing a save on disk', () => {
     expect(nameInXml(xml, 'Task_ShipOrder')).toBe('Ship order');
     const aside = await asideFiles(fixture.dir);
     expect(aside).toHaveLength(1);
-    expect(aside[0]).toMatch(/^order\.local-bpmn-unsaved-\d{8}-\d{6}\.bpmn$/);
+    expect(aside[0]).toMatch(/^order\.bpmn-edit-unsaved-\d{8}-\d{6}\.bpmn$/);
     expect(nameInXml(await readFile(join(fixture.dir, aside[0]), 'utf8'), 'Task_ShipOrder')).toBe('Ship parcel');
     expect(cli.stderr()).toContain(`the editor's version was saved to ${join(fixture.dir, aside[0])}`);
     expect(git(fixture.dir, 'status', '--porcelain')).toContain(`?? ${aside[0]}`);

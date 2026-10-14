@@ -8,8 +8,8 @@ import { collectPageErrors, startCli } from './helpers/cli.js';
 import { expectNoTempFiles, openEditor, setupRepo } from './helpers/editor.js';
 import { ownEntry, userList } from './helpers/presence.js';
 
-/** Where the toolbar screenshots go (LOCAL_BPMN_SCREENSHOT_DIR, else the test's output directory). */
-const screenshotDir = (testInfo) => process.env.LOCAL_BPMN_SCREENSHOT_DIR ?? testInfo.outputDir;
+/** Where the toolbar screenshots go (BPMN_EDIT_SCREENSHOT_DIR, else the test's output directory). */
+const screenshotDir = (testInfo) => process.env.BPMN_EDIT_SCREENSHOT_DIR ?? testInfo.outputDir;
 
 /** The toolbar's geometry as laid out in the page. */
 function toolbarLayout(page) {
@@ -76,7 +76,7 @@ test.describe('S5/S7: toolbar layout with the users list and the Share controls'
     fixture = await setupRepo();
     cli = await startCli(fixture.file, {
       cwd: fixture.dir,
-      env: { LOCAL_BPMN_TEST_TUNNEL: 'fake', LOCAL_BPMN_TEST_TUNNEL_DELAY_MS: '100' },
+      env: { BPMN_EDIT_TEST_TUNNEL: 'fake', BPMN_EDIT_TEST_TUNNEL_DELAY_MS: '100' },
     });
     contexts = [];
   });

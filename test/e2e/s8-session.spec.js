@@ -1,9 +1,9 @@
 // S8: session ended / stop sharing / reconnect, without Cloudflare. The CLI runs with the stand-in tunnel
-// (LOCAL_BPMN_TEST_TUNNEL=fake, src/test-tunnel.js); collaborators open the share link on localhost with
+// (BPMN_EDIT_TEST_TUNNEL=fake, src/test-tunnel.js); collaborators open the share link on localhost with
 // the Cloudflare headers, as in s7-share.spec.js. The keepalive through a real tunnel is covered by
 // s8-keepalive-tunnel.spec.js.
 //
-// Pages get a shorter reconnect schedule through `window.localBpmnTestConnection` (see web/app.js), so
+// Pages get a shorter reconnect schedule through `window.bpmnEditTestConnection` (see web/app.js), so
 // a page that kept retrying would show many attempts within a second; the default schedule is unit
 // tested (test/unit/connection.test.js).
 import { expect, test } from '@playwright/test';
@@ -71,7 +71,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
     return startCli(fixture.file, {
       cwd: fixture.dir,
       ...(port ? { port } : {}),
-      env: { LOCAL_BPMN_TEST_TUNNEL: 'fake', LOCAL_BPMN_TEST_TUNNEL_DELAY_MS: '100', ...env },
+      env: { BPMN_EDIT_TEST_TUNNEL: 'fake', BPMN_EDIT_TEST_TUNNEL_DELAY_MS: '100', ...env },
     });
   }
 
@@ -82,7 +82,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
   async function openWindow(browser, url, { policy = PATIENT, headers, expectStatus = 'saved' } = {}) {
     const context = await browser.newContext(headers ? { extraHTTPHeaders: headers } : {});
     contexts.push(context);
-    await context.addInitScript((p) => { window.localBpmnTestConnection = p; }, policy);
+    await context.addInitScript((p) => { window.bpmnEditTestConnection = p; }, policy);
     const page = await context.newPage();
     const errors = collectPageErrors(page);
     const sockets = [];
@@ -179,7 +179,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
       await expect(overlay(collab.page).action).toBeHidden();
       for (const win of [host, local]) {
         await expect(overlay(win.page).text).toHaveText(
-          'local-bpmn was stopped. Run it again and open the link it prints, or reconnect once it runs again.',
+          'bpmn-edit was stopped. Run it again and open the link it prints, or reconnect once it runs again.',
         );
         await expect(overlay(win.page).action).toHaveText('Reconnect');
       }
@@ -248,7 +248,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
       // The collaborator's socket goes through the test proxy.
       const context = await browser.newContext({ extraHTTPHeaders: CF_HEADERS });
       contexts.push(context);
-      await context.addInitScript((p) => { window.localBpmnTestConnection = p; }, PATIENT);
+      await context.addInitScript((p) => { window.bpmnEditTestConnection = p; }, PATIENT);
       const page = await context.newPage();
       const collab = { page, errors: collectPageErrors(page) };
       const net = await proxy(page);
@@ -335,7 +335,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
       cli = await startHost();
       const context = await browser.newContext();
       contexts.push(context);
-      await context.addInitScript((p) => { window.localBpmnTestConnection = p; }, PATIENT); // heartbeat 1 s
+      await context.addInitScript((p) => { window.bpmnEditTestConnection = p; }, PATIENT); // heartbeat 1 s
       const page = await context.newPage();
       const errors = collectPageErrors(page);
       const net = await proxy(page);
@@ -360,7 +360,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
 
   test('keepalive: a connection that stops answering pings is dropped and leaves the users list; live ones stay',
     async ({ browser }) => {
-      cli = await startHost({ env: { LOCAL_BPMN_KEEPALIVE_MS: '250' } });
+      cli = await startHost({ env: { BPMN_EDIT_KEEPALIVE_MS: '250' } });
       const host = await openWindow(browser, cli.url);
 
       /** A raw client that joins as `name`; autoPong false = a connection that died without closing. */
@@ -435,11 +435,11 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
       await expect.poll(disk, { timeout: 3000 }).toContain('name="Edited while the host was down"');
       expect(await disk()).toContain('name="Before the crash"');
       // ...but its secret is from the old run: it is a plain local editor now, and says so.
-      await expect(host.page.locator('#toast')).toContainText('local-bpmn was restarted');
+      await expect(host.page.locator('#toast')).toContainText('bpmn-edit was restarted');
       await expect(host.page.locator('#share')).toBeHidden();
-      expect(await host.page.evaluate(() => sessionStorage.getItem('local-bpmn:host-secret'))).toBeNull();
-      expect((await request.post(`${restarted.baseUrl}api/share`, { headers: { 'X-Local-Bpmn-Host': oldSecret } })).status()).toBe(403);
-      expect((await request.get(`${restarted.baseUrl}api/share`, { headers: { 'X-Local-Bpmn-Host': restarted.hostSecret } })).status()).toBe(200);
+      expect(await host.page.evaluate(() => sessionStorage.getItem('bpmn-edit:host-secret'))).toBeNull();
+      expect((await request.post(`${restarted.baseUrl}api/share`, { headers: { 'X-Bpmn-Edit-Host': oldSecret } })).status()).toBe(403);
+      expect((await request.get(`${restarted.baseUrl}api/share`, { headers: { 'X-Bpmn-Edit-Host': restarted.hostSecret } })).status()).toBe(200);
 
       // The collaborator's link belongs to the old run: "Session ended", no more attempts.
       await expect(overlay(collab.page).root).toBeVisible({ timeout: 5000 });
@@ -472,7 +472,7 @@ test.describe('S8: session ended, stop sharing, reconnect', () => {
     await overlay(host.page).action.click();
     await expect(overlay(host.page).root).toBeHidden();
     await expect(status(host.page)).toHaveText('Saved', { timeout: 5000 });
-    await expect(host.page.locator('#toast')).toContainText('local-bpmn was restarted');
+    await expect(host.page.locator('#toast')).toContainText('bpmn-edit was restarted');
     await expect(host.page.locator('#share')).toBeHidden();
     await typeLabel(host.page, 'Task_CancelOrder', 'After reconnect');
     await expect.poll(disk, { timeout: 3000 }).toContain('name="After reconnect"');

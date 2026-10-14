@@ -2,9 +2,9 @@
 // Share button. ONE tunnel covers every public-URL check (Cloudflare rate-limits quick tunnels per IP, so
 // this test never retries and is never repeated in a loop; retries: 0).
 //
-// The CLI finds cloudflared the way it does for users: on PATH, else in ~/.local-bpmn/bin (LOCAL_BPMN_HOME),
+// The CLI finds cloudflared the way it does for users: on PATH, else in ~/.bpmn-edit/bin (BPMN_EDIT_HOME),
 // else it downloads it there (~20 MB) — then the download progress on the Share spinner is checked too.
-// Set LOCAL_BPMN_SKIP_TUNNEL_E2E=1 to skip (offline, or to spare the rate limit); every other S7 rule is
+// Set BPMN_EDIT_SKIP_TUNNEL_E2E=1 to skip (offline, or to spare the rate limit); every other S7 rule is
 // covered without a tunnel in s7-share.spec.js.
 import { expect, test } from '@playwright/test';
 import { execFileSync } from 'node:child_process';
@@ -41,7 +41,7 @@ async function publicGet(url, { method = 'GET', headers = {} } = {}) {
 test.describe('S7: share via public link (real Cloudflare tunnel)', () => {
   // Chrome only, so the browser matrix (S10) never starts more tunnels.
   test.skip(({ browserName }) => browserName !== 'chromium', 'real Cloudflare tunnels are rate-limited; run once in Chrome');
-  test.skip(process.env.LOCAL_BPMN_SKIP_TUNNEL_E2E === '1', 'LOCAL_BPMN_SKIP_TUNNEL_E2E=1');
+  test.skip(process.env.BPMN_EDIT_SKIP_TUNNEL_E2E === '1', 'BPMN_EDIT_SKIP_TUNNEL_E2E=1');
   test.setTimeout(420_000); // a first run downloads cloudflared; on a slow line that takes minutes
 
   let fixture;
@@ -124,7 +124,7 @@ test.describe('S7: share via public link (real Cloudflare tunnel)', () => {
         await expect(status(collab)).toHaveText('Saved');
 
         // Through the public hostname, nothing but /s/<token>/ exists — not even with the host secret.
-        const secret = { 'X-Local-Bpmn-Host': cli.hostSecret };
+        const secret = { 'X-Bpmn-Edit-Host': cli.hostSecret };
         const checks = {
           'wrong token': await publicGet(`${origin}/s/${'A'.repeat(32)}/`),
           'wrong token, no slash': await publicGet(`${origin}/s/${otherToken(token)}`),

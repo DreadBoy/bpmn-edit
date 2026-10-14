@@ -75,7 +75,7 @@ describe('server routes', () => {
     for (const path of ['/../package.json', '/%2e%2e/package.json', '/..%2fpackage.json', '/vendor/../../src/server.js']) {
       const res = await rawGet(server.port, path);
       assert.equal(res.status, 404, path);
-      assert.doesNotMatch(res.body, /local-bpmn|createServer/, path);
+      assert.doesNotMatch(res.body, /bpmn-edit|createServer/, path);
     }
   });
 

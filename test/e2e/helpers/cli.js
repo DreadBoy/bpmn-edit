@@ -6,14 +6,14 @@ import { basename, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 export const ROOT = resolve(fileURLToPath(import.meta.url), '..', '..', '..', '..');
-export const CLI = join(ROOT, 'bin', 'local-bpmn.js');
+export const CLI = join(ROOT, 'bin', 'bpmn-edit.js');
 export const FIXTURES = join(ROOT, 'test', 'fixtures');
 
-const READY_LINE = /^local-bpmn: editing (.+) at (http:\/\/\S+)$/m;
+const READY_LINE = /^bpmn-edit: editing (.+) at (http:\/\/\S+)$/m;
 
 /** Copies a fixture into a fresh temp dir; returns { dir, file, cleanup }. */
 export async function copyFixture(name = 'order.bpmn') {
-  const dir = await mkdtemp(join(tmpdir(), 'local-bpmn-e2e-'));
+  const dir = await mkdtemp(join(tmpdir(), 'bpmn-edit-e2e-'));
   const file = join(dir, basename(name));
   await copyFile(join(FIXTURES, name), file);
   return { dir, file, cleanup: () => rm(dir, { recursive: true, force: true }) };
@@ -135,7 +135,7 @@ export function collectPageErrors(page) {
  * when the host terminates the server half of a proxied connection whose page half is already closed
  * (the cut or dead connection,
  * replaced once the page reconnects), WebKit logs this for the page. The page's own socket was closed
- * before; Chrome and Firefox log nothing. Reproduced without local-bpmn: route a socket, close the page
+ * before; Chrome and Firefox log nothing. Reproduced without bpmn-edit: route a socket, close the page
  * half, then terminate the server half. WebKit logs the same message whenever the server terminates a
  * live socket abruptly, proxied or not: WebKit's benign counterpart of Chrome's "WebSocket connection
  * failed".

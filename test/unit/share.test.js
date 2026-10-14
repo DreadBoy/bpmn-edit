@@ -64,7 +64,7 @@ describe('share routes and security model', () => {
   before(async () => {
     server = createServer({ filePath: FIXTURE, port: 0, createTunnelProvider: testProviderFactory('fake', { delayMs: 30 }) });
     port = await server.listen();
-    host = { 'x-local-bpmn-host': server.hostSecret };
+    host = { 'x-bpmn-edit-host': server.hostSecret };
   });
   after(() => server.close());
   afterEach(() => server.share.stop());
@@ -86,7 +86,7 @@ describe('share routes and security model', () => {
   it('host-only endpoints need the host secret (403 without, or with a wrong one)', async () => {
     for (const method of ['GET', 'POST', 'DELETE']) {
       assert.equal((await request(port, '/api/share', { method })).status, 403, method);
-      assert.equal((await request(port, '/api/share', { method, headers: { 'x-local-bpmn-host': 'wrong' } })).status, 403, method);
+      assert.equal((await request(port, '/api/share', { method, headers: { 'x-bpmn-edit-host': 'wrong' } })).status, 403, method);
     }
     // ?host= in the URL is not how host-only HTTP calls authenticate.
     assert.equal((await request(port, `/api/share?host=${server.hostSecret}`, { method: 'POST' })).status, 403);
@@ -136,7 +136,7 @@ describe('share routes and security model', () => {
       ['GET', '/s/'], ['GET', '/s/x/'], ['GET', '/nope'], ['GET', `${shared.path}/../api/file`],
     ];
     for (const [method, path] of notFound) {
-      const res = await request(port, path, { method, headers: h({ 'x-local-bpmn-host': server.hostSecret }) });
+      const res = await request(port, path, { method, headers: h({ 'x-bpmn-edit-host': server.hostSecret }) });
       assert.equal(res.status, 404, `${method} ${path}`);
     }
     // Same with each Cloudflare header alone.
@@ -278,7 +278,7 @@ describe('share errors', () => {
   it('rate limit: 429 with TUNNEL_RATE_LIMITED and a readable message; Share can be retried', async () => {
     const server = createServer({ filePath: FIXTURE, port: 0, createTunnelProvider: testProviderFactory('rate-limited-once', { delayMs: 0 }) });
     const port = await server.listen();
-    const host = { 'x-local-bpmn-host': server.hostSecret };
+    const host = { 'x-bpmn-edit-host': server.hostSecret };
     try {
       const res = await request(port, '/api/share', { method: 'POST', headers: host });
       assert.equal(res.status, 429);
@@ -299,7 +299,7 @@ describe('share errors', () => {
     const server = createServer({ filePath: FIXTURE, port: 0, createTunnelProvider: testProviderFactory('fail', { delayMs: 0 }) });
     const port = await server.listen();
     try {
-      const res = await request(port, '/api/share', { method: 'POST', headers: { 'x-local-bpmn-host': server.hostSecret } });
+      const res = await request(port, '/api/share', { method: 'POST', headers: { 'x-bpmn-edit-host': server.hostSecret } });
       assert.equal(res.status, 502);
       assert.deepEqual(json(res).error, { code: 'TUNNEL_FAILED', message: 'Could not start the public tunnel: cloudflared exited early (code 1).' });
     } finally {
