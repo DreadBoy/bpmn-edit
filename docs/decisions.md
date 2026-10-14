@@ -955,6 +955,276 @@ tunnel stays connected (or recovers transparently). S7 wires sharing up without 
 - Quick tunnels allow at most 200 in-flight requests and no Server-Sent Events (bpmn-edit uses neither).
 - The 125 s cut is attributed to Cloudflare's proxy read timeout by the matching number only.
 
+## Q4-impl: saves keep the file's own text (minimal-diff writer)
+
+### Question
+
+Q4 (`docs/q4-diff-churn.md`) measured that the first save of a file made by another tool rewrites it in
+bpmn-js's formatting (3–898 lines unrelated to a one-word rename) and silently drops comments, processing
+instructions and the DOCTYPE (an entity turned into literal text). It recommended option (c): a host-side
+3-way writer that patches only what changed into the text on disk, checked on every write, with a
+format-preserving fallback. This step implements it and verifies it against the Q4 acceptance criteria.
+
+### What was built
+
+- **`src/minimal-diff.js`** (no dependencies). A small strict XML reader (anything it does not understand —
+  malformed markup, unbound prefixes, duplicate ids — is an error, which only means a fallback; entity
+  references are kept as references, like bpmn-js keeps them as text, so DOCTYPE entities from the internal
+  subset or an external DTD both work), and `renderForDisk({ disk, base, out })`:
+  - `disk`: the text on disk; `base`: bpmn-js's serialisation of exactly that text; `out`: bpmn-js's
+    serialisation after the edit (the update the browser sent).
+  - Elements are matched by id; elements without an id by position among same-named siblings under their
+    nearest element with an id, aligned by content (LCS) so that removing one `<outgoing>` removes that
+    line. Changed attributes and texts are patched in place (in the attribute's own quotes; references to
+    the file's entities written back as references), removed elements are cut with their line, added
+    elements are inserted next to their nearest sibling on disk. Everything else stays byte for byte.
+  - **Every element that keeps its id keeps its own text.** Moved to another parent (e.g. dragged into a
+    sub-process, also one created in the same save): its text on disk, with the changes inside it
+    patched, is cut and inserted at the new place, re-indented. Replaced by another type (the wrench; same
+    id): the tags get the new name and the content is patched like any other element; extensions bpmn-js
+    drops on replace (attributes and elements in namespaces it does not know, `extensionElements`) stay
+    on disk. The DI shape or edge that bpmn-js re-creates with a new id on replace is matched to the old
+    one (same `bpmnElement`, same plane) and patched in place (its id changes). So comments, PIs, CDATA,
+    entity references and extensions inside moved or replaced elements stay where they were.
+  - New elements are rendered in the file's style, detected from the file: line ending, indent unit,
+    quote, `/>` or ` />`, attribute layout (one line, one per line aligned under the first, or with a
+    hanging indent), and the file's namespace prefixes (a namespace bpmn-js writes as `bpmn:` is written
+    with the file's `bpmn2:` or as its default namespace; a namespace the file lacks, e.g. `bioc:` for a
+    colour, is declared where bpmn-js declared it, else on the root — only when something written needs it).
+  - bpmn-js's empty `<bpmndi:BPMNLabel />` (added to a shape when its label is edited, no information) is
+    neither written nor compared, so a rename is exactly one changed line.
+  - **DI that bpmn-js moved on import.** bpmn-js ≥ 9 moves the DI of a collapsed sub-process into a
+    diagram of its own, with other coordinates. A shape or edge whose coordinates on disk are bpmn-js's
+    moved by one constant offset gets bpmn-js's changes (a move, a new label) moved back by that offset;
+    the diagram bpmn-js made exists only in its view and is not written. Any other value bpmn-js changed
+    whose text on disk differs from the base (beyond number spelling) is refused (fallback) instead of
+    written relative to the wrong thing.
+- **Labels in collapsed sub-processes of older files (`web/app.js`).** bpmn-js 18's
+  `SubprocessCompatibility` moves such DI into a diagram of its own and shifts shapes and waypoints next
+  to the origin, but not label bounds, so every label there showed far from its element (in old files
+  already, before any edit). bpmn-edit's import now shifts each such label by its element's shift (a
+  listener before and after bpmn-js's, priorities 1600 / 1400 on `import.render.start`). With that,
+  the labels have the same offset as their shapes, and the writer writes them in the file's own
+  coordinates. Why the file's coordinates and not bpmn-js's shifted ones: BPMN DI coordinates are
+  absolute in the diagram that holds them (here the main one, as on disk); written that way, the file
+  stays consistent with its own shapes and its other labels, renders right in tools that read DI as
+  written (bpmn-js < 9 and non-bpmn-js tools), and in bpmn-edit before and after reopening. Writing the
+  shifted values instead would misplace the labels everywhere except in unpatched bpmn-js ≥ 9, which
+  misplaces all the file's existing labels anyway (its bug); those tools show new labels displaced the
+  same way as the file's old ones.
+- **Undo of a delete or a type change.** The store keeps (for the run) the text of every element with an
+  id that a write cut from the file, with bpmn-js's model of it at that moment (up to 5 versions per
+  id, 200 ids). When bpmn-js brings an element back with exactly such a model (undo), that text is
+  written back (comments, PIs, CDATA, extensions kept on an earlier type change — bpmn-js's model then
+  lacked them, and that model is what is matched), next to its old neighbour on disk; elements cut
+  together (a task with its flows and their DI) go back next to each other in their old order. An
+  element bpmn-js brings back with another model (e.g. undo re-adds its flow references in another
+  order, or drops `sourceElement` on an edge) gets its remembered text back first, with bpmn-js's text
+  of it at delete time as its base, and then only what bpmn-js changed is patched in (verifier round 4:
+  before, such an element was written from bpmn-js's output and lost its comments, PIs, CDATA and kept
+  extensions without a note). Should a remembered element still be written from bpmn-js's output (its
+  parent gone, namespaces changed), what that loses of its remembered text is reported (`lost=`,
+  warning) even in a `minimal` write. Children only the disk has (extensions kept on
+  a type change) are taken for the ones bpmn-js brings back when they are equal, instead of a second
+  copy. The check compares restored text with the remembered text: everything in it exactly, every
+  element bpmn-js has present, the parent as bpmn-js has it.
+- **Namespaces declared per element.** Where a file declares a namespace on the elements themselves
+  (`<Bounds xmlns="…/DC" …/>`, Bizagi) rather than with a prefix on the root, new elements do the same
+  (the declaration where the file puts it, here last), so the root start tag is not touched.
+- **The check (every write).** The result is parsed again and its model compared fact by fact (elements,
+  parents, attributes with namespace URIs, xsi:type as a QName, texts, CDATA, comments, PIs, declaration,
+  DOCTYPE; an entity reference is a fact of its own, never equal to the literal text `&amp;name;`): what
+  bpmn-js changed (`base → out`) must be in the result with `out`'s value (layout moved back by an import
+  offset, see above), elements bpmn-js removed must be gone (except the extensions of a replaced element),
+  comments/PIs/CDATA/declaration/DOCTYPE of everything on disk must be as on disk — inside moved and
+  replaced elements too — and every other fact exactly as on disk. A
+  second opinion with an independent tokenizer (`src/elements.js` element forms): every element the
+  result changed compared with the disk must be one bpmn-js changed. Any mismatch → fallback.
+- **What a fallback loses** is computed from the models (file vs text written): every comment, PI, CDATA
+  section, the declaration and DOCTYPE, and every element and attribute in a namespace bpmn-js does not
+  know (extensions), unless it was in an element the edit deleted. Verifier round 3 found that `format`
+  had only counted comments and PIs it could not place, so extensions and CDATA it dropped went
+  unreported; a unit test now forces `format` over kept extensions and requires each to be named.
+- **Fallbacks**, each observable (`store.writerStats`, a `rendered` event with `lost`, one terminal note per
+  kind and run saying what the save does instead, a warning naming what was lost on **every** save that
+  loses something, and with `BPMN_EDIT_DEBUG_WRITES=1` one line per write: `bpmn-edit: debug: write mode=…
+  ms=… [lost=n] [reason=…]`):
+  - `unbased`: no base known for the disk text → the disk text itself is the base (exact for files
+    bpmn-js wrote; otherwise bpmn-js's normalisations are written too, comments etc. still kept), checked;
+  - `format`: bpmn-js's output rendered in the file's style with the file's prolog (declaration,
+    comments, PIs, DOCTYPE), root start tag (if it declares the same attributes) and epilog (final
+    newline); texts bpmn-js has unchanged are written as on disk (CDATA, entity references, comments
+    inside them); comments and PIs between elements are put back next to the same element (before the
+    next sibling that still exists, else after the previous one, else at the end of the parent). Checked
+    to have exactly `out`'s model; what had nowhere to go is listed as lost;
+  - `raw`: the disk text cannot be read as XML: bpmn-js's output as it is; its comments, PIs and DOCTYPE
+    (found by a plain scan) are listed as lost. `new`: the file is missing or broken, nothing to keep
+    (not a fallback).
+- **Where the base comes from.** The browser sends `{ type: 'baseline', version, xml }` right after it
+  imports a version that may be the file on disk (initial load, change on disk, re-sync, a newer document
+  fetched after a conflict), before anything can change the diagram (`saveXML` serialises synchronously
+  when called, right after `importXML` resolves; the message goes out before any update based on that
+  version). The server looks the version up among the recent versions read from disk
+  (`Session#diskTextOf`) and hands `(text, base)` to the store, which keeps it **only while the file
+  holds exactly that text** (`store.setBaseline` refuses any other text). After each own write the pair
+  becomes `(text written, XML it was written from)` — valid because the check proved the written text
+  relates to that XML as the old disk text related to its base. A change on disk replaces the text, so
+  an old base can never be applied to new text: until the browser has imported the new version and sent
+  its baseline, a write would be `unbased`; in practice every update based on that version comes after
+  its baseline on the same socket. A reconnecting page whose document is unchanged re-sends the baseline
+  it kept (a restarted host has none).
+- **Q2 path unchanged.** Rendering happens in the store's write loop right before `writeAtomically`,
+  from the store's own `diskXml` — the same text the pre-write disk check compares the file with, so a
+  change on disk still holds the write back and is reported as before. `diskXml`, `lastWrite`, the
+  in-flight text, stale-save detection (`looksStale` / `containsChanges` on disk texts) and the
+  confirmation of writes over broken files all work on the text written; `saved` reports the XML given to
+  `write()` (the session matches it against its accepted updates). Side files keep what they kept before:
+  edits that were never written as the editor's XML, a written version (stale save, Ctrl-C checks) as
+  the text that was written, i.e. in the file's style. Without `render` (unit tests of the store) the
+  store writes the XML as it is.
+
+### Results
+
+E2E `test/e2e/q4-minimal-diff.spec.js`: every file in `test/fixtures/q4` committed to a fresh repo with
+`core.autocrlf` set explicitly (`false`: full scenario; `input`: renames and move), real CLI with
+`BPMN_EDIT_DEBUG_WRITES=1`, real browser at 1600×1000. Rename task A, rename task B (name with `&` and
+quotes), drag task A 40 px (UI); then (modeling API in the page, one save each) append a task, connect it,
+colour a task, add an annotation with an association, add an expanded sub-process, move the appended task
+into it, replace task B by another type, delete task B with its connections. Unrelated = lines changed
+between the ideal edit (only the name attribute replaced in place) and the saved file.
+
+| File | Unrelated lines, rename 1 / 2 (Q4 before) | `git diff`, rename 1 / 2 | Move (Q4 before) | Structural: append, connect, colour, annotate, sub-process, move into it, replace, delete | Writes / fallbacks |
+| --- | --- | --- | --- | --- | --- |
+| bizagi-export | **0 / 0** (154 / 0) | 2 / 2 | **10** (52) | 14, 9, 4, 11, 6, 27, 15, 43 | 14 / 0 |
+| bpmnio-demo-export | **0 / 0** (898 / 1) | 2 / 2 | **6** (12) | 14, 9, 4, 11, 4, 27, 6, 22 | 14 / 0 |
+| camunda7-loan-approval | **0 / 0** (39 / 0) | 2 / 2 | **6** (6) | 14, 9, 4, 11, 4, 27, 10, 30 | 14 / 0 |
+| camunda7-modeler | **0 / 0** (127 / 1) | 2 / 2 | **6** (12) | 14, 9, 4, 11, 4, 27, 7, 18 | 14 / 0 |
+| camunda8-modeler | **0 / 0** (143 / 1) | 2 / 2 | **14** (20) | 14, 9, 2, 11, 4, 27, 6, 26 | 14 / 0 |
+| comments-nonascii | **0 / 0** (14 / 1) | 2 / 2 | **8** (14) | 14, 9, 4, 11, 4, 27, 6, 20 | 14 / 0 |
+| crlf | **0 / 0** (213 / 1) | 2 / 2 | **6** (12) | 14, 9, 4, 11, 4, 27, 6, 20 | 14 / 0 |
+| doctype | **0 / 0** (8 / 1) | 2 / 2 | **6** (12) | 14, 9, 4, 11, 4, 27, 6, 21 | 14 / 0 |
+| hand-4space | **0 / 0** (305 / 1) | 2 / 2 | **6** (12) | 25, 16, 10, 21, 9, 43, 6, 32 | 14 / 0 |
+| hand-tabs | **0 / 0** (305 / 1) | 2 / 2 | **6** (12) | 25, 16, 10, 21, 9, 43, 6, 32 | 14 / 0 |
+| no-trailing-newline | **0 / 0** (3 / 1) | 2 / 2 | **6** (12) | 14, 9, 4, 11, 4, 27, 6, 20 | 14 / 0 |
+| signavio-export | **0 / 0** (431 / 0) | 2 / 2 | **10** (18) | 14, 9, 4, 11, 4, 27, 11, 29 | 14 / 0 |
+
+Numbers per file with `core.autocrlf=false` (the `input` runs gave the same rename and move numbers);
+identical in Chrome, Firefox and WebKit. Writes: 11 (`false`) + 3 (`input`) per file and browser.
+
+- Lines unrelated to a rename: **0** on the first and the second save in every file and both autocrlf
+  settings (Q4 before: 3–898 on the first save, 0–1 later); `git diff --numstat` shows exactly the 2
+  lines of the rename.
+- Information: the model facts of the file after both renames equal the original's except the two
+  names (comments, PIs, DOCTYPE and `&company;`, CDATA, unknown `acme:`/`camunda:`/`zeebe:`/`signavio:`/
+  `bizagi:` content, default-valued attributes, number spelling, namespace prefixes and declarations);
+  text before and after the root element byte-identical; detected style identical; no foreign line ends.
+- Move: 6–14 lines, no element reordered, only DI layout values changed (Q4 before: 6–52 with the moved
+  shape's DI moved to the end of the plane).
+- Structural edits: **0 fallbacks** in 96 structural writes per browser (12 files × 8 edits); with the
+  renames and moves 168 writes per browser, 504 in all, every one `minimal`, i.e. every one passed the
+  check. The new task and its shape have the prefixes, indentation and quotes of their neighbours;
+  one-attribute-per-line files get new elements in that layout (hence their larger counts). Moving into a
+  sub-process relocates the element's own text (bpmn-js also removes its connections, which cross the
+  sub-process' border); a type change renames its tags in place and patches the DI shape bpmn-js
+  re-created (6–15 lines; 10–25 when replaced elements were written from bpmn-js's output).
+- Gestures through the UI (second part of the spec, all three browsers): wrench → "User task" on
+  `doctype` (task with `&company;` documentation) and `comments-nonascii` (task with a comment, a PI in
+  its `extensionElements`, CDATA documentation, `acme:sla`, `acme:retryPolicy`); a new expanded
+  sub-process from the palette and the same tasks dragged into it; in `bpmnio-demo-export` (bpmn-js 7.3)
+  with a comment added in the process and a PI in the plane, drilling into "Collapsed Event Sub Process"
+  and renaming its start event. Every write `minimal`, no note or warning, every comment / PI / CDATA /
+  declaration / DOCTYPE fact of the file unchanged, `&company;` and the `acme:` extensions still there;
+  replace ≤ 10 changed lines (the tags, the DI id, a label bpmn-js re-measures), the collapsed rename
+  ≤ 5 (the name and the new label, placed below the event in the file's coordinates).
+- Verifier round 4 found: (M1) delete + undo of an element with two or more flows (bpmn-js re-adds the
+  references in another order) was written from bpmn-js's output as `minimal`, silently losing its
+  comment, PI, CDATA and kept extensions; (M2) on Signavio a vertical drag (bpmn-js inserts waypoints
+  before an endpoint that stays) fell back to `format` (144 lines): the writer kept the endpoint's
+  spelling `419.0`, the check compared it by position with bpmn-js's `419`. Fixed: restore-then-patch
+  (above) and loss reporting for remembered elements; changed values are compared as numbers by the
+  check, like the writer does. The corpus E2E now also drags task A vertically (0, 30) and diagonally
+  (25, 20) in every file: minimal, nothing lost, no DI reordering, at most a removed and an added line
+  per layout value bpmn-js changed (10–26 lines; hand-formatted files have one attribute per line). The
+  diagonal drag is refused by bpmn-js in Bizagi (lane) and drops the task onto a flow in
+  bpmnio-demo-export (bpmn-js splits the flow): both still minimal and lossless. UI tests: Signavio's
+  start event dragged 20 px down; wrench → connect a second flow → delete → undo on
+  `comments-nonascii` and `camunda7-modeler`.
+- Verifier round 3 found: (D1) wrench, delete, undo on a task whose extensions had been kept on the type
+  change fell back to `format`, dropping its comment, PI, CDATA and extensions without saying so (the
+  check required restored elements to equal bpmn-js's model exactly, and `format` under-reported); (D2)
+  Bizagi got `di:`/`dc:` prefixes and a root declaration for new DI; (D3) flows and edges restored by an
+  undo went to bpmn-js's position. Fixed as above. UI tests for wrench → delete → undo → undo on
+  `comments-nonascii` and `camunda8-modeler` require `minimal lost=0` on every write and end ≤ 2 lines
+  from the original (a label bpmn-js re-measures, or a reference bpmn-js re-orders, see below). The
+  verifier's probes (delete/replace + undo on 9 files, delete-undo-redo-undo, two deletes, multi-select,
+  move-into + delete + undo, rename + move + delete + undo) all end with nothing missing and ≤ 2 lines.
+- Verifier round 2 found: (1) a label added or moved inside a collapsed sub-process of a bpmn-js 7 file
+  was written in file coordinates but bpmn-js 18 does not shift labels on import, so after reopening it
+  showed ~1200 px from its event (the E2E did not reopen); (2) delete + undo, and (3) replace + undo, lost
+  a task's comment, PI and CDATA, or fell back to `format`. Fixed as above; the E2E now reopens the file
+  from disk in a new bpmn-edit and compares the label's position relative to its event (it fails with
+  the import patch disabled: 187 px), and delete + undo / replace + undo on `comments-nonascii` are UI
+  tests (each ≤ 2 changed lines afterwards: bpmn-js re-measures one gateway label). The E2E also parses
+  the debug line field by field and requires `lost=0`.
+- Verifier round 1 found that the first version wrote moved/replaced elements from bpmn-js's output (a
+  DOCTYPE entity became `&amp;company;`; comments, PIs, CDATA and `acme:` extensions vanished, all as
+  `minimal`, because the check compared such subtrees with bpmn-js's output), and that a rename inside a
+  collapsed sub-process of a bpmn-js 7 file fell back to `format`, which dropped body comments and PIs.
+  All fixed as described above; each is now an E2E (UI) and a unit test, and the check rejects the old
+  results (unit test "the check refuses a result that turns an entity into text or drops a comment of a
+  moved element").
+- Unit tests (`test/unit/minimal-diff.test.js`): the Q4 captured bpmn-js saves chained through the writer
+  (0 unrelated lines, moves ≤ 16), style/prefix/default-namespace/attribute-layout cases, moves into a
+  sub-process (existing and new), type replacement keeping comments/PIs/CDATA/entities/extensions, DI
+  import offsets (new label, move), deletes, each fallback with what it loses, the checks catching
+  tampered results, the reader, the store (base only for its own text, dropped on a change on disk, loss
+  warnings), the session and the server's `baseline` message.
+- Cost: 4–70 ms per write on the corpus, ~45–100 ms on a generated 300-element diagram (98 KB) — on the
+  host, once per debounced write.
+
+### Decision
+
+Ship the minimal-diff writer as the only write path of the CLI (`bin/bpmn-edit.js`, `createServer`'s own
+store), with the checked fallbacks above. bpmn-js's output itself is unchanged and is still what the
+windows exchange; only the text written to disk differs. The Q4 acceptance criteria (renames, the 40 px
+move, information kept, formatting, new elements in the file's style, every write checked, 0 fallbacks on
+the structural edits) are met on the whole corpus in all three browsers, for the gestures the E2E and the
+verifier's probes cover; the known limits below are where the result is not byte-minimal or falls back.
+
+### Known limits
+
+- `format` is still used when a change cannot be patched in place: a changed text next to an XML comment
+  in the same element, changed mixed content, a new element under DI that exists only in bpmn-js's view
+  (e.g. a new shape inside a collapsed sub-process of a bpmn-js < 9 file), an element moved together with
+  its moved parent, a value normalised on import other than a constant DI offset. It keeps comments and
+  PIs next to surviving elements; what it cannot place (e.g. a comment inside a text that changed, or
+  next to elements that are all gone) is named in a warning. It also writes bpmn-js's attribute order,
+  number spelling and default attributes for that save. Each mode prints its note once per run.
+- Comments and PIs inside an element you delete are gone with it (the deletion is the edit); an undo in
+  the same run brings them back. The memory is per run of bpmn-edit and holds the last 200 elements.
+- Cut and paste writes the pasted element from bpmn-js's output: bpmn-js's copy does not carry
+  extensions, and the file's comments/PIs/CDATA in it are not carried over (backlog).
+- After an undo, bpmn-js may re-add a reference (`<incoming>`/`<outgoing>`) at the end of its list (the
+  file follows: a removed and an added line), and may respell a number in a waypoint it changed during
+  the delete and back on undo (a line pair). After a type change and its undo, the DI label bpmn-js
+  dropped and brings back is written as bpmn-js has it (e.g. Signavio's `302.0` becomes `302`, its
+  `labelStyle` is gone). A restored edge whose `sourceElement`/`targetElement` bpmn-js dropped
+  (camunda7-loan-approval) loses those two DI attributes (bpmn-js's model, a line pair).
+- In a collapsed sub-process of a bpmn-js < 9 file, bpmn-js ≥ 9 puts the diagram's top-left element at
+  (180, 160) on every import, so positions inside it are relative (as in any bpmn-js ≥ 9 tool). Other
+  bpmn-js ≥ 9 tools show the labels there displaced (their import does not shift labels).
+- Extensions kept on a type change are on disk but not in the open windows' model until the file is
+  reloaded (bpmn-js dropped them from the model on replace).
+- Element order is not compared (by design: DI order is kept as on disk, new elements go next to their
+  nearest sibling); neither are namespace prefixes (only the namespaces themselves).
+- The base is trusted as sent by any connected window (host or collaborator); a window can already change
+  the whole document. A wrong base is not detected as such: the check proves the result relates to `out`
+  as the disk relates to the base.
+- Without a base (e.g. an old page, or an update arriving before the baseline) the save is `unbased`:
+  correct, but bpmn-js's import normalisations of a foreign file (default attributes, number spelling,
+  DI it reorganises) are written in that save.
+- The writer runs synchronously on the host (tens of ms for large diagrams).
+
 ## S5/S6: presence protocol
 
 ### Decision

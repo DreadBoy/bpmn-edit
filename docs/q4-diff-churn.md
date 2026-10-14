@@ -261,6 +261,9 @@ annotation with an association, replace a task by a user task (same id, other el
 
 Record the decision in `docs/decisions.md` (not done here, by instruction).
 
+**Implemented** as described (option (c) with the checked fallbacks): see `docs/decisions.md`, "Q4-impl",
+`src/minimal-diff.js` and `test/e2e/q4-minimal-diff.spec.js`.
+
 **Acceptance threshold for the implementation.** Test it with an E2E spec over every file in `test/fixtures/q4/`
 that uses the same UI steps as `scripts/q4-churn-measure.mjs`:
 

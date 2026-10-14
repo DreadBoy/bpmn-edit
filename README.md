@@ -47,6 +47,15 @@ bpmn-edit does not create new files.
 - Every edit is saved automatically: the browser sends the diagram about 300 ms after your last change and
   bpmn-edit writes it to the file 250 ms later. The write is atomic (temporary file, then rename) and keeps
   the file's permissions. `git diff` shows the result right away; the toolbar shows the save status.
+- A save changes only what you edited. The rest of the file keeps its exact text: XML comments, processing
+  instructions, the DOCTYPE and references to its entities, CDATA sections, attributes and elements the
+  editor does not know, attribute order and quotes, how numbers are written, indentation, line endings and
+  the final newline. New elements are written in the file's own style (indentation, quotes, one attribute
+  per line if the file does that, its namespace prefixes). So the first `git diff` after renaming a task
+  shows that one line. An element you move into a sub-process keeps its own text (comments and all); one
+  whose type you change keeps its content and gets the new tag name, also extensions the editor itself would
+  drop. What counts as the edit is up to bpmn-js: moving a shape also moves the waypoints of its connections
+  and can re-measure nearby labels, and deleting a connection removes it from the elements it connected.
 - bpmn-edit watches the file. When another program changes it (your IDE, `git checkout`, …), every open
   editor reloads the diagram from disk, keeping the viewport and selection.
 - If the file on disk becomes invalid (e.g. half-written or not BPMN), the editor keeps showing the last good
@@ -155,10 +164,22 @@ Things to know:
 
 ## Known limitations
 
-- **Formatting churn on the first save.** The first save rewrites the file in bpmn-js's own formatting
-  (attribute order, indentation, the `<definitions>` header on one line), so the first `git diff` can show
-  many lines unrelated to your edit; later saves only change what you edited. XML comments, processing
-  instructions and a DOCTYPE are not kept. Commit the file before the first edit if you want a clean diff.
+- **Formatting in rare cases.** Every save is checked before it is written: read back, the file must have
+  exactly your edit and nothing else changed. When bpmn-edit cannot write a save that way (e.g. a changed
+  text next to an XML comment inside the same element, or a new element in a part of an older file that
+  bpmn-js reorganises when it opens it, such as a collapsed sub-process of a file from bpmn-js before
+  version 9), it writes that save in bpmn-js's order of elements and attributes (and its spelling of numbers,
+  default attributes and character references, e.g. `&#38;` becomes `&amp;`), still with the file's
+  indentation, quotes, line endings, header, texts (CDATA, entity references) and comments and processing
+  instructions next to the elements they were next to. `git diff` then shows more than your edit, and the
+  terminal says so. Whatever such a save cannot keep (a comment whose element is gone, or one inside a text
+  that changed) is named on the terminal, every time. If the file cannot be read as XML at all, the save is
+  bpmn-js's output as it is, and the terminal lists the comments, processing instructions and DOCTYPE it
+  drops. Comments inside an element you delete go with it; undoing the delete in the same run of bpmn-edit
+  brings them back with the element (if bpmn-js brings the element back changed, e.g. with its flow
+  references in another order, its old text is used with that change patched in). Cut and paste does not
+  carry an element's comments or extensions over (backlog). After an undo, a few values can come back the
+  way bpmn-js writes them (a re-ordered flow reference, a respelled number in a label or waypoint).
 - Concurrent editing (below) is not a CRDT; some edits can be refused with a notice instead of merged.
 - Undo history is reset whenever another window's change or a change on disk is shown.
 - Saves on disk racing a browser edit (see [Saving and changes on disk](#saving-and-changes-on-disk)) have
