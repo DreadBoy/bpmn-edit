@@ -980,7 +980,10 @@ format-preserving fallback. This step implements it and verifies it against the 
     elements are inserted next to their nearest sibling on disk. Everything else stays byte for byte.
   - **Every element that keeps its id keeps its own text.** Moved to another parent (e.g. dragged into a
     sub-process, also one created in the same save): its text on disk, with the changes inside it
-    patched, is cut and inserted at the new place, re-indented. Replaced by another type (the wrench; same
+    patched, is cut and inserted at the new place, re-indented; also out of an element bpmn-js removes
+    (expanding a collapsed sub-process: bpmn-js removes the diagram it made for its content and moves
+    the shapes back into the main plane; the removed element is remembered without being restorable
+    as such, since its text holds elements that are elsewhere now). Replaced by another type (the wrench; same
     id): the tags get the new name and the content is patched like any other element; extensions bpmn-js
     drops on replace (attributes and elements in namespaces it does not know, `extensionElements`) stay
     on disk. The DI shape or edge that bpmn-js re-creates with a new id on replace is matched to the old
@@ -1026,7 +1029,14 @@ format-preserving fallback. This step implements it and verifies it against the 
   parent gone, namespaces changed), what that loses of its remembered text is reported (`lost=`,
   warning) even in a `minimal` write. Children only the disk has (extensions kept on
   a type change) are taken for the ones bpmn-js brings back when they are equal, instead of a second
-  copy. The check compares restored text with the remembered text: everything in it exactly, every
+  copy. Each cut element remembers all its neighbours with an id (up to 20 per side): it goes back after
+  the nearest earlier one still on disk, else before the nearest later one; neighbours cut together
+  (e.g. the first edges of a plane, each the other's remembered neighbour) go back next to each other in
+  their old order and never wait for each other in a cycle. A remembered text that uses a namespace
+  bpmn-js no longer declares in its output (e.g. `di:` once the last edge is gone) gets the declaration
+  on the element in the base it is compared with (declarations are not facts). Several new children of
+  an element that has none on disk (e.g. a task whose references all went with a delete and come back
+  with the undo) are written in one edit, in bpmn-js' order. The check compares restored text with the remembered text: everything in it exactly, every
   element bpmn-js has present, the parent as bpmn-js has it.
 - **Namespaces declared per element.** Where a file declares a namespace on the elements themselves
   (`<Bounds xmlns="…/DC" …/>`, Bizagi) rather than with a prefix on the root, new elements do the same
@@ -1040,7 +1050,8 @@ format-preserving fallback. This step implements it and verifies it against the 
   replaced elements too — and every other fact exactly as on disk. A
   second opinion with an independent tokenizer (`src/elements.js` element forms): every element the
   result changed compared with the disk must be one bpmn-js changed. Any mismatch → fallback.
-- **What a fallback loses** is computed from the models (file vs text written): every comment, PI, CDATA
+- **What a fallback loses** is computed from the models (file vs text written, and the remembered text of
+  every element bpmn-js brings back that the write would have restored, see above): every comment, PI, CDATA
   section, the declaration and DOCTYPE, and every element and attribute in a namespace bpmn-js does not
   know (extensions), unless it was in an element the edit deleted. Verifier round 3 found that `format`
   had only counted comments and PIs it could not place, so extensions and CDATA it dropped went
@@ -1136,6 +1147,25 @@ identical in Chrome, Firefox and WebKit. Writes: 11 (`false`) + 3 (`input`) per 
   declaration / DOCTYPE fact of the file unchanged, `&company;` and the `acme:` extensions still there;
   replace ≤ 10 changed lines (the tags, the DI id, a label bpmn-js re-measures), the collapsed rename
   ≤ 5 (the name and the new label, placed below the event in the file's coordinates).
+- Verifier final round found: (D1) delete + undo still fell back to `format` in two layouts, and
+  `format` did not count what the restored element's remembered text had, so its comment, PI, CDATA and
+  kept extensions went without a note: a task appended to the deleted one lost all its references with
+  the delete and got two back (both written over the same empty content: "overlapping changes"); and
+  in camunda7-loan-approval the deleted task's edges were the first children of the plane, each the
+  other's remembered neighbour, so none was written back (and bpmn-js no longer declared `di:` once no
+  edge was left, so the changed ones could not be restored first): "check failed". (D2) Expanding a
+  collapsed sub-process (wrench, or undo of the collapse) fell back to `format` ("moved together with
+  its parent", 20–970 lines, kept extensions of a wrenched task in it dropped, reported). Fixed as
+  described above (one edit for several new children, neighbour lists without cycles, missing
+  declarations in the base, moving out of a removed element, fallback losses including remembered
+  texts). Unit tests replay gestures captured in Chrome (`test/fixtures/q4-captures`: what the page sent,
+  one update per save) through the writer: append, (wrench,) connect, delete, undo on `comments-nonascii`
+  and `camunda7-loan-approval` end minimal with every comment, PI, CDATA and extension of the state
+  before the delete (≤ 6 lines: references bpmn-js re-orders, `sourceElement`/`targetElement` it drops);
+  collapse, expand, undo, undo, redo, redo of a new sub-process with a task (wrenched, and deleted with
+  the sub-process and undone) all minimal, nothing lost (expand ≤ 30 lines: bpmn-js lays out the
+  sub-process anew; back to before the collapse up to where the task's shape is in the plane, ≤ 6).
+  The same gestures through the UI are E2E tests in all three browsers.
 - Verifier round 4 found: (M1) delete + undo of an element with two or more flows (bpmn-js re-adds the
   references in another order) was written from bpmn-js's output as `minimal`, silently losing its
   comment, PI, CDATA and kept extensions; (M2) on Signavio a vertical drag (bpmn-js inserts waypoints
@@ -1204,6 +1234,11 @@ verifier's probes cover; the known limits below are where the result is not byte
   the same run brings them back. The memory is per run of bpmn-edit and holds the last 200 elements.
 - Cut and paste writes the pasted element from bpmn-js's output: bpmn-js's copy does not carry
   extensions, and the file's comments/PIs/CDATA in it are not carried over (backlog).
+- After a sub-process is collapsed and expanded again (or the collapse undone), the shapes of its
+  content are in the main plane where bpmn-js puts them (after the sub-process' shape), not where they
+  were before the collapse (a removed and an added block per shape, its text kept). A cut element that
+  had such shapes moved out of it is not written back from memory (its text holds them); it comes back
+  from bpmn-js' output.
 - After an undo, bpmn-js may re-add a reference (`<incoming>`/`<outgoing>`) at the end of its list (the
   file follows: a removed and an added line), and may respell a number in a waypoint it changed during
   the delete and back on undo (a line pair). After a type change and its undo, the DI label bpmn-js
