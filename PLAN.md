@@ -144,8 +144,8 @@ cannot tell host and collaborator apart:
   - Modelled on DreadBoy/glyphmark: `release.yml` (push to main → check: `npm ci` + unit tests → publish if the
     version is not on npm, npm Trusted Publishing/OIDC, provenance, Node 24) and `version.yml` (manual bump →
     dispatch Release). E2E stays local (needs macOS + real Chrome + tunnels).
-  - Before first push: rewrite all history to author **and** committer `Matic Leva <vertical3life@gmail.com>`
-    (no work email anywhere); no Co-Authored-By / "Generated with" / @-mentions in any commit. PLAN.md may stay.
+  - Done 2026-10-14: history rewritten to author **and** committer `Matic Leva <vertical3life@gmail.com>`
+    (no work email anywhere; no Co-Authored-By / "Generated with" / @-mentions); repo public, main pushed at bd340b7.
   - Product owner: configure trusted publisher on npmjs.com (`dread_boy`); the very first publish may have to be
     manual if npm requires the package to exist first (check). Push to https://github.com/DreadBoy/bpmn-edit
     only on explicit go-ahead.
