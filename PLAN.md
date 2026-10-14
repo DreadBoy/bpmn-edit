@@ -230,7 +230,11 @@ implement the decision if it changes anything. These steps are as mandatory as t
     saves ≤1. **Silent information loss**: XML comments, processing instructions, DOCTYPE; a DOCTYPE entity gets
     corrupted to literal text. Recommendation: (c) server-side 3-way minimal-diff writer patching changed elements
     into the original text, verified against the bpmn-js model, falling back to (b) "preserve header/EOL/indent".
-  - [ ] **Q4-impl** (after Q2; touches the write path). **E2E acceptance** over every file in `test/fixtures/q4`:
+  - [~] **Q4-impl** — implemented 2026-10-14 (commits "minimal-diff writer" on main); 4 verify rounds, last fixes
+    (M1 delete+undo with reordered flow refs, M2 signavio vertical move → `format` fallback) NOT independently
+    verified; Firefox/WebKit + Q2 ×3 not re-run on final code. **Next: one fresh verify round** (M1/M2 repros,
+    full 3-browser matrix, Q2 race ×3), then mark done. Writer is enabled; fallbacks report any loss.
+  - (original acceptance) (after Q2; touches the write path). **E2E acceptance** over every file in `test/fixtures/q4`:
     one-label rename ≤1 unrelated line on first and later saves; zero information loss (comments, PIs,
     DOCTYPE/entities, CDATA, unknown extensions, prefixes, defaults, number spelling); EOL/indent/quotes/attr order/
     XML decl/final newline unchanged outside edited elements; 40 px move → no DI reordering, ≤16 lines; every write
