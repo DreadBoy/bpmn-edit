@@ -21,6 +21,9 @@
 //
 // The XML reader here is small and strict: anything it does not understand (an entity defined
 // outside the file, malformed markup, duplicate ids, ...) is an error, which only means a fallback.
+import {
+  ELEMENTS as SCHEMA_ELEMENTS, GROUPS as SCHEMA_GROUPS, NAMESPACES as SCHEMA_NS, SEQUENCES as SCHEMA_SEQUENCES,
+} from './bpmn-schema-order.js';
 import { elementForms } from './elements.js';
 
 const XML_NS = 'http://www.w3.org/XML/1998/namespace';
@@ -72,8 +75,14 @@ function decodeRefs(text) {
 
 /** Text content as a parser reports it: line ends normalised, references expanded. */
 const decodeText = (raw) => decodeRefs(raw.replace(/\r\n?/g, '\n'));
-/** Attribute value as a parser reports it (attribute-value normalisation for CDATA attributes). */
-const decodeAttr = (raw) => decodeRefs(raw.replace(/\r\n?/g, '\n').replace(/[\t\n]/g, ' '));
+/**
+ * Attribute value as bpmn-js reads it: references expanded, white space as written. (bpmn-js' parser
+ * does not normalise attribute values, and its writer leaves tabs and carriage returns literal: a name
+ * "a<TAB>b" is `name="a	b"` in its output. Read the XML way, that is "a b", not bpmn-js' model; the
+ * writer writes such characters as references, `&#9;`, `&#10;`, `&#13;` (see escapeAttr), which both
+ * read alike.)
+ */
+const decodeAttr = (raw) => decodeRefs(raw);
 
 /** End (exclusive) of the DOCTYPE starting at `i` (its internal subset may contain '>' and quotes). */
 function doctypeEnd(xml, i) {
@@ -548,8 +557,23 @@ export function lostExtensions(D, W, U, back = new Map()) {
   const map = (path) => aliasPath(path, back);
   const where = (path) => map(path).replace(/\{[^}]*\}/g, '').replace(/^#/, '');
   const lost = [];
+  const recreated = new Set(back.keys());
   const visit = (e, owner) => {
     if (!isExtensionContent(e)) owner = e;
+    // The label of a DI shape bpmn-js re-created on replace without one (e.g. a task, whose label is
+    // inside it): what it carried beyond its bounds goes with it.
+    if (e.uri === BPMN_DI_NS && e.local === 'BPMNLabel' && e.parent && recreated.has(idOf(e.parent)) && !fw.has(`el${SEP}${map(e.path)}${SEP}`)) {
+      const of = `the label of ${idOf(e.parent)}`;
+      for (const a of e.attrs) {
+        if (a.uri === null && a.local === 'labelStyle') lost.push(`label style ${a.value} of ${idOf(e.parent)}`);
+        else if (isUnknownNs(a.uri)) lost.push(`attribute ${a.name} in ${of}`);
+      }
+      for (const c of elementChildren(e)) {
+        if (isUnknownNs(c.uri)) lost.push(`element ${c.name} in ${of}`);
+        else if (isDiExtension(c)) for (const x of elementChildren(c)) lost.push(`element ${x.name} in ${of}`);
+      }
+      return;
+    }
     if (!inU.has(map(owner.path))) return; // gone with an element bpmn-js removed
     const path = map(e.path);
     if (e !== owner && !fw.has(`el${SEP}${path}${SEP}`)) {
@@ -676,22 +700,52 @@ export function checkMinimal(D, B, U, W, restored = []) {
 }
 
 /**
- * Where a child of a BPMN element goes in the BPMN 2.0 XSD's sequence: documentation*, extensionElements?,
- * auditing?, monitoring?, categoryValueRef* (tBaseElement, tFlowElement), a flow node's incoming*,
- * outgoing*, then everything else (type-specific; bpmn-js writes those in their order). Elements in other
- * namespaces (extension content outside extensionElements) have no rank. Null for children of elements
- * in other namespaces.
+ * Where a child goes in its parent's content model in the BPMN 2.0 XSD (src/bpmn-schema-order.js,
+ * generated from it): the index of its element (or of the substitution group it stands for, e.g. a task
+ * for `flowElement`) in the sequence of the parent's type, inherited elements first. E.g. in a process
+ * documentation, extensionElements, ..., laneSet, flowElement, artifact, ...; in a flow node ...,
+ * incoming, outgoing, ...; in a collaboration participant, messageFlow, artifact, ...; in definitions
+ * import, extension, rootElement, BPMNDiagram, relationship; in a DI shape extension, Bounds, BPMNLabel.
+ * bpmn-js serialises in its descriptor's order, which follows the schema. Null (no constraint) for a
+ * child the parent's type does not list (extension content in other namespaces, `xsd:any` content) and
+ * for children of elements of unknown type.
  */
-const SCHEMA_HEAD = ['documentation', 'extensionElements', 'auditing', 'monitoring', 'categoryValueRef', 'incoming', 'outgoing'];
+const SCHEMA_PREFIX = new Map(Object.entries(SCHEMA_NS).map(([p, uri]) => [uri, p]));
+const schemaName = (uri, local) => (SCHEMA_PREFIX.has(uri) ? `${SCHEMA_PREFIX.get(uri)}:${local}` : null);
+const rankTables = new Map(); // type -> Map(child element -> rank)
+function rankTable(type) {
+  let table = rankTables.get(type);
+  if (table) return table;
+  table = new Map();
+  const add = (name, rank) => {
+    if (table.has(name)) return;
+    table.set(name, rank);
+    for (const member of SCHEMA_GROUPS[name] ?? []) add(member, rank);
+  };
+  (SCHEMA_SEQUENCES[type] ?? []).forEach((name, rank) => add(name, rank));
+  rankTables.set(type, table);
+  return table;
+}
+/** The schema type of an element: its xsi:type if it names one, else its global element's type. */
+function schemaType(el) {
+  const xsiType = el.attrs.find((a) => a.uri === XSI_NS && a.local === 'type');
+  if (xsiType) {
+    const m = /^\{([^}]*)\}(.*)$/.exec(attrValue(el, xsiType));
+    const name = m && schemaName(m[1], m[2]);
+    if (name && SCHEMA_SEQUENCES[name]) return name;
+  }
+  const name = schemaName(el.uri, el.local);
+  return name ? SCHEMA_ELEMENTS[name] ?? null : null;
+}
 function schemaRank(child) {
-  if (child.parent?.uri !== BPMN_MODEL_NS || child.uri !== BPMN_MODEL_NS) return null;
-  const k = SCHEMA_HEAD.indexOf(child.local);
-  return k === -1 ? SCHEMA_HEAD.length : k;
+  const type = child.parent ? schemaType(child.parent) : null;
+  const name = type && schemaName(child.uri, child.local);
+  return name ? rankTable(type).get(name) ?? null : null;
 }
 
 /** Children of `el` out of the schema order (see schemaRank), and a second extensionElements. */
 function orderProblems(el) {
-  if (el.uri !== BPMN_MODEL_NS) return [];
+  if (!schemaType(el)) return [];
   const ranked = elementChildren(el).filter((c) => schemaRank(c) !== null);
   const problems = [];
   for (let k = 1; k < ranked.length; k++) {
@@ -1309,6 +1363,10 @@ function writeMinimal(D, B, U, memory = new Map()) {
         continue;
       }
       const dc = dFor(bc);
+      // A diagram bpmn-js made for a collapsed sub-process of an older file (it exists only in its view,
+      // see layoutOffsets), removed with the sub-process: nothing to remove on disk.
+      const viewOnly = bc.uri === BPMN_DI_NS && bc.local === 'BPMNDiagram' && !dList.some((e) => qn(e) === qn(bc));
+      if (!dc && viewOnly) continue;
       if (!dc) throw new WriterFallback(`${bc.path}: cannot find it on disk`);
       claimed.add(dc);
       removeElement(dc);
@@ -1415,6 +1473,32 @@ function writeMinimal(D, B, U, memory = new Map()) {
     if (!d.selfClosing) edit(d.closeStart + 2, d.closeStart + 2 + d.name.length, name);
   }
 
+  /**
+   * The schema's order (see schemaRank) wins over the nearest sibling (`prev` / `next`, children of
+   * `dParent` on disk; the new child `u` goes after `prev`, or before `next`): the disk may have children
+   * bpmn-js' order does not know (extensions kept on a replace), or have its children in another order
+   * than bpmn-js (an element an undo brings back goes back to its old place on disk, bpmn-js appends
+   * it: a new text annotation, next to it in bpmn-js' output, would land among the flows). The new child
+   * goes past every child on disk the schema puts before it (an <incoming> after a kept
+   * <extensionElements>, an artifact after the last flow element, a group after the participants) and
+   * in front of every one it puts after it (an <outgoing> of a sub-process in front of its flow
+   * elements). Unless the disk is out of that order. Returns [prev, next], one of them null.
+   */
+  const inSchemaOrder = (u, dParent, prev, next) => {
+    const rank = schemaRank(u);
+    if (rank === null) return [prev, next];
+    const settled = elementChildren(dParent).filter((d) => !cut.has(d) && !isMoving(d));
+    const from = prev ? settled.indexOf(prev) + 1 : next ? settled.indexOf(next) : 0;
+    let lo = 0;
+    settled.forEach((d, k) => {
+      if ((schemaRank(d) ?? rank) < rank) lo = k + 1;
+    });
+    const after = settled.findIndex((d) => (schemaRank(d) ?? rank) > rank);
+    const hi = after === -1 ? settled.length : after;
+    const k = lo <= hi ? Math.min(Math.max(from, lo), hi) : from;
+    if (k === from) return [prev, next];
+    return k > 0 ? [settled[k - 1], null] : [null, settled[0]];
+  };
   const filled = new Map(); // element of D without children -> the edit that gives it its new ones
   /** Where `u` (a new child of `dParent` in U) goes in the disk text: next to its nearest sibling on disk. */
   const placeAt = (u, dParent, write) => {
@@ -1429,25 +1513,7 @@ function writeMinimal(D, B, U, memory = new Map()) {
     for (let k = at - 1; k >= 0 && !prev; k--) prev = anchor(siblings[k]);
     let next = null;
     if (!prev) for (let k = at + 1; k < siblings.length && !next; k++) next = anchor(siblings[k]);
-    // The schema's order (see schemaRank) wins over the nearest sibling: the disk may have children
-    // bpmn-js' order does not know (extensions kept on a replace), or have its children in another
-    // order than bpmn-js (e.g. a start event moved back into a sub-process goes back to its old place,
-    // bpmn-js appends it). The new child goes past every child on disk the schema puts before it (e.g.
-    // an <incoming> after a kept <extensionElements>) and in front of every one it puts after it (an
-    // <outgoing> of a sub-process in front of its flow elements). Unless the disk is out of that order.
-    const rank = schemaRank(u);
-    if (rank !== null) {
-      const settled = elementChildren(dParent).filter((d) => !cut.has(d) && !isMoving(d));
-      const from = prev ? settled.indexOf(prev) + 1 : next ? settled.indexOf(next) : 0;
-      let lo = 0;
-      settled.forEach((d, k) => {
-        if ((schemaRank(d) ?? rank) < rank) lo = k + 1;
-      });
-      const after = settled.findIndex((d) => (schemaRank(d) ?? rank) > rank);
-      const hi = after === -1 ? settled.length : after;
-      const k = lo <= hi ? Math.min(Math.max(from, lo), hi) : from;
-      if (k !== from) [prev, next] = k > 0 ? [settled[k - 1], null] : [null, settled[0]];
-    }
+    [prev, next] = inSchemaOrder(u, dParent, prev, next);
     const parentIndent = lineIndent(text, dParent.start) ?? '';
     if (prev) {
       const indent = lineIndent(text, prev.start) ?? parentIndent + unit;
@@ -1550,8 +1616,10 @@ function writeMinimal(D, B, U, memory = new Map()) {
       const near = D.ids.get(id);
       return near && near.parent === dParent && !cut.has(near) && !isMoving(near) && status.get(id) === 'kept' ? near : null;
     };
-    const prev = (kept.prev ?? [kept.after]).map(there).find(Boolean);
-    const next = prev ? null : (kept.next ?? [kept.before]).map(there).find(Boolean);
+    const near = (kept.prev ?? [kept.after]).map(there).find(Boolean) ?? null;
+    const far = near ? null : (kept.next ?? [kept.before]).map(there).find(Boolean) ?? null;
+    // Its old place, unless the schema order of the disk now says otherwise (see inSchemaOrder).
+    const [prev, next] = near || far ? inSchemaOrder(u, dParent, near, far) : [null, null];
     if (prev) {
       const indent = lineIndent(text, prev.start);
       edit(prev.end, prev.end, eol + (indent ?? '') + write(indent ?? kept.indent));
@@ -1615,8 +1683,9 @@ function writeMinimal(D, B, U, memory = new Map()) {
         const near = D.ids.get(nearId);
         return near && near.parent === dParent && !cut.has(near) && !isMoving(near) && status.get(nearId) === 'kept' ? near : null;
       };
-      const prev = was?.parent === idOf(dParent) ? was.prev.map(there).find(Boolean) : null;
-      const next = was?.parent === idOf(dParent) && !prev ? was.next.map(there).find(Boolean) : null;
+      const near = was?.parent === idOf(dParent) ? was.prev.map(there).find(Boolean) ?? null : null;
+      const far = was?.parent === idOf(dParent) && !near ? was.next.map(there).find(Boolean) ?? null : null;
+      const [prev, next] = near || far ? inSchemaOrder(u, dParent, near, far) : [null, null];
       if (prev) {
         const indent = lineIndent(text, prev.start);
         edit(prev.end, prev.end, eol + (indent ?? '') + reindent(indent ?? oldIndent));

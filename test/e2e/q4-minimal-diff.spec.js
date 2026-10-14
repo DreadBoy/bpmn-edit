@@ -12,9 +12,23 @@ import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { FIXTURES, startCli } from './helpers/cli.js';
 import { git } from './helpers/editor.js';
-import { detectStyle, escapeAttr, facts, load, parse } from '../../src/minimal-diff.js';
+import { checkOrder, detectStyle, escapeAttr, facts, load, parse } from '../../src/minimal-diff.js';
 
 const CORPUS = join(FIXTURES, 'q4');
+const XSD = new URL('../../node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', import.meta.url).pathname;
+const HAS_XMLLINT = spawnSync('xmllint', ['--version']).status === 0;
+
+/**
+ * What xmllint finds wrong with `xml` against the BPMN 2.0 XSD that it does not find in `original`
+ * (messages without file and line). [] when xmllint is not installed.
+ */
+function newXsdErrors(xml, original) {
+  if (!HAS_XMLLINT) return [];
+  const errors = (text) => spawnSync('xmllint', ['--noout', '--nonet', '--schema', XSD, '-'], { input: text, encoding: 'utf8' })
+    .stderr.split('\n').filter((l) => l && !/validates$|fails to validate$/.test(l)).map((l) => l.replace(/^[^:]*:\d+: /, ''));
+  const before = new Set(errors(original));
+  return errors(xml).filter((l) => !before.has(l));
+}
 const FILES = (await readdir(CORPUS)).filter((name) => name.endsWith('.bpmn')).sort();
 
 /** The two tasks renamed in each file (the same as in the Q4 measurement, docs/q4-diff-churn.md). */
@@ -99,10 +113,21 @@ function writes(cli) {
   }));
 }
 
-/** Every write minimal and lossless (a clear failure, not a timeout, if one was not). */
-function expectMinimalWrites(cli, what = 'writes') {
+/**
+ * Every write minimal and lossless (a clear failure, not a timeout, if one was not); `lostAt`: write
+ * index -> the number of losses that write must report instead (see the corpus' replace).
+ */
+function expectMinimalWrites(cli, what = 'writes', lostAt = new Map()) {
   const all = writes(cli);
-  expect(all.map((w) => `${w.mode} lost=${w.lost}${w.reason ? ` (${w.reason})` : ''}`), what).toEqual(all.map(() => 'minimal lost=0'));
+  expect(all.map((w) => `${w.mode} lost=${w.lost}${w.reason ? ` (${w.reason})` : ''}`), what)
+    .toEqual(all.map((w, k) => `minimal lost=${lostAt.get(k) ?? 0}`));
+}
+
+/** The `labelStyle` of the label of element `id`'s DI shape in `xml`, or null. */
+function labelStyleOf(xml, id) {
+  const shape = [...load(xml).ids.values()].find((e) => e.local === 'BPMNShape' && e.attrs.some((a) => a.local === 'bpmnElement' && a.value === id));
+  const label = shape?.children.find((c) => c.kind === 'element' && c.local === 'BPMNLabel');
+  return label?.attrs.find((a) => a.local === 'labelStyle')?.value ?? null;
 }
 
 /**
@@ -254,6 +279,7 @@ for (const autocrlf of ['false', 'input']) {
       test(`${name}: saves change only what was edited`, async ({ browser }) => {
         test.setTimeout(autocrlf === 'false' ? 180_000 : 90_000);
         const [taskA, taskB] = TARGETS[name];
+        const lostAt = new Map(); // write index -> losses it reports (see the replace)
         const fixture = await setupRepo(name, autocrlf);
         const context = await browser.newContext({ viewport: { width: 1600, height: 1000 } });
         const page = await context.newPage();
@@ -354,7 +380,14 @@ for (const autocrlf of ['false', 'input']) {
               const now = await saved(page, cli, fixture.file, count);
               await dump(name, autocrlf, `${step++}-${what.replaceAll(' ', '-')}`, now);
               row.structural.push(await changedLines(fixture.dir, previous, now));
-              expectMinimalWrites(cli, what);
+              // bpmn-js re-creates a replaced task's shape without a label (it is inside the task): a label
+              // with a style (Bizagi, Signavio) goes, which the write reports (verifier Q4-impl round 8).
+              const cutStyle = what.startsWith('replace') ? labelStyleOf(original, taskB) : null;
+              if (cutStyle) {
+                lostAt.set(count, 1);
+                expect(cli.stderr()).toContain(`could not keep this from the file: label style ${cutStyle} of `);
+              }
+              expectMinimalWrites(cli, what, lostAt);
               expect(outside(now), what).toEqual(outside(original));
               expect(foreignLineEnds(now, original), what).toBe(0);
               if (what === 'append a task') {
@@ -378,8 +411,9 @@ for (const autocrlf of ['false', 'input']) {
           expect(errors).toEqual([]);
           row.writes = writes(cli).length;
           row.fallbacks = writes(cli).filter((w) => w.mode !== 'minimal').length;
-          expectMinimalWrites(cli);
-          expect(cli.stderr()).not.toMatch(/bpmn-edit: (note|warning):/);
+          expectMinimalWrites(cli, 'writes', lostAt);
+          expect(cli.stderr()).not.toMatch(/bpmn-edit: note:/);
+          expect(cli.stderr().split('\n').filter((l) => /bpmn-edit: warning:/.test(l) && !/: label style \S+ of \S+$/.test(l))).toEqual([]);
           report.push(row);
         } finally {
           await dump(name, autocrlf, 'cli-stderr', cli.stderr());
@@ -837,24 +871,73 @@ test.describe('what is inside edited elements is kept (UI gestures)', () => {
   });
 
   /**
-   * Children of BPMN elements out of the BPMN 2.0 XSD's order (documentation*, extensionElements?,
-   * auditing?, monitoring?, categoryValueRef*, incoming*, outgoing*, then the rest). Descriptions.
+   * Children of BPMN and DI elements out of the BPMN 2.0 XSD's order (every type's sequence, see
+   * src/bpmn-schema-order.js and checkOrder). Descriptions.
    */
-  function schemaOrderProblems(xml) {
-    const MODEL = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
-    const RANK = ['documentation', 'extensionElements', 'auditing', 'monitoring', 'categoryValueRef', 'incoming', 'outgoing'];
-    const problems = [];
-    const visit = (el) => {
-      const kids = el.children.filter((c) => c.kind === 'element');
-      if (el.uri === MODEL) {
-        const ranks = kids.filter((c) => c.uri === MODEL).map((c) => [c.local, RANK.includes(c.local) ? RANK.indexOf(c.local) : RANK.length]);
-        for (let k = 1; k < ranks.length; k++) if (ranks[k][1] < ranks[k - 1][1]) problems.push(`${el.name}: ${ranks[k][0]} after ${ranks[k - 1][0]}`);
-      }
-      kids.forEach(visit);
-    };
-    visit(parse(xml).root);
-    return problems;
-  }
+  const nowhere = load('<none/>');
+  const schemaOrderProblems = (xml) => checkOrder(nowhere, nowhere, load(xml));
+
+  // Verifier Q4-impl round 8, D1: an element an undo brings back goes back to its old place on disk
+  // (bpmn-js appends it); a new artifact went next to it, among the flow elements (a group in Bizagi's
+  // collaboration: before a participant). Schema-invalid, written as minimal without a note.
+  test('comments-nonascii: delete a flow, undo, append a text annotation: after every flow element', async ({ browser }) => {
+    const t = await open(browser, 'comments-nonascii.bpmn');
+    try {
+      await t.page.evaluate(() => window.bpmnModeler.get('canvas').zoom('fit-viewport'));
+      let count = writes(t.cli).length;
+      await deleteByPad(t.page, 'Flow_ToGateway');
+      await saved(t.page, t.cli, t.fixture.file, count);
+      count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      await t.page.keyboard.press('ControlOrMeta+z');
+      const undone = await saved(t.page, t.cli, t.fixture.file, count);
+      expect(undone).toBe(t.original);
+      count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      await shapeOf(t.page, 'Task_CheckStock').click();
+      await t.page.locator('.djs-context-pad.open .entry[data-action="append.text-annotation"]').click();
+      await expect(t.page.locator('.djs-direct-editing-parent')).toBeVisible();
+      await t.page.keyboard.type('Note');
+      await t.page.mouse.click(1500, 80);
+      const now = await saved(t.page, t.cli, t.fixture.file, count);
+      const kids = load(now).ids.get('Process_Order').children.filter((c) => c.kind === 'element').map((c) => c.local);
+      expect(kids.slice(kids.indexOf('textAnnotation'))).toEqual(['textAnnotation', 'association']);
+      expect(schemaOrderProblems(now)).toEqual([]);
+      expect(newXsdErrors(now, t.original)).toEqual([]);
+      await expectKept(t, now);
+    } finally {
+      await t.close();
+    }
+  });
+
+  test('bizagi-export: delete everything, undo, a new group: after the participants', async ({ browser }) => {
+    const t = await open(browser, 'bizagi-export.bpmn');
+    try {
+      let count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      await t.page.keyboard.press('ControlOrMeta+a');
+      await t.page.keyboard.press('Delete');
+      const empty = await saved(t.page, t.cli, t.fixture.file, count);
+      expect(load(empty).ids.has('_5a972b87-735d-454a-b31c-f52fb3afc5c7')).toBe(false);
+      count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      await t.page.keyboard.press('ControlOrMeta+z');
+      await saved(t.page, t.cli, t.fixture.file, count);
+      count = writes(t.cli).length;
+      await t.page.evaluate(() => {
+        const m = window.bpmnModeler;
+        m.get('modeling').createShape(m.get('elementFactory').createShape({ type: 'bpmn:Group' }), { x: 60, y: 40 }, m.get('canvas').getRootElement());
+      });
+      const now = await saved(t.page, t.cli, t.fixture.file, count);
+      const collaboration = [...load(now).ids.values()].find((e) => e.local === 'collaboration');
+      expect(collaboration.children.filter((c) => c.kind === 'element').map((c) => c.local)).toEqual(['participant', 'participant', 'group']);
+      expect(schemaOrderProblems(now)).toEqual([]);
+      expect(newXsdErrors(now, t.original)).toEqual([]);
+      await expectKept(t, now);
+    } finally {
+      await t.close();
+    }
+  });
 
   /** Deletes a flow with its context pad (selected through bpmn-js: a click may miss a thin line). */
   async function deleteByPad(page, id) {

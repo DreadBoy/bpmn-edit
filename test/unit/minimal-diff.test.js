@@ -1,4 +1,6 @@
 import assert from 'node:assert/strict';
+import { spawnSync } from 'node:child_process';
+import { existsSync } from 'node:fs';
 import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -6,7 +8,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import WebSocket from 'ws';
 import { createFileStore } from '../../src/file.js';
 import {
-  checkForms, checkMinimal, checkModel, checkOrder, detectStyle, escapeAttr, facts, load, lostExtensions, minimalDiff, parse, preserveFormat,
+  checkForms, checkMinimal, checkModel, checkOrder, detectStyle, escapeAttr, facts, idOf, load, lostExtensions, minimalDiff, parse, preserveFormat,
   renderForDisk, XmlError,
 } from '../../src/minimal-diff.js';
 import { createServer } from '../../src/server.js';
@@ -31,26 +33,33 @@ function changedLines(a, b) {
 }
 
 /**
- * Children of BPMN elements out of the BPMN 2.0 XSD's order (its head: documentation*, extensionElements?,
- * auditing?, monitoring?, categoryValueRef*, then a flow node's incoming*, outgoing*, then the rest).
- * Elements in other namespaces are not ranked. Returns descriptions (empty: in order).
+ * Children of BPMN elements out of the BPMN 2.0 XSD's order (the sequence of every type, from
+ * src/bpmn-schema-order.js, see checkOrder), and second extensionElements. Returns descriptions (empty:
+ * in order).
  */
-function schemaOrderProblems(xml) {
-  const RANK = ['documentation', 'extensionElements', 'auditing', 'monitoring', 'categoryValueRef', 'incoming', 'outgoing'];
-  const problems = [];
-  const visit = (el) => {
-    const kids = el.children.filter((c) => c.kind === 'element');
-    if (el.uri === MODEL) {
-      const ranked = kids.filter((c) => c.uri === MODEL).map((c) => [c.local, RANK.includes(c.local) ? RANK.indexOf(c.local) : RANK.length]);
-      for (let k = 1; k < ranked.length; k++) {
-        if (ranked[k][1] < ranked[k - 1][1]) problems.push(`${el.name}#${el.attrs.find((a) => a.local === 'id')?.value}: ${ranked[k][0]} after ${ranked[k - 1][0]}`);
-      }
-      if (ranked.filter(([l]) => l === 'extensionElements').length > 1) problems.push(`${el.name}: two extensionElements`);
-    }
-    kids.forEach(visit);
-  };
-  visit(parse(xml).root);
-  return problems;
+const NOWHERE = load('<none/>');
+const schemaOrderProblems = (xml) => checkOrder(NOWHERE, NOWHERE, load(xml));
+
+const XSD = new URL('../../node_modules/bpmn-moddle/resources/bpmn/xsd/BPMN20.xsd', import.meta.url).pathname;
+const HAS_XMLLINT = spawnSync('xmllint', ['--version']).status === 0 && existsSync(XSD);
+/**
+ * Second, independent opinion on the order: what xmllint finds wrong with `xml` against the BPMN 2.0 XSD
+ * that it does not find in `original` (messages without line numbers). [] when xmllint is not installed.
+ */
+async function newXsdErrors(xml, original) {
+  if (!HAS_XMLLINT) return [];
+  const dir = await mkdtemp(join(tmpdir(), 'bpmn-xsd-'));
+  try {
+    const errors = async (text) => {
+      await writeFile(join(dir, 'f.bpmn'), text);
+      const r = spawnSync('xmllint', ['--noout', '--nonet', '--schema', XSD, join(dir, 'f.bpmn')], { encoding: 'utf8' });
+      return r.stderr.split('\n').filter((l) => l && !/validates$|fails to validate$/.test(l)).map((l) => l.replace(/^[^:]*:\d+: /, ''));
+    };
+    const before = new Set(await errors(original));
+    return (await errors(xml)).filter((l) => !before.has(l));
+  } finally {
+    await rm(dir, { recursive: true, force: true });
+  }
 }
 
 /** Line (1-based) on which element `id` starts. */
@@ -169,6 +178,18 @@ describe('minimal-diff writer: edits in the file\'s style', () => {
     const { text, mode } = renderForDisk({ disk: D, base: B, out: U });
     assert.equal(mode, 'minimal');
     assert.equal(text, D.replace("name='Alpha'", "name='Alpha &amp; \"Omega\"'"));
+  });
+
+  it('a name with a tab, line feed or carriage return is written with character references (bpmn-js writes some literally)', () => {
+    // Verifier Q4-impl round 8, D2: bpmn-js writes a tab and a carriage return in an attribute literally
+    // (and reads them back so); written so, any XML reader (and the writer's) normalises them to spaces.
+    for (const [name, written] of [['tab\there', 'tab&#9;here'], ['a\nb\r\nc', 'a&#10;b&#13;&#10;c'], ['cr\ronly', 'cr&#13;only']]) {
+      const U = bpmnjs(model()).replace('name="Alpha"', `name="${name.replaceAll('\n', '&#10;')}"`);
+      const { text, mode } = renderForDisk({ disk: D, base: B, out: U });
+      assert.equal(mode, 'minimal');
+      assert.equal(text, D.replace("name='Alpha'", `name='${written}'`));
+      assert.equal(load(text).ids.get('A').attrs.find((a) => a.local === 'name').value, name);
+    }
   });
 
   it('writes added elements with the file\'s indent, line ends, quotes, prefixes and self-closing style', () => {
@@ -440,6 +461,28 @@ describe('minimal-diff writer: what is inside replaced and moved elements', () =
     const W4 = renderForDisk({ disk: W3.text, base: U1, out: B1, memory });
     assert.deepEqual([W3.mode, W4.mode], ['minimal', 'minimal'], W4.reason);
     assert.equal(W4.text, D1);
+  });
+
+  it('a replace whose re-created DI shape has no label reports what the old label carried (its style, extensions)', () => {
+    // Verifier Q4-impl round 8: Bizagi / Signavio tasks have a label with a style; bpmn-js re-creates the
+    // shape of a task it replaces without one (a task's label is inside it), so the label goes. Not silently.
+    const shapes = (diId, label) => [['bpmndi:BPMNShape', { id: diId, bpmnElement: 'A' }, [
+      ['dc:Bounds', { x: '100', y: '100', width: '100', height: '80' }],
+      ...(label ? [label] : []),
+    ]], shapeNode('B', '300', '100')];
+    const run = (label) => {
+      const before = m([taskA('bpmn2:task'), taskB('bpmn2:task')], { shapes: shapes('A_di', label) });
+      const after = m([taskA('bpmn2:userTask', { extensions: false, sla: false }), taskB('bpmn2:task')], { shapes: shapes('UserTask_1_di', null) });
+      return renderForDisk({ disk: disk(before, prolog), base: bpmnjs(before), out: bpmnjs(after) });
+    };
+    const bounds = ['dc:Bounds', { x: '90', y: '190', width: '0', height: '0' }];
+    const styled = run(['bpmndi:BPMNLabel', { id: 'A_label', labelStyle: 'S1', 'acme:hint': 'x' }, [['di:extension', {}, [['acme:pos', {}]]], bounds]]);
+    assert.equal(styled.mode, 'minimal', styled.reason);
+    assert.deepEqual(styled.lost, ['label style S1 of A_di', 'attribute acme:hint in the label of A_di', 'element acme:pos in the label of A_di']);
+    // A label with nothing but its bounds (and an empty DI extension): nothing to report.
+    const plain = run(['bpmndi:BPMNLabel', { id: 'A_label' }, [['di:extension', {}], bounds]]);
+    assert.equal(plain.mode, 'minimal', plain.reason);
+    assert.equal(plain.lost, undefined);
   });
 
   it('a minimal write that would drop extensions of an element bpmn-js still has reports them (safety net)', () => {
@@ -970,13 +1013,17 @@ describe('minimal-diff writer: gestures captured in the browser (test/fixtures/q
 
   it('bz-task-service: a wrench that changes the tag keeps the DI extension of the shape bpmn-js re-creates; undo', async () => {
     const { texts, writes } = await replay('bz-task-service');
-    allMinimal(writes);
+    // The shape keeps its DI extension; bpmn-js re-creates it without a label (a task's label is inside
+    // it): the old label goes like one whose name is cleared (and comes back with the undo). Its style
+    // goes with it, which is said (verifier Q4-impl round 8; its DI extension is empty, nothing to name).
+    assert.deepEqual(writes.map((w) => [w.mode, w.lost]), [
+      ['minimal', ['label style Style_6b41969d-9f3b-4d41-be89-6b5b6a905a1d of DiagramElement_57dad906-f70a-4843-ab50-5cf02eabb1e5']],
+      ['minimal', undefined],
+    ]);
     const [original, wrenched, undone] = texts;
     const id = '_5a972b87-735d-454a-b31c-f52fb3afc5c7';
     assert.equal(load(wrenched).ids.get(id).local, 'serviceTask');
     assert.deepEqual(kept(wrenched), kept(original));
-    // The shape keeps its DI extension; bpmn-js re-creates it without a label (a task's label is inside
-    // it): the old label goes like one whose name is cleared (and comes back with the undo).
     assert.deepEqual(diExtras(wrenched).filter((s) => !s.startsWith(id)), diExtras(original).filter((s) => !s.startsWith(id)));
     assert.equal(diExtras(wrenched).find((s) => s.startsWith(id)), `${id}: BPMNShape:extension`);
     assert.equal(undone, original);
@@ -1002,6 +1049,102 @@ describe('minimal-diff writer: gestures captured in the browser (test/fixtures/q
       assert.deepEqual(kept(texts[texts.length - 1]), kept(texts[reference]), name);
       assert.deepEqual(kept(texts[reference]), kept(texts[0]), name);
     }
+  });
+
+  // Verifier Q4-impl round 8, D1: an element an undo brings back goes back to its old place on disk,
+  // bpmn-js appends it; a new artifact went next to it (its nearest sibling in bpmn-js' output), i.e.
+  // among the flow elements (a group in Bizagi's collaboration: before a participant). Schema-invalid,
+  // written as minimal without a note: the order check only knew the head of the sequences.
+  // [capture, the new element's type, the elements the schema puts before it in its parent, lines the undo may
+  // differ from the original (labels bpmn-js re-measures, references it re-adds last)]
+  for (const [name, type, before, undoLines] of [
+    ['cn-flow-undo-annotate', 'textAnnotation', /^(startEvent|task|exclusiveGateway|endEvent|sequenceFlow)$/, 0],
+    ['cn-task-undo-group', 'group', /^(startEvent|task|exclusiveGateway|endEvent|sequenceFlow)$/, 2],
+    ['bz-all-undo-group', 'group', /^(participant|messageFlow)$/, 16],
+  ]) {
+    it(`${name}: delete, undo, then a new ${type}: after every ${before.source.replace(/[\^$()]/g, '')} (schema order)`, async () => {
+      const { texts, writes } = await replay(name);
+      allMinimal(writes);
+      const [original, , undone, added] = texts;
+      // The undo puts everything back where it was (up to labels bpmn-js re-measures and references it re-orders).
+      assert.deepEqual(kept(undone), kept(original));
+      assert.ok(changedLines(original, undone) <= undoLines, String(changedLines(original, undone)));
+      for (const t of texts) assert.deepEqual(schemaOrderProblems(t), [], name);
+      assert.deepEqual(await newXsdErrors(added, original), []);
+      const el = [...load(added).ids.values()].find((e) => e.local === type && !load(original).ids.has(idOf(e)));
+      const siblings = el.parent.children.filter((c) => c.kind === 'element').map((c) => c.local);
+      assert.equal(siblings.slice(siblings.indexOf(type)).findIndex((l) => before.test(l)), -1, siblings.join(' '));
+      assert.ok(changedLines(undone, added) <= 14, String(changedLines(undone, added)));
+    });
+  }
+
+  // Verifier Q4-impl round 8, D3: deleting everything in a bpmn-js 7 file with collapsed sub-processes
+  // fell back to 'format' (the diagrams bpmn-js makes for them exist only in its view; "cannot find it
+  // on disk"). The undo (bpmn-js ≥ 9 brings those diagrams back, so the file gets them) stays minimal.
+  it('bd-all-undo: deleting everything with collapsed sub-processes of an older file is minimal, nothing lost', async () => {
+    const { texts, writes } = await replay('bd-all-undo');
+    allMinimal(writes);
+    assert.deepEqual(load(texts[1]).root.children.filter((c) => c.kind === 'element').map((c) => c.local), ['globalTask', 'process', 'BPMNDiagram']);
+    for (const t of texts) assert.deepEqual(kept(t), kept(texts[0]));
+    for (const t of texts) assert.deepEqual(schemaOrderProblems(t), []);
+  });
+});
+
+describe('minimal-diff writer: the schema order of children', () => {
+  it('the order table is generated from the BPMN 2.0 XSD (scripts/gen-bpmn-schema-order.mjs)', async () => {
+    const { generate } = await import('../../scripts/gen-bpmn-schema-order.mjs');
+    const committed = await readFile(new URL('../../src/bpmn-schema-order.js', import.meta.url), 'utf8');
+    assert.equal(committed, generate(), 'run node scripts/gen-bpmn-schema-order.mjs');
+    const { ELEMENTS, SEQUENCES } = await import('../../src/bpmn-schema-order.js');
+    const seq = (el) => SEQUENCES[ELEMENTS[el]];
+    const inOrder = (list, ...names) => names.every((n, k) => k === 0 || list.indexOf(names[k - 1]) < list.indexOf(n));
+    assert.ok(inOrder(seq('bpmn:process'), 'bpmn:documentation', 'bpmn:extensionElements', 'bpmn:ioSpecification', 'bpmn:auditing',
+      'bpmn:monitoring', 'bpmn:property', 'bpmn:laneSet', 'bpmn:flowElement', 'bpmn:artifact', 'bpmn:resourceRole',
+      'bpmn:correlationSubscription', 'bpmn:supports'));
+    assert.ok(inOrder(seq('bpmn:subProcess'), 'bpmn:incoming', 'bpmn:outgoing', 'bpmn:loopCharacteristics', 'bpmn:laneSet', 'bpmn:flowElement', 'bpmn:artifact'));
+    assert.ok(inOrder(seq('bpmn:collaboration'), 'bpmn:participant', 'bpmn:messageFlow', 'bpmn:artifact', 'bpmn:conversationNode',
+      'bpmn:conversationAssociation', 'bpmn:participantAssociation', 'bpmn:messageFlowAssociation', 'bpmn:correlationKey'));
+    assert.deepEqual(seq('bpmn:definitions'), ['bpmn:import', 'bpmn:extension', 'bpmn:rootElement', 'bpmndi:BPMNDiagram', 'bpmn:relationship']);
+    assert.deepEqual(seq('bpmndi:BPMNShape'), ['di:extension', 'dc:Bounds', 'bpmndi:BPMNLabel']);
+  });
+
+  it('the check refuses children out of order anywhere in a sequence (process, collaboration, definitions, DI)', () => {
+    const doc = (body) => `<definitions xmlns="${MODEL}" xmlns:bpmndi="${DI}" xmlns:dc="${DC}" xmlns:di="${DDI}" id="Defs">${body}</definitions>`;
+    const ok = doc('<collaboration id="C"><participant id="Pa" processRef="P"/><group id="G"/></collaboration>'
+      + '<process id="P"><laneSet id="LS"/><task id="T"/><sequenceFlow id="F" sourceRef="T" targetRef="T"/><textAnnotation id="TA"/></process>'
+      + '<bpmndi:BPMNDiagram id="D"><bpmndi:BPMNPlane id="PL"><bpmndi:BPMNShape id="S" bpmnElement="T"><dc:Bounds x="0" y="0" width="1" height="1"/>'
+      + '<bpmndi:BPMNLabel labelStyle="LS1"/></bpmndi:BPMNShape></bpmndi:BPMNPlane></bpmndi:BPMNDiagram>');
+    assert.deepEqual(schemaOrderProblems(ok), []);
+    const swap = (text, a, b) => text.replace(a, '\u0000').replace(b, a).replace('\u0000', b);
+    for (const [a, b, problem] of [
+      ['<sequenceFlow id="F" sourceRef="T" targetRef="T"/>', '<textAnnotation id="TA"/>', '#P: sequenceFlow after textAnnotation'],
+      ['<laneSet id="LS"/>', '<task id="T"/>', '#P: laneSet after task'],
+      ['<participant id="Pa" processRef="P"/>', '<group id="G"/>', '#C: participant after group'],
+      ['<dc:Bounds x="0" y="0" width="1" height="1"/>', '<bpmndi:BPMNLabel labelStyle="LS1"/>', '#S: dc:Bounds after bpmndi:BPMNLabel'],
+    ]) {
+      assert.deepEqual(schemaOrderProblems(swap(ok, a, b)), [problem]);
+    }
+    // The process after the diagram: rootElement after BPMNDiagram.
+    const moved = ok.replace(/<process[\s\S]*<\/process>/, '').replace('</definitions>', `${/<process[\s\S]*<\/process>/.exec(ok)[0]}</definitions>`);
+    assert.deepEqual(schemaOrderProblems(moved), ['#Defs: process after bpmndi:BPMNDiagram']);
+  });
+
+  it('a new artifact goes after every flow element on disk, also when bpmn-js has its flows in another order', () => {
+    // On disk F1 is between the tasks (an undo put it back there); bpmn-js appends it, and the new
+    // annotation comes after it in bpmn-js' output.
+    const tasks = [
+      ['bpmn2:task', { id: 'A', name: 'Alpha' }, [['bpmn2:outgoing', {}, 'F1']]],
+      ['bpmn2:task', { id: 'B', name: 'Beta' }, [['bpmn2:incoming', {}, 'F1']]],
+    ];
+    const flow = ['bpmn2:sequenceFlow', { id: 'F1', sourceRef: 'A', targetRef: 'B' }];
+    const note = ['bpmn2:textAnnotation', { id: 'N' }, [['bpmn2:text', {}, 'Note']]];
+    const onDisk = disk(model({ tasks: [tasks[0], flow, tasks[1]], flows: [] }));
+    const base = bpmnjs(model({ tasks, flows: [flow] }));
+    const out = bpmnjs(model({ tasks, flows: [flow, note] }));
+    const W = renderForDisk({ disk: onDisk, base, out });
+    assert.equal(W.mode, 'minimal', W.reason);
+    assert.equal(W.text, disk(model({ tasks: [tasks[0], flow, tasks[1]], flows: [note] })));
+    assert.deepEqual(schemaOrderProblems(W.text), []);
   });
 });
 
@@ -1086,9 +1229,10 @@ describe('minimal-diff reader', () => {
     assert.throws(() => load(`<a xmlns="${MODEL}"><b id="x"/><c id="x"/></a>`), /duplicate id/);
   });
 
-  it('expands character references, keeps entity references as written (like bpmn-js) and normalises line ends', () => {
-    const doc = parse('<?xml version="1.0"?>\r\n<!DOCTYPE a [ <!ENTITY co "ACME &#38; Co"> ]>\r\n<a t="x&#10;y\r\nz">&co; &#x1F600;\r\n<![CDATA[<raw>]]></a>');
-    assert.equal(doc.root.attrs[0].value, 'x\ny z');
+  it('expands character references, keeps entity references as written (like bpmn-js), normalises line ends in text', () => {
+    const doc = parse('<?xml version="1.0"?>\r\n<!DOCTYPE a [ <!ENTITY co "ACME &#38; Co"> ]>\r\n<a t="x&#10;y\r\nz\tw">&co; &#x1F600;\r\n<![CDATA[<raw>]]></a>');
+    // Attribute values as bpmn-js reads them: white space as written (no attribute-value normalisation).
+    assert.equal(doc.root.attrs[0].value, 'x\ny\r\nz\tw');
     assert.equal(doc.root.children[0].value, '\u0001co; 😀\n');
     assert.deepEqual([...doc.entities.names], ['co']);
     assert.equal(doc.root.children[1].value, '<raw>');
