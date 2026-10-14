@@ -716,4 +716,123 @@ test.describe('what is inside edited elements is kept (UI gestures)', () => {
       }
     });
   }
+
+  // Verifier Q4-impl final round, D1: delete + undo fell back to 'format' and dropped the element's
+  // comment, PI, CDATA and kept extensions without a note: a task appended to it lost its only
+  // references with the delete and got two back ("overlapping changes"), or the restored edges were
+  // each other's remembered neighbour and none was written (camunda7-loan-approval: check failed).
+  for (const [file, id, wrench, connect] of [
+    ['comments-nonascii.bpmn', 'Task_CheckStock', false, 'to'],
+    ['comments-nonascii.bpmn', 'Task_CheckStock', true, 'back'],
+    ['camunda7-loan-approval.bpmn', 'UserTask_1', true, null],
+    ['camunda7-loan-approval.bpmn', 'UserTask_1', false, null],
+  ]) {
+    test(`${file}: append${wrench ? ', wrench' : ''}${connect ? `, connect ${connect}` : ''}, delete, undo: minimal, the element's own text back`, async ({ browser }) => {
+      const t = await open(browser, file);
+      try {
+        const pad = async (elementId, action) => {
+          await t.page.mouse.click(1500, 80);
+          await shapeOf(t.page, elementId).click();
+          await expect(t.page.locator('.djs-context-pad.open')).toBeVisible();
+          await t.page.locator(`.djs-context-pad.open .entry[data-action="${action}"]`).click();
+        };
+        const ids = () => t.page.evaluate(() => window.bpmnModeler.get('elementRegistry').getAll().map((e) => e.id));
+        const before = await ids();
+        let count = 0;
+        await pad(id, 'append.append-task');
+        await t.page.keyboard.press('Escape');
+        await saved(t.page, t.cli, t.fixture.file, count);
+        const appended = (await ids()).find((x) => !before.includes(x) && x.startsWith('Activity_') && !x.endsWith('_label'));
+        expect(appended).toBeTruthy();
+        if (wrench) {
+          count = writes(t.cli).length;
+          await t.page.mouse.click(1500, 80);
+          await replaceWith(t.page, id, 'replace-with-service-task');
+          await saved(t.page, t.cli, t.fixture.file, count);
+        }
+        if (connect) {
+          count = writes(t.cli).length;
+          const [from, to] = connect === 'to' ? [id, appended] : [appended, id];
+          await pad(from, 'connect');
+          const target = await shapeOf(t.page, to).boundingBox();
+          await t.page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+          await t.page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+          await saved(t.page, t.cli, t.fixture.file, count);
+        }
+        const beforeDelete = await readFile(t.fixture.file, 'utf8');
+        count = writes(t.cli).length;
+        await pad(id, 'delete');
+        await saved(t.page, t.cli, t.fixture.file, count);
+        count = writes(t.cli).length;
+        await t.page.mouse.click(1500, 80);
+        await t.page.keyboard.press('ControlOrMeta+z');
+        const now = await saved(t.page, t.cli, t.fixture.file, count);
+        expectMinimalWrites(t.cli);
+        expect(t.cli.stderr()).not.toMatch(/bpmn-edit: (note|warning):/);
+        expect(keptFacts(now)).toEqual(keptFacts(t.original));
+        // The model before the delete, extensions included; bpmn-js may re-order references to the
+        // flows and drops sourceElement / targetElement of the edges it restores (known limits).
+        const allowed = (key) => /\}(incoming|outgoing)\[\d+\]\u0000$/.test(key) || /\u0000\{\}(sourceElement|targetElement)$/.test(key);
+        expect(factChanges(beforeDelete, now, allowed)).toEqual([]);
+        expect(await changedLines(t.fixture.dir, beforeDelete, now)).toBeLessThanOrEqual(6);
+      } finally {
+        await t.close();
+      }
+    });
+  }
+
+  // Verifier Q4-impl final round, D2: expanding a collapsed sub-process (the wrench, or undo of the
+  // collapse) fell back to 'format' ("moved together with its parent", 75-970 lines, kept extensions of
+  // a wrenched task in it dropped): its shapes move out of the diagram bpmn-js made for it.
+  test('comments-nonascii: a wrenched task in a new sub-process, collapse, expand, undo, undo: minimal, nothing lost', async ({ browser }) => {
+    test.slow();
+    const t = await open(browser, 'comments-nonascii.bpmn');
+    try {
+      const undo = async () => {
+        await t.page.mouse.click(1500, 80);
+        await t.page.keyboard.press('ControlOrMeta+z');
+      };
+      await replaceWith(t.page, 'Task_CheckStock', 'replace-with-service-task');
+      const wrenched = await saved(t.page, t.cli, t.fixture.file, 0);
+      let count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      const sub = await createSubProcess(t.page);
+      await saved(t.page, t.cli, t.fixture.file, count);
+      count = writes(t.cli).length;
+      await dragInto(t.page, 'Task_CheckStock', sub);
+      const inside = await saved(t.page, t.cli, t.fixture.file, count);
+      expect(load(inside).ids.get('Task_CheckStock').parent.path).toBe(`#${sub}`);
+      const texts = [];
+      for (const step of ['replace-with-collapsed-subprocess', 'replace-with-expanded-subprocess', 'undo', 'undo']) {
+        count = writes(t.cli).length;
+        if (step === 'undo') await undo();
+        else {
+          // The sub-process by its border (its middle may be the task in it).
+          await t.page.mouse.click(1500, 80);
+          await shapeOf(t.page, sub).click({ position: { x: 4, y: 4 } });
+          await t.page.locator('.djs-context-pad.open .entry[data-action="replace"]').click();
+          await t.page.locator(`.djs-popup [data-id="${step}"]`).click();
+        }
+        texts.push(await saved(t.page, t.cli, t.fixture.file, count));
+      }
+      const [collapsed, expanded, undone, undone2] = texts;
+      expect(load(collapsed).ids.has(sub)).toBe(true);
+      expect(undone).toBe(collapsed); // undo of the expand: collapsed as before
+      for (const now of texts) {
+        expect(keptFacts(now)).toEqual(keptFacts(t.original));
+        // The task keeps the extensions bpmn-js dropped on the wrench.
+        expect(now).toContain('acme:sla="PT2H"');
+        expect(now).toContain('<acme:note>Façade call – keep idempotent</acme:note>');
+      }
+      expectMinimalWrites(t.cli);
+      expect(t.cli.stderr()).not.toMatch(/bpmn-edit: (note|warning):/);
+      // Expanded again: the sub-process' size and its shapes' places (bpmn-js lays them out anew).
+      expect(await changedLines(t.fixture.dir, collapsed, expanded)).toBeLessThanOrEqual(30);
+      // Back to before the collapse, up to where the task's shape is in the plane.
+      expect(await changedLines(t.fixture.dir, inside, undone2)).toBeLessThanOrEqual(6);
+      expect(factChanges(wrenched, undone2, () => false).every((c) => !/acme|comment|pi |cdata/.test(c))).toBe(true);
+    } finally {
+      await t.close();
+    }
+  });
 });

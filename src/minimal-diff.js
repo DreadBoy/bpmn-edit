@@ -878,13 +878,18 @@ function reindentText(text, from, to) {
 function restoredFacts(restored) {
   const fm = new Map();
   const paths = new Set();
+  const byPath = new Map();
   for (const r of restored) {
     const decls = Object.entries(r.scope).map(([p, uri]) => `${p ? `xmlns:${p}` : 'xmlns'}="${escapeAttr(uri)}"`).join(' ');
     const doc = load(`<restored ${decls}>${r.text}</restored>`);
     for (const [k, v] of facts(doc)) fm.set(k, v);
-    for (const el of walk(doc.root)) if (el !== doc.root) paths.add(el.path);
+    for (const el of walk(doc.root)) {
+      if (el === doc.root) continue;
+      paths.add(el.path);
+      byPath.set(el.path, el);
+    }
   }
-  return { fm, paths };
+  return { fm, paths, byPath };
 }
 
 /**
@@ -1063,10 +1068,12 @@ function writeMinimal(D, B, U, memory = new Map()) {
     }
     return [d.start, d.end];
   };
+  const removals = new Set(); // the edits that cut elements bpmn-js removed
   const removeElement = (d) => {
     const [start, end] = lineRange(d);
     edit(start, end, '');
     cut.add(d);
+    return edits[edits.length - 1];
   };
   const writeText = (d, value) => {
     const hasCdata = d.children.some((c) => c.kind === 'cdata');
@@ -1256,13 +1263,19 @@ function writeMinimal(D, B, U, memory = new Map()) {
     const after = siblings.slice(0, at).reverse().find((e) => idOf(e) !== null);
     const before = after ? null : siblings.slice(at + 1).find((e) => idOf(e) !== null);
     const b = B.ids.get(id);
+    // Elements with an id moved out of it (they stay): its text then is not its content.
+    const movedOut = moving.filter(([, m]) => m !== d && inside(m, (e) => e === d)).map(([u]) => idOf(u));
     removedNow.push([id, {
       text: text.slice(d.start, d.end), form: deepForm(b), indent: lineIndent(text, d.start) ?? '', scope: scopeAt(d.parent),
       after: after ? idOf(after) : null, before: before ? idOf(before) : null,
+      // All its neighbours with an id, nearest first: where it goes back when its next ones were cut too.
+      prev: siblings.slice(0, at).reverse().map(idOf).filter((x) => x !== null).slice(0, NEIGHBOURS),
+      next: siblings.slice(at + 1).map(idOf).filter((x) => x !== null).slice(0, NEIGHBOURS),
       // bpmn-js' text of it then: what it comes back from when bpmn-js changed it meanwhile (see restoreFirst).
       baseText: B.text.slice(b.start, b.end), baseScope: scopeAt(b.parent),
+      ...(movedOut.length ? { movedOut } : {}),
     }]);
-    removeElement(d);
+    removals.add(removeElement(d));
   }
   // Replaced by another type: the new name in the tags (the content is patched like any other).
   for (const [u, d] of retyped) {
@@ -1274,6 +1287,7 @@ function writeMinimal(D, B, U, memory = new Map()) {
     if (!d.selfClosing) edit(d.closeStart + 2, d.closeStart + 2 + d.name.length, name);
   }
 
+  const filled = new Map(); // element of D without children -> the edit that gives it its new ones
   /** Where `u` (a new child of `dParent` in U) goes in the disk text: next to its nearest sibling on disk. */
   const placeAt = (u, dParent, write) => {
     const siblings = elementChildren(u.parent);
@@ -1297,12 +1311,27 @@ function writeMinimal(D, B, U, memory = new Map()) {
     } else {
       const indent = parentIndent + unit;
       const snippet = write(indent);
-      if (dParent.selfClosing) {
-        let slash = dParent.openEnd - 2;
-        while (isWs(text[slash - 1])) slash -= 1;
-        edit(slash, dParent.openEnd, `>${eol}${indent}${snippet}${eol}${parentIndent}</${nameOf(dParent)}>`);
-      } else if (dParent.children.every((c) => c.kind === 'text' && !/\S/.test(c.raw))) {
-        edit(dParent.openEnd, dParent.closeStart, `${eol}${indent}${snippet}${eol}${parentIndent}`);
+      // A second new child of a parent that had none: next to the first one (one edit for them all).
+      const fill = filled.get(dParent);
+      if (fill) {
+        if (!edits.includes(fill.edit)) throw new WriterFallback(`${dParent.path}: new children in two places`);
+        fill.snippets.push(snippet);
+        fill.edit.str = fill.render();
+        return;
+      }
+      if (dParent.selfClosing || dParent.children.every((c) => c.kind === 'text' && !/\S/.test(c.raw))) {
+        const snippets = [snippet];
+        const body = () => snippets.map((s) => `${eol}${indent}${s}`).join('');
+        const render = dParent.selfClosing
+          ? () => `>${body()}${eol}${parentIndent}</${nameOf(dParent)}>`
+          : () => `${body()}${eol}${parentIndent}`;
+        let start = dParent.openEnd;
+        if (dParent.selfClosing) {
+          start = dParent.openEnd - 2;
+          while (isWs(text[start - 1])) start -= 1;
+        }
+        edit(start, dParent.selfClosing ? dParent.openEnd : dParent.closeStart, render());
+        filled.set(dParent, { snippets, render, edit: edits[edits.length - 1] });
       } else {
         edit(dParent.openEnd, dParent.openEnd, eol + indent + snippet);
       }
@@ -1324,7 +1353,7 @@ function writeMinimal(D, B, U, memory = new Map()) {
     // cut, pasted, cut again, ...); else (bpmn-js changed it on the way back) at least its old place,
     // written from bpmn-js' output.
     const form = deepForm(u);
-    const fits = (v) => v.form === form && Object.entries(v.scope).every(([p, uri]) => resolveD(dParent, p) === uri);
+    const fits = (v) => v.form === form && !v.movedOut && Object.entries(v.scope).every(([p, uri]) => resolveD(dParent, p) === uri);
     const kept = [...versions].reverse().find(fits) ?? versions[versions.length - 1];
     const same = fits(kept);
     plans.set(idOf(u), { u, kept, dParent, same });
@@ -1334,15 +1363,20 @@ function writeMinimal(D, B, U, memory = new Map()) {
   // One whose old neighbour comes back too goes next to it (e.g. a task and its flows deleted together).
   const follows = new Map(); // id -> [plans placed right after it]
   const precedes = new Map(); // id -> [plans placed right before it]
-  const chained = new Set();
-  for (const [id, plan] of plans) {
+  const chained = new Map(); // id -> the id it is written next to
+  // Links to the element before it first: a run of neighbours cut together (e.g. the first edges of a
+  // plane, each the other's neighbour) must not form a cycle, which would write none of them.
+  const linked = [...plans].sort(([, x], [, y]) => (x.kept.after ? 0 : 1) - (y.kept.after ? 0 : 1));
+  for (const [id, plan] of linked) {
     const { after, before } = plan.kept;
     const to = after ?? before;
-    if (to && plans.has(to) && plans.get(to).dParent === plan.dParent && to !== id) {
-      const map = after ? follows : precedes;
-      map.set(to, [...(map.get(to) ?? []), plan]);
-      chained.add(id);
-    }
+    if (!to || !plans.has(to) || plans.get(to).dParent !== plan.dParent || to === id) continue;
+    let cycle = false;
+    for (let k = to; k !== undefined && !cycle; k = chained.get(k)) cycle = k === id;
+    if (cycle) continue;
+    const map = after ? follows : precedes;
+    map.set(to, [...(map.get(to) ?? []), plan]);
+    chained.set(id, to);
   }
   const emit = (plan, indent, seen = new Set()) => {
     const id = idOf(plan.u);
@@ -1363,12 +1397,20 @@ function writeMinimal(D, B, U, memory = new Map()) {
     if (chained.has(idOf(u))) continue; // written with the element it goes next to
     const write = (indent) => emit(plan, indent);
     // Back where it was, if its old neighbour is still there (bpmn-js may re-add it elsewhere).
+    // Its nearest old neighbour still there: after the one before it, else before the one after it.
     const { kept } = plan;
-    const near = D.ids.get(kept.after ?? kept.before ?? '');
-    if (near && near.parent === dParent && !cut.has(near) && !isMoving(near) && status.get(idOf(near)) === 'kept') {
-      const indent = lineIndent(text, near.start);
-      if (kept.after) edit(near.end, near.end, eol + (indent ?? '') + write(indent ?? kept.indent));
-      else edit(near.start, near.start, write(indent ?? kept.indent) + (indent === null ? '' : eol + indent));
+    const there = (id) => {
+      const near = D.ids.get(id);
+      return near && near.parent === dParent && !cut.has(near) && !isMoving(near) && status.get(id) === 'kept' ? near : null;
+    };
+    const prev = (kept.prev ?? [kept.after]).map(there).find(Boolean);
+    const next = prev ? null : (kept.next ?? [kept.before]).map(there).find(Boolean);
+    if (prev) {
+      const indent = lineIndent(text, prev.start);
+      edit(prev.end, prev.end, eol + (indent ?? '') + write(indent ?? kept.indent));
+    } else if (next) {
+      const indent = lineIndent(text, next.start);
+      edit(next.start, next.start, write(indent ?? kept.indent) + (indent === null ? '' : eol + indent));
     } else placeAt(u, dParent, write);
   }
 
@@ -1381,7 +1423,10 @@ function writeMinimal(D, B, U, memory = new Map()) {
   moving.sort(([x], [y]) => x.start - y.start);
   for (const [u, d] of moving) {
     const id = idOf(u);
-    if (inside(d, (e) => cut.has(e)) || inside(d.parent, isMoving)) throw new WriterFallback(`#${id}: moved together with its parent`);
+    if (cut.has(d) || inside(d.parent, isMoving)) throw new WriterFallback(`#${id}: moved together with its parent`);
+    // Moved out of an element bpmn-js removed (e.g. the shapes of a collapsed sub-process' own diagram
+    // when it is expanded): its text goes with the removed one's, the copy goes to the new place.
+    const outOfRemoved = inside(d.parent, (e) => cut.has(e));
     const spot = intoNew.get(u);
     const dParent = spot ? null : counterpart.get(u.parent);
     if (!spot && (!dParent || inside(dParent, (e) => e === d || cut.has(e) || isMoving(e)))) {
@@ -1395,6 +1440,8 @@ function writeMinimal(D, B, U, memory = new Map()) {
       if (!insertionAtEdge && e.start >= from && e.end <= to) {
         within.push({ ...e, start: e.start - from, end: e.end - from });
         edits.splice(k, 1);
+      } else if (outOfRemoved && removals.has(e) && e.start <= from && e.end >= to) {
+        continue;
       } else if ((e.start < from && e.end > from) || (e.start < to && e.end > to)) {
         throw new WriterFallback(`#${id}: changes across its boundary`);
       }
@@ -1403,7 +1450,7 @@ function writeMinimal(D, B, U, memory = new Map()) {
     const oldIndent = lineIndent(text, d.start) ?? '';
     const reindent = (indent) => own.split('\n')
       .map((line, k) => (k > 0 && line.startsWith(oldIndent) ? indent + line.slice(oldIndent.length) : line)).join('\n');
-    removeElement(d);
+    if (!outOfRemoved) removeElement(d);
     if (!spot) {
       placeAt(u, dParent, reindent);
       continue;
@@ -1543,8 +1590,9 @@ function restoreFirst(D, B, U, memory) {
   for (const [id, u] of U.ids) {
     if (B.ids.has(id) || D.ids.has(id)) continue;
     const versions = memory.get(id) ?? [];
-    if (!versions.length || versions.some((v) => v.form === deepForm(u))) continue; // as it was: restored as such
+    if (!versions.length || versions.some((v) => v.form === deepForm(u) && !v.movedOut)) continue; // as it was: restored as such
     const kept = versions[versions.length - 1];
+    if (kept.movedOut) continue; // its text holds elements that are elsewhere now
     const parentId = u.parent ? idOf(u.parent) : null;
     if (!kept.baseText || parentId === null) continue;
     plans.push({ id, kept, parentId });
@@ -1554,6 +1602,7 @@ function restoreFirst(D, B, U, memory) {
   let disk = D.text;
   let base = B.text;
   let pending = plans;
+  let force = false; // no progress: neighbours that come back too are not waited for (a cycle)
   while (pending.length) {
     const next = [];
     for (const plan of pending) {
@@ -1562,27 +1611,55 @@ function restoreFirst(D, B, U, memory) {
       const dParent = d.ids.get(plan.parentId);
       const bParent = b.ids.get(plan.parentId);
       if (!dParent || !bParent || dParent.selfClosing || bParent.selfClosing || d.ids.has(plan.id)
-        || !fits(dParent, plan.kept.scope) || !fits(bParent, plan.kept.baseScope)) continue;
-      const { after, before } = plan.kept;
-      if (pending.some((p) => p !== plan && (p.id === after || p.id === before)) && !d.ids.has(after ?? before)) {
-        next.push(plan); // its old neighbour comes back too: after that one
+        || !fits(dParent, plan.kept.scope)) continue;
+      // bpmn-js' text of it then may use a namespace bpmn-js no longer declares (e.g. `di:` once the
+      // last edge is gone): declared on the element itself in the base (declarations are not compared).
+      const missing = Object.entries(plan.kept.baseScope).filter(([p]) => resolvePrefix(bParent, p) === undefined);
+      if (!fits(bParent, Object.fromEntries(Object.entries(plan.kept.baseScope).filter(([p]) => !missing.some(([q]) => q === p))))) continue;
+      const baseText = plan.kept.baseText.replace(/^<[^\s/>]+/, (tag) => tag + missing.map(([p, uri]) => ` ${p ? `xmlns:${p}` : 'xmlns'}="${escapeAttr(uri)}"`).join(''));
+      // Its nearest old neighbour on disk: after the one before it, else before the one after it; one
+      // that comes back too is waited for.
+      const prevIds = plan.kept.prev ?? (plan.kept.after ? [plan.kept.after] : []);
+      const nextIds = plan.kept.next ?? (plan.kept.before ? [plan.kept.before] : []);
+      const comes = (id) => pending.some((p) => p !== plan && p.id === id) && !d.ids.has(id);
+      const onDisk = (id) => {
+        const near = d.ids.get(id);
+        return near && near.parent === dParent ? near : null;
+      };
+      const firstOf = (ids) => {
+        for (const id of ids) {
+          if (onDisk(id)) return { near: onDisk(id) };
+          if (comes(id) && !force) return { wait: true };
+        }
+        return {};
+      };
+      let where = firstOf(prevIds);
+      let after = true;
+      if (!where.near && !where.wait) {
+        where = firstOf(nextIds);
+        after = false;
+      }
+      if (where.wait) {
+        next.push(plan);
         continue;
       }
+      force = false;
       const kids = elementChildren(dParent);
-      const near = d.ids.get(after ?? before ?? '');
-      const anchor = near && near.parent === dParent ? near : null;
-      const last = kids[kids.length - 1];
-      const at = anchor ?? last;
+      const at = where.near ?? kids[kids.length - 1];
       if (!at) continue;
+      if (!where.near) after = true;
       const indent = lineIndent(disk, at.start) ?? '';
       const own = reindentText(plan.kept.text, plan.kept.indent, indent);
       const eol = detectStyle(d).eol;
-      disk = anchor && !after
-        ? disk.slice(0, at.start) + own + eol + indent + disk.slice(at.start)
-        : disk.slice(0, at.end) + eol + indent + own + disk.slice(at.end);
-      base = `${base.slice(0, bParent.closeStart)}${plan.kept.baseText}\n${base.slice(bParent.closeStart)}`;
+      disk = after
+        ? disk.slice(0, at.end) + eol + indent + own + disk.slice(at.end)
+        : disk.slice(0, at.start) + own + eol + indent + disk.slice(at.start);
+      base = `${base.slice(0, bParent.closeStart)}${baseText}\n${base.slice(bParent.closeStart)}`;
     }
-    if (next.length === pending.length) break; // neighbours in a cycle: leave them to the normal path
+    if (next.length === pending.length) {
+      if (force) break;
+      force = true;
+    }
     pending = next;
   }
   return disk === D.text ? null : { disk, base };
@@ -1594,23 +1671,61 @@ function restoreFirst(D, B, U, memory) {
  */
 function lostFromMemory(unused, W) {
   if (!unused?.length) return [];
-  const { fm } = restoredFacts(unused);
+  const { fm, byPath } = restoredFacts(unused);
   const fw = facts(W);
+  const where = (path) => path.replace(/\{[^}]*\}/g, '').replace(/^#/, '');
+  const lostPaths = new Set();
+  const under = (path) => {
+    for (let p = path; p; p = p.slice(0, Math.max(p.lastIndexOf('/'), 0))) if (lostPaths.has(p)) return true;
+    return false;
+  };
   const lost = [];
   for (const [key, value] of fm) {
     const [type, path, detail] = key.split(SEP);
-    if (path.startsWith('/') || fw.get(key) === value) continue; // the wrapper; kept
+    if (path.startsWith('/') || under(path) || fw.get(key) === value) continue; // the wrapper; gone with an element named; kept
     if (type === 'comment') lost.push(`comment "${value.length > 40 ? `${value.slice(0, 40)}…` : value}"`);
     else if (type === 'pi') lost.push(`processing instruction ${value.length > 40 ? `${value.slice(0, 40)}…` : value}`);
-    else if (type === 'cdata') lost.push(`a CDATA section in ${path.replace(/\{[^}]*\}/g, '').replace(/^#/, '')}`);
-    else if (type === 'el' && isUnknownNs(/^\{([^}]*)\}/.exec(value)?.[1])) lost.push(`element ${value.replace(/^\{[^}]*\}/, '')} in ${path.replace(/\{[^}]*\}/g, '').replace(/^#/, '').replace(/\/[^/]*$/, '')}`);
-    else if (type === 'attr' && isUnknownNs(/^\{([^}]*)\}/.exec(detail)?.[1])) lost.push(`attribute ${detail.replace(/^\{[^}]*\}/, '')} in ${path.replace(/\{[^}]*\}/g, '').replace(/^#/, '')}`);
+    else if (type === 'cdata') lost.push(`a CDATA section in ${where(path)}`);
+    else if (type === 'el' && isUnknownNs(/^\{([^}]*)\}/.exec(value)?.[1])) {
+      lostPaths.add(path);
+      const el = byPath.get(path);
+      lost.push(`element ${el?.name ?? value} in ${where(el?.parent?.path ?? path.replace(/\/[^/]*$/, ''))}`);
+    } else if (type === 'attr' && isUnknownNs(/^\{([^}]*)\}/.exec(detail)?.[1])) {
+      const name = byPath.get(path)?.attrs.find((a) => attrKey(a) === detail)?.name ?? detail;
+      lost.push(`attribute ${name} in ${where(path)}`);
+    }
   }
   return lost;
 }
 
+/**
+ * What a fallback (written from bpmn-js' output `U`, as `W`) loses of the remembered text of elements
+ * bpmn-js brings back (in `U`, not on disk; see writeMinimal `memory`): the undo of a delete would
+ * have written that text back. Descriptions, for notes.
+ */
+function lostOfRemembered(disk, U, W, memory) {
+  if (!memory?.size) return [];
+  let D;
+  try {
+    D = load(disk);
+  } catch {
+    D = null;
+  }
+  const back = [];
+  for (const [id, u] of U.ids) {
+    const versions = memory.get(id) ?? [];
+    if (!versions.length || D?.ids.has(id)) continue;
+    const form = deepForm(u);
+    const kept = [...versions].reverse().find((v) => v.form === form) ?? versions[versions.length - 1];
+    back.push({ id, text: kept.text, scope: kept.scope });
+  }
+  return lostFromMemory(back, W);
+}
+
 /** How many removed elements `memory` keeps (see writeMinimal), and versions of each. */
 const MEMORY_SIZE = 200;
+/** How many neighbours on each side a removed element remembers (see writeMinimal). */
+const NEIGHBOURS = 20;
 const MEMORY_VERSIONS = 5;
 
 /**
@@ -1709,7 +1824,7 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
     const U = load(out);
     const problems = checkModel(W, U);
     if (problems.length) throw new WriterFallback(`format check failed: ${problems.slice(0, 3).join(', ')}`);
-    const lost = lostFacts(load(disk), W, U);
+    const lost = [...lostFacts(load(disk), W, U), ...lostOfRemembered(disk, U, W, memory)];
     return { text, mode: 'format', reason: reasons.join('; '), ...(lost.length ? { lost } : {}) };
   } catch (err) {
     reasons.push(why(err));
@@ -1719,6 +1834,14 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
     lost = lostFacts(load(disk), load(out), load(out));
   } catch {
     lost = lostByRaw(disk);
+  }
+  try {
+    lost.push(...lostOfRemembered(disk, load(out), load(out), memory));
+  } catch {
+    // bpmn-js' output cannot be read here: what the remembered texts of elements it has hold is lost.
+    for (const [id, versions] of memory ?? []) {
+      if (typeof out === 'string' && out.includes(`id="${id}"`) && !disk.includes(`id="${id}"`)) lost.push(...lostByRaw(versions[versions.length - 1].text));
+    }
   }
   return { text: out, mode: 'raw', reason: reasons.join('; '), ...(lost.length ? { lost } : {}) };
 }

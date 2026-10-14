@@ -550,6 +550,187 @@ describe('minimal-diff writer: what is inside replaced and moved elements', () =
     const lostExtension = good.replace("<acme:retry n='3'/>", '');
     assert.ok(checkMinimal(load(D), load(B), load(out), load(lostExtension)).length > 0);
   });
+
+  it('two new children of an element that has none on disk: minimal, in bpmn-js\' order', () => {
+    // Verifier Q4-impl final round, D1: undo of a delete gave a task that had lost all its references
+    // two `<incoming>` back; both were written over the same (empty) content: "overlapping changes".
+    const taskC = (refs) => ['bpmn2:task', { id: 'C' }, refs.map((f) => ['bpmn2:incoming', {}, f])];
+    const shapes = [shapeNode('A', '100', '100'), shapeNode('B', '300', '100'), shapeNode('C', '500', '100')];
+    const before = m([taskA('bpmn2:task'), taskB('bpmn2:task'), taskC([])], { shapes });
+    const after = m([taskA('bpmn2:task'), taskB('bpmn2:task'), taskC(['F7', 'F8'])], { shapes });
+    for (const empty of ["<bpmn2:task id='C'/>", "<bpmn2:task id='C'>\r\n\t\t</bpmn2:task>"]) {
+      const onDisk = disk(before, prolog).replace("<bpmn2:task id='C'/>", empty);
+      const { text, mode, reason } = renderForDisk({ disk: onDisk, base: bpmnjs(before), out: bpmnjs(after) });
+      assert.equal(mode, 'minimal', reason);
+      assert.equal(text, disk(after, prolog));
+    }
+  });
+
+  // A plane whose first children are the edges of A (a camunda7-loan-approval layout): deleting A cuts
+  // two neighbours that each remember the other as theirs.
+  const flows2 = [['bpmn2:sequenceFlow', { id: 'F1', sourceRef: 'A', targetRef: 'B' }], ['bpmn2:sequenceFlow', { id: 'F2', sourceRef: 'A', targetRef: 'B' }]];
+  const edge = (id) => ['bpmndi:BPMNEdge', { id: `${id}_di`, bpmnElement: id, sourceElement: 'A_di' }, [
+    ['di:waypoint', { x: '200', y: '140' }], ['di:waypoint', { x: '300', y: '140' }],
+  ]];
+  const taskA2 = (order, opts) => {
+    const [type, attrs, kids] = taskA('bpmn2:task', opts);
+    return [type, attrs, [...kids.filter(([n]) => n !== 'bpmn2:outgoing'), ...order.map((f) => ['bpmn2:outgoing', {}, f])]];
+  };
+  const taskB2 = ['bpmn2:task', { id: 'B', name: 'Beta' }, [['bpmn2:incoming', {}, 'F1'], ['bpmn2:incoming', {}, 'F2']]];
+  const planeFirst = (order) => m([taskA2(order), taskB2], {
+    flows: flows2, shapes: [], edges: [edge('F1'), edge('F2'), shapeNode('A', '100', '100'), shapeNode('B', '300', '100')],
+  });
+  // Without A, no edge is left: bpmn-js no longer declares the `di:` namespace.
+  const goneA = bpmnjs(m([['bpmn2:task', { id: 'B', name: 'Beta' }]], { flows: [], shapes: [shapeNode('B', '300', '100')], edges: [] }))
+    .replace(` xmlns:di="${DDI}"`, '');
+
+  it('delete then undo of an element whose cut neighbours remember each other: all of them back, in place', () => {
+    const memory = new Map();
+    const onDisk = disk(planeFirst(['F1', 'F2']), prolog);
+    const W1 = renderForDisk({ disk: onDisk, base: bpmnjs(planeFirst(['F1', 'F2'])), out: goneA, memory });
+    assert.equal(W1.mode, 'minimal', W1.reason);
+    // bpmn-js brings it all back as it was: the old text exactly.
+    const same = renderForDisk({ disk: W1.text, base: goneA, out: bpmnjs(planeFirst(['F1', 'F2'])), memory: new Map(memory) });
+    assert.equal(same.mode, 'minimal', same.reason);
+    assert.equal(same.text, onDisk);
+    // bpmn-js brings them back changed (references re-ordered, the edges without `sourceElement`):
+    // their remembered texts, patched; nothing lost, the edges first in the plane in their order.
+    const changed = bpmnjs(planeFirst(['F2', 'F1'])).replaceAll(' sourceElement="A_di"', '');
+    const W2 = renderForDisk({ disk: W1.text, base: goneA, out: changed, memory });
+    assert.equal(W2.mode, 'minimal', W2.reason);
+    assert.equal(W2.lost, undefined);
+    for (const kept of ['<!-- checked by the warehouse -->', '<?acme-lint off?>', '<![CDATA[Checks <stock> & more]]>', "acme:sla='PT2H'", "<acme:retry n='3'/>"]) {
+      assert.ok(W2.text.includes(kept), kept);
+    }
+    assert.ok(W2.text.indexOf("id='F1_di'") < W2.text.indexOf("id='F2_di'") && W2.text.indexOf("id='F2_di'") < W2.text.indexOf("id='A_di'"));
+    assert.equal(changedLines(onDisk, W2.text), 6, W2.text); // the two references swapped, two sourceElement
+  });
+
+  it('a fallback names what the remembered text of an element brought back would have kept', () => {
+    // Verifier Q4-impl final round, D1: 'format' wrote such an element from bpmn-js' output and counted
+    // only what the file on disk had, so its comment, PI, CDATA and extensions went without a word.
+    const memory = new Map();
+    const gone = bpmnjs(m([taskB('bpmn2:task')], { flows: [], shapes: [shapeNode('B', '300', '100')], edges: [] }));
+    const W1 = renderForDisk({ disk: D, base: B, out: gone, memory });
+    assert.equal(W1.mode, 'minimal');
+    // A change next to a comment elsewhere forces 'format' on the undo (of a delete after a type change
+    // and back: bpmn-js' model of A lacks the extensions only the file has).
+    const disk2 = W1.text.replace('<bpmn2:incoming>F1</bpmn2:incoming>', '<bpmn2:incoming>F1<!-- why --></bpmn2:incoming>');
+    const out = bpmnjs(m([taskA('bpmn2:task', { extensions: false, sla: false }), taskB('bpmn2:task')])).replace('<bpmn2:incoming>F1</bpmn2:incoming>', '<bpmn2:incoming>F9</bpmn2:incoming>');
+    const { mode, lost, reason } = renderForDisk({ disk: disk2, base: gone, out, memory });
+    assert.equal(mode, 'format', reason);
+    for (const what of ['comment "why"', 'comment "checked by the warehouse"', 'processing instruction <?acme-lint off?>',
+      'a CDATA section in A/documentation[0]', 'attribute acme:sla in A', 'element acme:retry in A/extensionElements[0]']) {
+      assert.ok(lost.includes(what), `${what}: ${lost.join(' | ')}`);
+    }
+  });
+
+  // A collapsed sub-process with its content in a diagram of its own (bpmn-js >= 9).
+  const shapeA = (x, y) => ['bpmndi:BPMNShape', { id: 'A_di', bpmnElement: 'A' }, [
+    ['#comment', ' placed by hand '], ['dc:Bounds', { x, y, width: '100', height: '80' }],
+  ]];
+  const withSub = (expanded) => ['bpmn2:definitions', { ...NS, id: 'Defs', targetNamespace: 'http://example.com' }, [
+    ['bpmn2:process', { id: 'P', isExecutable: 'false' }, [
+      ['bpmn2:subProcess', { id: 'S' }, [['#comment', ' the inner part '], ['bpmn2:task', { id: 'A', name: 'Alpha' }]]],
+      ['bpmn2:task', { id: 'B', name: 'Beta' }],
+    ]],
+    ['bpmndi:BPMNDiagram', { id: 'D1' }, [
+      ['bpmndi:BPMNPlane', { id: 'PL', bpmnElement: 'P' }, [
+        ['bpmndi:BPMNShape', { id: 'S_di', bpmnElement: 'S', isExpanded: String(expanded) }, [
+          ['dc:Bounds', expanded ? { x: '100', y: '100', width: '350', height: '200' } : { x: '200', y: '160', width: '100', height: '80' }],
+        ]],
+        ...(expanded ? [shapeA('250', '160')] : []),
+        shapeNode('B', '600', '100'),
+      ]],
+    ]],
+    ...(expanded ? [] : [['bpmndi:BPMNDiagram', { id: 'D2' }, [['bpmndi:BPMNPlane', { id: 'PL2', bpmnElement: 'S' }, [shapeA('180', '160')]]]]]),
+  ]];
+
+  it('expanding a collapsed sub-process: its shapes move out of the diagram bpmn-js removes, with their text', () => {
+    // Verifier Q4-impl final round, D2: "moved together with its parent" fell back to 'format'.
+    const memory = new Map();
+    const collapsed = disk(withSub(false), PROLOG);
+    const W1 = renderForDisk({ disk: collapsed, base: bpmnjs(withSub(false)), out: bpmnjs(withSub(true)), memory });
+    assert.equal(W1.mode, 'minimal', W1.reason);
+    assert.equal(W1.text, disk(withSub(true), PROLOG));
+    // Undo (collapse again): the diagram is new again, the shape goes into it with its text.
+    const W2 = renderForDisk({ disk: W1.text, base: bpmnjs(withSub(true)), out: bpmnjs(withSub(false)), memory });
+    assert.equal(W2.mode, 'minimal', W2.reason);
+    assert.equal(W2.text, collapsed);
+    const W3 = renderForDisk({ disk: W2.text, base: bpmnjs(withSub(false)), out: bpmnjs(withSub(true)), memory });
+    assert.equal(W3.mode, 'minimal', W3.reason);
+    assert.equal(W3.text, W1.text);
+  });
+});
+
+describe('minimal-diff writer: gestures captured in the browser (test/fixtures/q4-captures)', async () => {
+  const CAPTURES = new URL('../fixtures/q4-captures/', import.meta.url).pathname;
+  // What bpmn-js drops and the file keeps: comments, PIs, CDATA, declaration, DOCTYPE, extensions.
+  const kept = (xml) => [...facts(load(xml))].filter(([key, value]) => {
+    const [type, , detail] = key.split('\u0000');
+    if (/^(comment|pi|cdata|decl|doctype)$/.test(type)) return true;
+    const uri = type === 'el' ? /^\{([^}]*)\}/.exec(value)?.[1] : type === 'attr' ? /^\{([^}]*)\}/.exec(detail)?.[1] : '';
+    return Boolean(uri) && !/omg\.org|bpmn\.io|w3\.org/.test(uri);
+  }).sort(([a], [b]) => (a < b ? -1 : 1));
+  const replay = async (name) => {
+    const capture = JSON.parse(await readFile(join(CAPTURES, `${name}.json`), 'utf8'));
+    const original = await readFile(new URL(`../fixtures/q4/${capture.fixture}`, import.meta.url).pathname, 'utf8');
+    const memory = new Map();
+    const texts = [original];
+    const writes = [];
+    let base = capture.baseline;
+    for (const { op, out } of capture.steps) {
+      const w = renderForDisk({ disk: texts[texts.length - 1], base, out, memory });
+      writes.push({ op, ...w });
+      texts.push(w.text);
+      base = out;
+    }
+    return { texts, writes };
+  };
+  const allMinimal = (writes) => {
+    for (const w of writes) {
+      assert.equal(w.mode, 'minimal', `${w.op}: ${w.reason}`);
+      assert.equal(w.lost, undefined, `${w.op}: ${w.lost}`);
+    }
+  };
+
+  // Verifier Q4-impl final round, D1: delete + undo fell back to 'format' ("overlapping changes", or the
+  // check refusing restored edges that were never written) and lost the element's comment, PI, CDATA
+  // and kept extensions without a word. [capture, steps before the delete, changed lines allowed]
+  for (const [name, beforeDelete, allowed] of [
+    ['cn-connect2', 2, 6], ['cn-connectback', 2, 6], ['cn-wrench-connect2', 3, 6], ['c7-plain', 1, 6], ['c7-wrench', 2, 6],
+  ]) {
+    it(`${name}: delete + undo brings the element back with its own text (minimal, nothing lost)`, async () => {
+      const { texts, writes } = await replay(name);
+      allMinimal(writes);
+      const reference = texts[beforeDelete];
+      assert.deepEqual(kept(texts[texts.length - 1]), kept(reference));
+      // bpmn-js re-orders a reference on undo, and drops the edges' sourceElement / targetElement.
+      assert.ok(changedLines(reference, texts[texts.length - 1]) <= allowed, String(changedLines(reference, texts[texts.length - 1])));
+    });
+  }
+
+  // Verifier Q4-impl final round, D2: expanding a collapsed sub-process (wrench, or undo of the collapse)
+  // fell back to 'format' (75-970 changed lines) and dropped kept extensions of a wrenched task in it.
+  it('cn-sub-long: collapse, expand, undo, undo, redo, redo of a new sub-process: minimal, small diffs', async () => {
+    const { texts, writes } = await replay('cn-sub-long');
+    allMinimal(writes);
+    for (const t of texts) assert.deepEqual(kept(t), kept(texts[0]));
+    // After 'into' (index 2) and after undo, undo (index 6): the same, up to where the task's shape is.
+    assert.ok(changedLines(texts[2], texts[6]) <= 6, String(changedLines(texts[2], texts[6])));
+    assert.equal(texts[5], texts[3]); // undo of the expand: collapsed as before
+    assert.equal(texts[8], texts[4]); // redo, redo: expanded as before
+    for (const [k, limit] of [[3, 30], [4, 20]]) assert.ok(changedLines(texts[k - 1], texts[k]) <= limit, `${k}: ${changedLines(texts[k - 1], texts[k])}`);
+  });
+
+  it('cn-sub-wrench, cn-sub-del: a wrenched task in the sub-process keeps its kept extensions through collapse, expand, delete, undo', async () => {
+    for (const [name, reference] of [['cn-sub-wrench', 1], ['cn-sub-del', 1]]) {
+      const { texts, writes } = await replay(name);
+      allMinimal(writes);
+      assert.deepEqual(kept(texts[texts.length - 1]), kept(texts[reference]), name);
+      assert.deepEqual(kept(texts[reference]), kept(texts[0]), name);
+    }
+  });
 });
 
 describe('minimal-diff writer: waypoints', () => {
