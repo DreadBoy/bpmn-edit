@@ -995,18 +995,38 @@ format-preserving fallback. This step implements it and verifies it against the 
     every later save lack, is given to bpmn-js' label for the comparison; its `labelStyle` stays). So
     comments, PIs, CDATA, entity references and extensions inside moved or replaced elements stay where
     they were. A label bpmn-js does not re-create (a task's label is inside it; an unnamed element has
-    none) goes with its style and DI extension, as when a name is cleared; an undo brings it back.
+    none) goes with its style and DI extension, as when a name is cleared; an undo brings it back. What
+    such a label carried beyond its bounds — its `labelStyle`, attributes in other namespaces, content
+    of its DI `extension` — is reported (`lost=`, warning naming e.g. `label style Style_… of
+    DiagramElement_…`; Bizagi and Signavio tasks replaced by another task type or a sub-process); a label
+    with nothing but its bounds (and an empty DI `extension`) goes without a note.
   - **Where a new child goes.** Next to its nearest sibling in bpmn-js' output that is on disk, within
-    the BPMN 2.0 schema's order of the children on disk: the head of the XSD sequence is ranked
-    (`documentation`, `extensionElements`, `auditing`, `monitoring`, `categoryValueRef`, then a flow
-    node's `incoming`, `outgoing`, then everything else in bpmn-js' order), and a new child goes past
-    every child on disk ranked before it (an `<incoming>` after a kept `<extensionElements>`) and in front
-    of every one ranked after it (a new `<documentation>` before it; a sub-process' new `<outgoing>` in
-    front of its flow elements, whose order on disk may differ from bpmn-js'), unless the disk is out of
-    that order already. An element moved back to the parent it
+    the BPMN 2.0 schema's order of the children on disk. The order is the XSD's (bpmn-moddle's copy),
+    generated into `src/bpmn-schema-order.js` by `scripts/gen-bpmn-schema-order.mjs` (a unit test fails
+    when the committed table differs from what the script generates): for every element type the
+    sequence of its content model, inherited elements first, a substitution group standing for its
+    members — e.g. a process: `documentation`, `extensionElements`, `supportedInterfaceRef`,
+    `ioSpecification`, `ioBinding`, `auditing`, `monitoring`, `property`, `laneSet`, flow elements,
+    artifacts, `resourceRole`, `correlationSubscription`, `supports`; a flow node: …, `categoryValueRef`,
+    `incoming`, `outgoing`, …; a collaboration: `participant`, `messageFlow`, artifacts,
+    `conversationNode`, …, `correlationKey`, …; `definitions`: `import`, `extension`, root elements,
+    `BPMNDiagram`, `relationship`; a DI shape: `extension`, `Bounds`, `BPMNLabel`. bpmn-js writes its
+    children in its descriptor's order, which follows the schema (every output captured so far is in
+    order). Children the type does not list (other namespaces, `xsd:any` content) have no rank. A new
+    child goes past every child on disk ranked before it (an `<incoming>` after a kept
+    `<extensionElements>`, a text annotation or group after the last flow element, a group in a
+    collaboration after the last participant) and in front of every one ranked after it (a new
+    `<documentation>` before it; a sub-process' new `<outgoing>` in front of its flow elements, whose
+    order on disk may differ from bpmn-js'), unless the disk is out of that order already. The same
+    bounds apply to an element written back at its old place (undo of a delete) or moved back next to
+    its old neighbours. An element moved back to the parent it
     was moved out of (e.g. undo of a drag into a sub-process; bpmn-js appends it to the parent) goes
     back next to its old neighbours there (remembered for the run, like removed elements), not to the
     end of the parent.
+  - **Attribute values** are read as bpmn-js reads them, without XML attribute-value normalisation:
+    bpmn-js writes a tab or a carriage return in a name literally and reads it back so, where an XML
+    parser (and the writer's reader, before) reads a space. Changed values are written with character
+    references (`&#9;`, `&#10;`, `&#13;`), which both read alike.
   - New elements are rendered in the file's style, detected from the file: line ending, indent unit,
     quote, `/>` or ` />`, attribute layout (one line, one per line aligned under the first, or with a
     hanging indent), and the file's namespace prefixes (a namespace bpmn-js writes as `bpmn:` is written
@@ -1067,8 +1087,9 @@ format-preserving fallback. This step implements it and verifies it against the 
   still has, and the `labelStyle` of a label in a DI shape it re-created: as on disk),
   comments/PIs/CDATA/declaration/DOCTYPE of everything on disk must be as on disk — inside moved and
   replaced elements too — and every other fact exactly as on disk. The facts have no order, so an
-  order check (`checkOrder`): the children of every BPMN element of the result must be in the schema's
-  ranked order (see "Where a new child goes"), with at most one `extensionElements`, unless that element
+  order check (`checkOrder`): the children of every BPMN and DI element of the result must be in the
+  schema's order, the whole sequence of its type (see "Where a new child goes"), with at most one
+  `extensionElements`, unless that element
   is out of order on disk or in bpmn-js' output already (a file that is invalid that way is not held
   against the write). A
   second opinion with an independent tokenizer (`src/elements.js` element forms): every element the
@@ -1077,7 +1098,8 @@ format-preserving fallback. This step implements it and verifies it against the 
   missing from the text written while the element it belongs to (its nearest ancestor that is not
   extension content; DI re-created on replace by its old id) is still in bpmn-js' output; anything
   listed is reported (`lost=`, warning) even though the write is `minimal`. The writer keeps all of it
-  today, so this only turns a future mistake into a note instead of a silent loss.
+  today, so this only turns a future mistake into a note instead of a silent loss. (The label of a DI
+  shape bpmn-js re-created without one is the deliberate exception above, reported the same way.)
 - **What a fallback loses** is computed from the models (file vs text written, and the remembered text of
   every element bpmn-js brings back that the write would have restored, see above): every comment, PI, CDATA
   section, the declaration and DOCTYPE, and every element and attribute in a namespace bpmn-js does not
@@ -1176,6 +1198,37 @@ identical in Chrome, Firefox and WebKit. Writes: 11 (`false`) + 3 (`input`) per 
   declaration / DOCTYPE fact of the file unchanged, `&company;` and the `acme:` extensions still there;
   replace ≤ 10 changed lines (the tags, the DI id, a label bpmn-js re-measures), the collapsed rename
   ≤ 5 (the name and the new label, placed below the event in the file's coordinates).
+- Verifier round 8 found: (D1, major) an artifact added after delete + undo was written schema-invalid
+  as `minimal` without a note: comments-nonascii, delete `Flow_ToGateway` (or a task, a gateway), undo,
+  append a text annotation (or a group) → the annotation and its association between the restored flow
+  and the next flows ("sequenceFlow: This element is not expected"); select-all delete, undo, a group
+  on every file but bpmnio-demo-export (Bizagi: the group before a `participant`). bpmn-js appends an
+  element an undo brings back, the writer puts it back at its old place on disk, and the new artifact
+  went next to it, its nearest sibling in bpmn-js' output; the order check ranked only the head of the
+  sequence (everything after `outgoing` was one rank). Fixed: the whole schema order, generated from the
+  XSD for every element type (above), in placement (new children, and elements written back or moved
+  back to their old place) and in the check. (D2, minor) a name with a tab or carriage return (e.g.
+  `modeling.updateLabel(el, 'tab\there')`) was written as a space: the writer's reader normalised
+  bpmn-js' literal tab like an XML parser does, so the file disagreed with the editor's model; it now
+  reads values as bpmn-js does and writes such characters as references. (Label cut) a tag-changing
+  wrench on a Bizagi / Signavio task silently cut the old label with its `labelStyle`; now reported
+  (above) — so the corpus E2E's replace in bizagi-export and signavio-export writes `minimal lost=1`
+  with that warning, every other write `minimal lost=0`. (D3, minor) select-all delete in
+  bpmnio-demo-export fell back to `format` ("BPMNDiagram[0]: cannot find it on disk": the diagrams bpmn-js
+  makes for collapsed sub-processes of an older file exist only in its view); removing one is now
+  nothing to do on disk. Unit tests replay the gestures captured in Chrome (`cn-flow-undo-annotate`,
+  `cn-task-undo-group`, `bz-all-undo-group`, `bd-all-undo`): every write minimal, nothing lost, every
+  text in schema order and (where xmllint is installed) without new XSD errors, the new artifact after
+  every flow element / participant; synthetic tests cover the placement, the check over process,
+  collaboration, definitions and DI sequences, the table's freshness, attribute values with tab / LF /
+  CR, and the label report (and its absence for a label with only bounds). UI tests (three browsers):
+  delete a flow, undo, append a text annotation (comments-nonascii); select all, delete, undo, a group
+  (bizagi-export). All the new tests fail without the fix. The verifier's fuzz (`fuzz.mjs`, 13 files,
+  seeds 1–3, xmllint after every write), extended by bpmn-js-like reordering of flow elements (an undo
+  appending), text annotations with associations, groups (in the collaboration where there is one) and
+  names with tab / CR / LF: 3 569 writes, every one minimal, no new XSD error, no loss, every reopened
+  model equal to bpmn-js'; the same fuzz on the code before this round: 10 schema-invalid `minimal`
+  writes in 3 files for seed 1.
 - Verifier round 7 found: (D-A, major) a wrench that keeps the element's tag dropped the extensions
   bpmn-js drops on replace, written as `minimal` with no note: camunda7-modeler's start event to a
   message start event lost `camunda:asyncBefore`/`camunda:exclusive`; the start events of bizagi-export
@@ -1307,7 +1360,12 @@ verifier's probes cover; the known limits below are where the result is not byte
   next to elements that are all gone) is named in a warning. It also writes bpmn-js's attribute order,
   number spelling and default attributes for that save. Each mode prints its note once per run.
 - Comments and PIs inside an element you delete are gone with it (the deletion is the edit); an undo in
-  the same run brings them back. The memory is per run of bpmn-edit and holds the last 200 elements.
+  the same run brings them back. The memory is per run of bpmn-edit and holds the last 200 elements:
+  deleting more at once (select all in bpmnio-demo-export: ~450 elements with their DI) and undoing
+  writes the ones it no longer holds from bpmn-js' output, in bpmn-js' order (the process' elements
+  come back reordered; correct model, nothing of the file lost there). In a file of bpmn-js < 9 that
+  undo also writes the diagrams bpmn-js ≥ 9 makes for collapsed sub-processes (their content's shapes
+  in a diagram of their own, in bpmn-js' coordinates) — bpmn-js' model, as before this round.
 - Cut and paste writes the pasted element from bpmn-js's output: bpmn-js's copy does not carry
   extensions, and the file's comments/PIs/CDATA in it are not carried over (backlog).
 - After a sub-process is collapsed and expanded again (or the collapse undone), the shapes of its
