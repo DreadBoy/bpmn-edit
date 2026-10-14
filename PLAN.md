@@ -157,6 +157,20 @@ cannot tell host and collaborator apart:
   - No CI e2e for now (decision in docs/release-procedure.md); follow-up: non-blocking macOS workflow with
     `BPMN_EDIT_SKIP_TUNNEL_E2E=1 npx playwright test --project=chrome`, measured on GitHub before gating.
 
+## v2 (after the 1.0.x releases)
+
+- [ ] **V2-1. Create a new file.** Requested by product owner 2026-10-14; v1 refuses a missing path.
+  - Missing path, interactive terminal (stdin and stdout are TTYs): ask `new.bpmn does not exist. Create it? [y/N]`.
+    On yes, write a blank diagram (one start event, like the bpmn.io demo) and open it. On no or Ctrl+C, exit 1.
+  - Missing path, not interactive (scripts, CI, piped): don't block. Print an error telling the user to pass
+    `--create`, and exit 1.
+  - `--create`: create without asking. If the file already exists, open it unchanged.
+  - Refuse when the parent folder doesn't exist or the name doesn't end in `.bpmn`; never create folders.
+    Create atomically and don't overwrite (`wx`).
+  - Why: the prompt catches typos (`oder.bpmn`) without making the common case verbose, and the flag keeps
+    scripts working. Both are a few lines in `bin/bpmn-edit.js` (`node:readline`); the e2e test drives a real
+    TTY via a pseudo-terminal (e.g. `script -q`), or tests the non-TTY branch plus `--create`.
+
 ## Backlog (small known issues, fold into a later step)
 - Linux: the server cannot start (found in S12). `wildcardListenerOn()` in `src/server.js` binds `0.0.0.0`/`::` with
   `exclusive: true` after our own loopback binds; Linux answers EADDRINUSE, so every port looks taken ("No free port
