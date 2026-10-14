@@ -143,6 +143,36 @@ let clientId = null;      // assigned by the host in 'init'
 
 // Exposed for tests and debugging.
 window.bpmnModeler = modeler;
+
+// Files from bpmn-js before version 9 keep the DI of a collapsed sub-process in the main diagram. On
+// import, bpmn-js (SubprocessCompatibility, priority 1500) moves it into a diagram of its own and shifts
+// shapes and waypoints next to the origin, but not the shapes' label bounds: such labels show far away
+// from their elements. Shift them by the same amount (Q4-impl, docs/decisions.md). The file keeps its
+// own coordinates: bpmn-edit's writer moves bpmn-js' changes back by that shift (src/minimal-diff.js).
+{
+  const eventBus = modeler.get('eventBus');
+  let before = null;
+  const positionOf = (di) => (di.bounds ? { x: di.bounds.x, y: di.bounds.y } : di.waypoint?.[0] ? { x: di.waypoint[0].x, y: di.waypoint[0].y } : null);
+  const planeElements = (definitions) => (definitions.diagrams ?? []).flatMap((diagram) => diagram.plane?.planeElement ?? []);
+  eventBus.on('import.render.start', 1600, ({ definitions }) => {
+    before = new Map();
+    for (const di of planeElements(definitions)) {
+      const at = positionOf(di);
+      if (at && di.label?.bounds) before.set(di, at);
+    }
+  });
+  eventBus.on('import.render.start', 1400, ({ definitions }) => {
+    if (!before) return;
+    for (const di of planeElements(definitions)) {
+      const was = before.get(di);
+      const now = was && positionOf(di);
+      if (!now || (now.x === was.x && now.y === was.y)) continue;
+      di.label.bounds.x += now.x - was.x;
+      di.label.bounds.y += now.y - was.y;
+    }
+    before = null;
+  });
+}
 window.bpmnEdit = Object.freeze({
   /** This window's id in the session (from the host), or null before 'init'. */
   get clientId() { return clientId; },
@@ -159,6 +189,7 @@ let lastPingAt = null;    // when the last heartbeat ping was sent on this conne
 let lastReceivedAt = 0;   // when the last message arrived
 let fileIdentity = null;  // path (or name) of the file the first 'init' showed
 let syncedXml = null;     // the host's document at `version`, as far as this window knows
+let syncedBaseline = null; // bpmn-js' serialisation of syncedXml right after importing it (see importDiagram)
 let version = null;       // version of the document this window's edits are based on
 let importing = false;
 let rendered = false;
@@ -415,10 +446,18 @@ function checkFlushed() {
   sendMessage({ type: 'flushed' });
 }
 
-async function importDiagram(xml) {
+/**
+ * Imports `xml`. `baselineFor`: the host's version of `xml` if it may come from the file on disk
+ * (not another window's edit): bpmn-js' serialisation of it right after the import is sent to the
+ * host as the 'baseline' of that version, the base of its minimal-diff writer (Q4). It is taken
+ * before anything else can change the diagram (saveXML serialises synchronously when called).
+ */
+async function importDiagram(xml, { baselineFor = null } = {}) {
   importing = true;
+  let serialised;
   try {
     const { warnings } = await modeler.importXML(xml);
+    if (Number.isInteger(baselineFor)) serialised = modeler.saveXML({ format: true });
     if (warnings.length) console.warn('bpmn-edit: diagram imported with warnings', warnings);
   } finally {
     importing = false;
@@ -426,9 +465,18 @@ async function importDiagram(xml) {
   resetLocalEdits(); // importing cleared the command stack
   hideError(); // a diagram is showing (again): earlier render errors are over
   syncedXml = xml;
+  syncedBaseline = null;
   if (!rendered) {
     canvas.zoom('fit-viewport', 'auto');
     rendered = true;
+  }
+  if (serialised) {
+    try {
+      syncedBaseline = (await serialised).xml;
+      sendMessage({ type: 'baseline', version: baselineFor, xml: syncedBaseline });
+    } catch (err) {
+      console.warn('bpmn-edit: could not serialise the imported diagram', err);
+    }
   }
 }
 
@@ -462,7 +510,7 @@ async function applyRemoteUpdate(message) {
   if (!rendered) {
     // Nothing showing yet (the first document could not be rendered): just try this one.
     try {
-      await importDiagram(message.xml);
+      await importDiagram(message.xml, { baselineFor: fromHost(message) ? message.version : null });
       advanceVersion(message.version);
     } catch (err) {
       showError(`Could not render the changed document: ${err.message}`);
@@ -490,7 +538,7 @@ async function showRemoteDocument(message) {
   const { xml: previousXml } = await modeler.saveXML({ format: true });
 
   try {
-    await importDiagram(message.xml);
+    await importDiagram(message.xml, { baselineFor: fromHost(message) ? message.version : null });
   } catch (err) {
     // Never leave the editor blank or broken: go back to what was shown before.
     console.warn('bpmn-edit: could not show the changed document', err);
@@ -500,6 +548,7 @@ async function showRemoteDocument(message) {
       // Nothing better to show; the error notice below explains.
     }
     syncedXml = null; // what is showing is this window's, not known to be the host's
+    syncedBaseline = null;
     canvas.viewbox({ x, y, width, height });
     // From disk, the host answers the report with an 'invalid' file status (shown as a notice);
     // anything else has no such indicator, so show the error.
@@ -513,6 +562,14 @@ async function showRemoteDocument(message) {
   advanceVersion(message.version);
   if (message.origin === 'disk') showReloadedNotice();
   return true;
+}
+
+/**
+ * Whether a document may be the file on disk ('disk', or the host's current document: 'host'), not
+ * another window's edit (whose base the host already knows).
+ */
+function fromHost(message) {
+  return message.origin === 'disk' || message.origin === 'host' || message.origin === undefined;
 }
 
 /** Tells the host that a document from disk could not be shown, so it can report the file as invalid. */
@@ -1171,7 +1228,7 @@ async function handleMessage(message) {
       if (!rendered) {
         hostInstance = message.instance ?? null;
         try {
-          await importDiagram(message.xml);
+          await importDiagram(message.xml, { baselineFor: message.version });
           version = message.version;
         } catch (err) {
           showError(`Could not render ${message.name || 'the diagram'}: ${err.message}`);
@@ -1184,7 +1241,10 @@ async function handleMessage(message) {
     }
     case 'ack':
       rememberChanges(inflight?.edits ?? []);
-      if (inflight) syncedXml = inflight.xml;
+      if (inflight) {
+        syncedXml = inflight.xml;
+        syncedBaseline = inflight.xml;
+      }
       // Kept until the host has written them, in case a change on disk replaces them first (Q2).
       if (inflight?.edits?.length) unsavedEdits.push({ version: message.version, edits: inflight.edits });
       inflight = null;
@@ -1400,6 +1460,7 @@ async function resync(message) {
     rememberChanges(sent.edits);
     if (sent.edits.length) unsavedEdits.push({ version: accepted.version, edits: sent.edits });
     syncedXml = sent.xml;
+    syncedBaseline = sent.xml;
     inflight = null;
   }
   const lostOnDisk = reconcileAccepted(message, sameHost);
@@ -1416,12 +1477,15 @@ async function resync(message) {
   version = null;
   if (!mustRebase && message.xml === syncedXml) {
     version = message.version; // nothing changed at the host: our edits (if any) apply as they are
+    // The host may be a new one that has not seen the base of what is on disk (Q4).
+    if (syncedBaseline !== null) sendMessage({ type: 'baseline', version, xml: syncedBaseline });
   } else if (!mustRebase && !accepted && sent && message.xml === sent.xml) {
     // The update in flight had been accepted (its 'ack' was lost with the connection).
     localEdits = localEdits.slice(sent.edits.length);
     rememberChanges(sent.edits);
     if (sameHost && sent.edits.length) unsavedEdits.push({ version: message.version, edits: sent.edits });
     syncedXml = sent.xml;
+    syncedBaseline = sent.xml;
     version = message.version;
   } else if (!localEdits.length && !dirty && !mustRebase && !interactionActive()) {
     await showRemoteDocument(message);

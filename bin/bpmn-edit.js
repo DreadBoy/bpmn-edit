@@ -5,6 +5,7 @@ import { basename } from 'node:path';
 import { Command, InvalidArgumentError, Option } from 'commander';
 import open from 'open';
 import { createFileStore } from '../src/file.js';
+import { renderForDisk } from '../src/minimal-diff.js';
 import { createServer } from '../src/server.js';
 import { Session } from '../src/session.js';
 import { testProviderFactory } from '../src/test-tunnel.js';
@@ -51,7 +52,11 @@ const program = new Command()
 const [filePath] = program.args;
 const options = program.opts();
 
-const store = createFileStore(filePath, { debounceMs: options.writeDelay });
+// Saves keep the file's own formatting (Q4, src/minimal-diff.js). BPMN_EDIT_DEBUG_WRITES=1 prints how
+// each save was written (hidden, for tests).
+const store = createFileStore(filePath, {
+  debounceMs: options.writeDelay, render: renderForDisk, debugWrites: process.env.BPMN_EDIT_DEBUG_WRITES === '1',
+});
 let initialXml;
 try {
   initialXml = await store.read();

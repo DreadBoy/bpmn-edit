@@ -215,7 +215,16 @@ function sameOrBothMissing(a, b) {
  *     our last write shortly after it (see inspectDisk),
  *   'external-missing' the file was deleted (emitted once until it reappears),
  *   'external-invalid' ({ message }) the file is not (or not yet) a complete BPMN document,
- *   'disk-ok' the file is valid again after 'external-missing' / 'external-invalid'.
+ *   'disk-ok' the file is valid again after 'external-missing' / 'external-invalid',
+ *   'rendered' ({ mode, reason, lost, ms }) with `render` (Q4): how a write's text was made (see
+ *     src/minimal-diff.js renderForDisk); 'unbased', 'format' and 'raw' are fallbacks; `lost`: what
+ *     of the file it could not keep (also logged, every time).
+ *
+ * `render({ disk, base, out })` (optional, Q4): turns the XML given to write() (`out`, the editor's
+ * serialisation) into the text to write, given the text on disk (`disk`, null if missing or broken)
+ * and the editor's serialisation of it (`base`, see setBaseline; null if unknown). Without it the XML
+ * is written as it is. 'saved' always reports the XML given to write(); diskXml, lastWrite and side
+ * files of unconfirmed writes hold the text written.
  */
 /** How often the files replaced by an unconfirmed write are polled (see watchReplaced). */
 const REPLACED_POLL_MS = 50;
@@ -228,7 +237,12 @@ const REPLACED_QUIET_MS = 50;
 /** At shutdown, a file replaced less than this long ago is watched until then (its writer may be slow to start). */
 const REPLACED_WATCH_MS = 300;
 
-export function createFileStore(path, { debounceMs = 250, settleMs = 150, confirmMs = 2000, log = defaultLog } = {}) {
+/** Writer modes that are fallbacks (see src/minimal-diff.js renderForDisk). */
+const FALLBACK_MODES = new Set(['unbased', 'format', 'raw']);
+
+export function createFileStore(path, {
+  debounceMs = 250, settleMs = 150, confirmMs = 2000, log = defaultLog, render = null, debugWrites = false,
+} = {}) {
   const store = new EventEmitter();
   let targetPath = path;     // resolved through symlinks by read()
   let diskXml = null;        // what we believe is on disk (last read or written)
@@ -267,6 +281,13 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
   let chainOpen = false;
   let adopting = null;       // complete save found in a file we replaced, to put back (adoptReplaced)
   let replacedTimer = null;  // polls the files we replaced while unconfirmed (see watchReplaced)
+  // Q4: what is written is `render`'s text for the XML given to write() (the editor's serialisation),
+  // e.g. only the edit patched into the text on disk (src/minimal-diff.js). `baseline`: the editor's
+  // serialisation of exactly the text on disk ({ disk, base }); only used while the file holds `disk`.
+  let baseline = null;
+  const writerStats = { minimal: 0, unbased: 0, format: 0, raw: 0, new: 0 };
+  const warnedModes = new Set();
+  const removedTexts = new Map(); // `render`'s memory of elements cut from the file (see src/minimal-diff.js)
 
   /** The file's stat right now (synchronously), or null if it is missing. */
   function currentStat() {
@@ -531,7 +552,7 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
    * content for `confirmMs`, what we wrote counts as not saved: a valid save arriving meanwhile is
    * reported as replacing it (`discarded`), so its edits are re-applied on top (Q2).
    */
-  function confirmLater(xml, replaced = null, { kind = 'broken' } = {}) {
+  function confirmLater(xml, replaced = null, { kind = 'broken', out = provisional?.out ?? xml } = {}) {
     const since = provisional?.since ?? Date.now();
     const files = provisional?.replaced ?? [];
     // Why it is unconfirmed (for the shutdown warning): 'broken' (replaced an invalid file),
@@ -541,7 +562,8 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     const timer = setTimeout(confirmProvisional, confirmMs);
     timer.unref?.();
     if (replaced) files.push(replaced);
-    provisional = { xml, timer, since, replaced: files, kind: why };
+    // xml: the text written (on disk); out: the editor's XML it was written for ('saved' reports it).
+    provisional = { xml, out, timer, since, replaced: files, kind: why };
     if (files.length) watchReplaced();
   }
 
@@ -748,23 +770,67 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     }
     provisional = null;
     stopWatchingReplaced(entry);
-    store.emit('saved', { xml: entry.xml });
+    store.emit('saved', { xml: entry.out });
   }
 
-  /** Ends the unconfirmed state (see confirmLater); returns the unconfirmed content, or null. */
+  /** Ends the unconfirmed state (see confirmLater); returns the editor's unconfirmed XML, or null. */
   function dropProvisional() {
     if (!provisional) return null;
     clearTimeout(provisional.timer);
     stopWatchingReplaced(provisional);
-    const { xml } = provisional;
+    const { out } = provisional;
     provisional = null;
-    return xml;
+    return out;
+  }
+
+  /**
+   * The text to write for the editor's XML `xml` (see `render`), given what is on disk now. Never
+   * throws: a failing writer writes `xml` as it is.
+   */
+  function renderForWrite(xml) {
+    if (!render) return xml;
+    const base = baseline !== null && baseline.disk === diskXml ? baseline.base : null;
+    const started = performance.now();
+    let result;
+    try {
+      result = render({ disk: diskXml, base, out: xml, memory: removedTexts });
+    } catch (err) {
+      result = { text: xml, mode: 'raw', reason: `writer error: ${err.message}` };
+    }
+    const ms = Math.round(performance.now() - started);
+    writerStats[result.mode] = (writerStats[result.mode] ?? 0) + 1;
+    if (debugWrites) {
+      log(`bpmn-edit: debug: write mode=${result.mode} ms=${ms}${result.lost?.length ? ` lost=${result.lost.length}` : ''}`
+        + `${result.reason ? ` reason=${result.reason}` : ''}\n`);
+    }
+    const name = basename(path);
+    if (FALLBACK_MODES.has(result.mode) && !warnedModes.has(result.mode)) {
+      warnedModes.add(result.mode);
+      const why = result.reason ? ` (${readableReason(result.reason)})` : '';
+      log({
+        unbased: `bpmn-edit: note: saved ${name} without the editor's reading of the file on disk${why}; this save `
+          + 'may also change default attributes and number spelling the way bpmn-js writes them\n',
+        format: `bpmn-edit: note: could not change only the edited parts of ${name}${why}; this save is written in `
+          + 'bpmn-js\'s order of elements and attributes, with the file\'s indentation, quotes and line endings\n',
+        raw: `bpmn-edit: warning: could not read ${name} as XML${why}; this save is bpmn-js's output as it is\n`,
+      }[result.mode]);
+    }
+    if (result.lost?.length) {
+      log(`bpmn-edit: warning: this save of ${name} could not keep ${result.lost.length === 1 ? 'this' : 'these'} from the `
+        + `file: ${result.lost.join(', ')}\n`);
+    }
+    store.emit('rendered', { mode: result.mode, reason: result.reason ?? null, lost: result.lost ?? [], ms });
+    return result.text;
   }
 
   async function writeOne(xml) {
-    if (xml === diskXml) {
-      if (provisional) provisional.xml = xml;
-      else store.emit('saved', { xml });
+    const text = renderForWrite(xml);
+    if (text === diskXml) {
+      if (render) baseline = { disk: text, base: xml };
+      if (provisional) {
+        provisional.xml = text;
+        provisional.out = xml;
+      } else store.emit('saved', { xml });
       return;
     }
     // Shutdown while another program is rewriting the file (it became broken or disappeared less than
@@ -775,19 +841,22 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       if (await keepAside(xml, { leftAlone: true })) return;
     }
     writeSeq += 1;
-    inFlightXml = xml;
+    inFlightXml = text;
     const before = diskXml;
     try {
       const replacesUnknown = diskXml === null; // the file was missing or invalid
-      const result = await writeAtomically(xml, { linkBroken: replacesUnknown });
+      const result = await writeAtomically(text, { linkBroken: replacesUnknown });
       if (result.external !== undefined) {
         await onBlockedWrite(xml, result.external);
         return;
       }
-      diskXml = xml;
+      diskXml = text;
       diskStat = result.stat;
+      // The text written relates to `xml` as the old disk text related to its base (checked by the
+      // writer), so `xml` is the editor's serialisation of it.
+      if (render) baseline = { disk: text, base: xml };
       const previousXml = lastWrite?.xml;
-      lastWrite = { xml, hash: sha256(xml), mtimeMs: result.stat.mtimeMs, size: result.stat.size };
+      lastWrite = { xml: text, hash: sha256(text), mtimeMs: result.stat.mtimeMs, size: result.stat.size };
       const previousWriteAt = lastWriteAt;
       lastWriteAt = Date.now();
       if (!chainOpen || previousWriteAt === null || lastWriteAt - previousWriteAt >= STALE_SAVE_MS) {
@@ -810,12 +879,14 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
         removeLink(result.replaced);
       }
       if (replacesUnknown || raced || recreated) {
-        confirmLater(xml, result.replaced, { kind: recreated ? 'recreated' : raced ? 'raced' : 'broken' });
+        confirmLater(text, result.replaced, { kind: recreated ? 'recreated' : raced ? 'raced' : 'broken', out: xml });
       }
       // Still unconfirmed, like the write before it. The wait is not restarted: under continuous
       // editing it would never end (and every Ctrl-C would keep a copy aside).
-      else if (provisional) provisional.xml = xml;
-      else store.emit('saved', { xml });
+      else if (provisional) {
+        provisional.xml = text;
+        provisional.out = xml;
+      } else store.emit('saved', { xml });
       setDiskOk(); // e.g. our write recreated a deleted file
     } catch (err) {
       const error = new Error(`Could not write ${path}: ${err.message}`, { cause: err });
@@ -1039,13 +1110,13 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
       // whether or not the file holds it right now (Q2: never lose it silently; no shutdown delay).
       if (provisional) {
         const current = await readFile(targetPath, 'utf8').catch(() => null);
-        const { since, kind } = provisional;
+        const { since, kind, xml: written } = provisional;
         // The broken files our unconfirmed write replaced keep their second name: a program still
         // writing into one through its descriptor finishes its save there after we exit.
         const kept = provisional.replaced.filter((file) => file.link);
         for (const file of kept) file.keepLink = true;
         const unconfirmed = dropProvisional();
-        await keepAside(unconfirmed, { unconfirmed: current === unconfirmed, since, kind });
+        await keepAside(unconfirmed, { unconfirmed: current === written, since, kind });
         for (const file of kept) {
           log(`bpmn-edit: warning: the half-written ${basename(path)} the editor replaced was kept as ${file.link}; `
             + 'if the program that was writing it finishes its save after bpmn-edit stopped, that save ends up there\n');
@@ -1130,6 +1201,20 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
 
     /** What we believe is currently on disk (last content read or written by this store). */
     get diskXml() { return diskXml; },
+
+    /**
+     * The editor's serialisation (`base`) of the text `disk` (the editor imported `disk` and
+     * serialised it right away). Used by `render` as long as the file holds exactly `disk`; ignored
+     * (false) if it does not hold it now.
+     */
+    setBaseline(disk, base) {
+      if (typeof disk !== 'string' || typeof base !== 'string' || disk !== diskXml) return false;
+      baseline = { disk, base };
+      return true;
+    },
+
+    /** How many writes `render` made in each mode (see src/minimal-diff.js renderForDisk). */
+    get writerStats() { return { ...writerStats }; },
 
     /** State of the file on disk as last observed by the watcher: 'ok' | 'missing' | 'invalid'. */
     get diskState() { return diskState; },
@@ -1218,6 +1303,17 @@ export function createFileStore(path, { debounceMs = 250, settleMs = 150, confir
     },
   }));
   return store;
+}
+
+/**
+ * The writer's first reason for a fallback, for people: namespace URIs left out of element paths, the
+ * check's details replaced by what they mean (the debug line keeps everything).
+ */
+function readableReason(reason) {
+  const first = reason.split('; ')[0];
+  if (first === 'no base') return 'the editor had not told bpmn-edit yet how it reads the file';
+  if (/^(format )?check failed/.test(first)) return 'the result did not pass the check that nothing else changed';
+  return first.replace(/\{[^}]*\}/g, '').replace(/ \(offset \d+\)/, '');
 }
 
 function defaultLog(message) {

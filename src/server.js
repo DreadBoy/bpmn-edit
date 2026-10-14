@@ -69,6 +69,13 @@
 //                                                               of this page's discarded updates
 //                                                               (discardedAfter) re-applied in it.
 //   client -> server  { type: 'reapplied', versions }           the same when nothing was left to send
+//   client -> server  { type: 'baseline', version, xml }        bpmn-js' serialisation of `version`
+//                                                               right after importing it (before any
+//                                                               edit), sent for versions from disk:
+//                                                               the base of the minimal-diff writer
+//                                                               (Q4, src/minimal-diff.js); ignored
+//                                                               unless the file still holds that
+//                                                               version
 //   server -> client  { type: 'ack', version }                  update accepted (the sender gets no
 //                                                               remote-update for its own edit)
 //   server -> client  { type: 'conflict', version, message }    update refused: another update replaced
@@ -137,6 +144,7 @@ import {
   CLIENT_KEY_RE, CLOSE_SESSION_ENDED, CLOSE_SHARE_STOPPED, KEEPALIVE_MS,
 } from '../web/connection-shared.js';
 import { createFileStore } from './file.js';
+import { renderForDisk } from './minimal-diff.js';
 import { createPresence } from './presence.js';
 import {
   HOST_SECRET_HEADER, HOST_SECRET_PARAM, hostAllowed, isRemoteRequest, newHostSecret, originAllowed, safeEqual,
@@ -405,6 +413,15 @@ export function createServer({
           throw err;
         }
       }
+      case 'baseline': {
+        const { version, xml } = message;
+        if (!Number.isInteger(version) || typeof xml !== 'string') {
+          return sendError(ws, 'bad-message', 'baseline needs an integer "version" and a string "xml"');
+        }
+        const text = session.diskTextOf?.(version);
+        if (text !== undefined) session.store?.setBaseline?.(text, xml);
+        return undefined;
+      }
       case 'flushed':
         flushWaiters.get(ws)?.();
         return undefined;
@@ -660,7 +677,7 @@ export function createServer({
     /** Starts listening; resolves to the actual port (may differ from the requested one). */
     async listen() {
       if (!session) {
-        const store = createFileStore(filePath);
+        const store = createFileStore(filePath, { render: renderForDisk });
         attachSession(new Session({ xml: await store.read(), store }));
         ownStore = store;
         await store.watch();

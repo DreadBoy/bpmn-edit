@@ -33,6 +33,8 @@ export class SessionError extends Error {
 const MAX_DISCARDS = 100;
 /** How many saves from an older copy syncState() remembers. */
 const MAX_STALE_SAVES = 20;
+/** How many versions read from disk diskTextOf() remembers. */
+const MAX_DISK_TEXTS = 4;
 
 /**
  * How long discarded edits wait for their window to come back once its connection is gone (S8: a
@@ -56,6 +58,7 @@ export class Session extends EventEmitter {
   #graceMs;
   #store;
   #log;
+  #diskTexts = new Map(); // version -> XML of the recent versions read from disk (see diskTextOf)
   #diskStatus = { state: 'ok' };
 
   /**
@@ -70,6 +73,7 @@ export class Session extends EventEmitter {
     super();
     if (typeof xml !== 'string' || !looksLikeBpmn(xml)) throw new TypeError('Session needs initial BPMN XML');
     this.#xml = xml;
+    this.#diskTexts.set(1, xml);
     this.#store = store;
     this.#log = log;
     this.#graceMs = reapplyGraceMs;
@@ -133,6 +137,15 @@ export class Session extends EventEmitter {
   }
 
   get store() { return this.#store; }
+
+  /**
+   * The XML of `version` if that version was read from disk (the initial file, or a change on disk;
+   * the most recent MAX_DISK_TEXTS of them), else undefined. A client that imported such a version
+   * sends bpmn-js' serialisation of it as the base for the minimal-diff writer (Q4).
+   */
+  diskTextOf(version) {
+    return this.#diskTexts.get(version);
+  }
 
   /** State of the file on disk: { state: 'ok' | 'missing' | 'invalid', message? }. */
   get diskStatus() { return { ...this.#diskStatus }; }
@@ -330,6 +343,8 @@ export class Session extends EventEmitter {
     this.#minBase = this.#version;
     this.#origin = 'disk';
     this.#lastDiskVersion = this.#version;
+    this.#diskTexts.set(this.#version, xml);
+    if (this.#diskTexts.size > MAX_DISK_TEXTS) this.#diskTexts.delete(this.#diskTexts.keys().next().value);
     this.emit('change', {
       xml, version: this.#version, origin: 'disk', ...(discardedAfter !== undefined ? { discardedAfter } : {}),
       ...(stale ? { stale: true } : {}),
