@@ -983,19 +983,27 @@ format-preserving fallback. This step implements it and verifies it against the 
     patched, is cut and inserted at the new place, re-indented; also out of an element bpmn-js removes
     (expanding a collapsed sub-process: bpmn-js removes the diagram it made for its content and moves
     the shapes back into the main plane; the removed element is remembered without being restorable
-    as such, since its text holds elements that are elsewhere now). Replaced by another type (the wrench; same
-    id): the tags get the new name and the content is patched like any other element; extensions bpmn-js
-    drops on replace (attributes and elements in namespaces it does not know, `extensionElements`) stay
-    on disk. The DI shape or edge that bpmn-js re-creates with a new id on replace is matched to the old
-    one (same `bpmnElement`, same plane) and patched in place (its id changes). So comments, PIs, CDATA,
-    entity references and extensions inside moved or replaced elements stay where they were.
-  - **Where a new child goes.** Next to its nearest sibling in bpmn-js' output that is on disk, and in
-    the BPMN 2.0 schema's order with respect to children only the disk has (the extensions kept on a
-    type change, which bpmn-js' order does not know): the head of the XSD sequence is ranked
+    as such, since its text holds elements that are elsewhere now). Replaced (the wrench; same id, by
+    another type or by the same one, e.g. another event definition): the tags get the new name if it
+    changed and the content is patched like any other element. **Extension content bpmn-js drops from an
+    element it still has stays on disk**: attributes and elements in namespaces it does not know,
+    `extensionElements`, DI `extension` elements. bpmn-js never removes these from an element that stays
+    except on replace (its modeling touches extensionElements only in `ModdleCopy`; unknown attributes
+    are never edited), so this needs no recognising of a replace. The DI shape or edge that bpmn-js
+    re-creates with a new id on replace is matched to the old one (same `bpmnElement`, same plane) and
+    patched in place (its id changes); its label is the old label (its id, which bpmn-js' new label and
+    every later save lack, is given to bpmn-js' label for the comparison; its `labelStyle` stays). So
+    comments, PIs, CDATA, entity references and extensions inside moved or replaced elements stay where
+    they were. A label bpmn-js does not re-create (a task's label is inside it; an unnamed element has
+    none) goes with its style and DI extension, as when a name is cleared; an undo brings it back.
+  - **Where a new child goes.** Next to its nearest sibling in bpmn-js' output that is on disk, within
+    the BPMN 2.0 schema's order of the children on disk: the head of the XSD sequence is ranked
     (`documentation`, `extensionElements`, `auditing`, `monitoring`, `categoryValueRef`, then a flow
     node's `incoming`, `outgoing`, then everything else in bpmn-js' order), and a new child goes past
-    disk-only children ranked before it (an `<incoming>` after a kept `<extensionElements>`) and in front
-    of those ranked after it (a new `<documentation>` before it). An element moved back to the parent it
+    every child on disk ranked before it (an `<incoming>` after a kept `<extensionElements>`) and in front
+    of every one ranked after it (a new `<documentation>` before it; a sub-process' new `<outgoing>` in
+    front of its flow elements, whose order on disk may differ from bpmn-js'), unless the disk is out of
+    that order already. An element moved back to the parent it
     was moved out of (e.g. undo of a drag into a sub-process; bpmn-js appends it to the parent) goes
     back next to its old neighbours there (remembered for the run, like removed elements), not to the
     end of the parent.
@@ -1055,7 +1063,8 @@ format-preserving fallback. This step implements it and verifies it against the 
   parents, attributes with namespace URIs, xsi:type as a QName, texts, CDATA, comments, PIs, declaration,
   DOCTYPE; an entity reference is a fact of its own, never equal to the literal text `&amp;name;`): what
   bpmn-js changed (`base → out`) must be in the result with `out`'s value (layout moved back by an import
-  offset, see above), elements bpmn-js removed must be gone (except the extensions of a replaced element),
+  offset, see above), elements bpmn-js removed must be gone (except extension content of an element it
+  still has, and the `labelStyle` of a label in a DI shape it re-created: as on disk),
   comments/PIs/CDATA/declaration/DOCTYPE of everything on disk must be as on disk — inside moved and
   replaced elements too — and every other fact exactly as on disk. The facts have no order, so an
   order check (`checkOrder`): the children of every BPMN element of the result must be in the schema's
@@ -1064,10 +1073,16 @@ format-preserving fallback. This step implements it and verifies it against the 
   against the write). A
   second opinion with an independent tokenizer (`src/elements.js` element forms): every element the
   result changed compared with the disk must be one bpmn-js changed. Any mismatch → fallback.
+- **Safety net for `minimal`.** Every write also lists the extension content of the file (see above)
+  missing from the text written while the element it belongs to (its nearest ancestor that is not
+  extension content; DI re-created on replace by its old id) is still in bpmn-js' output; anything
+  listed is reported (`lost=`, warning) even though the write is `minimal`. The writer keeps all of it
+  today, so this only turns a future mistake into a note instead of a silent loss.
 - **What a fallback loses** is computed from the models (file vs text written, and the remembered text of
   every element bpmn-js brings back that the write would have restored, see above): every comment, PI, CDATA
   section, the declaration and DOCTYPE, and every element and attribute in a namespace bpmn-js does not
-  know (extensions), unless it was in an element the edit deleted. Verifier round 3 found that `format`
+  know (extensions; and DI `extension` elements), unless it was in an element the edit deleted (a DI
+  shape bpmn-js re-created on replace is not deleted). Verifier round 3 found that `format`
   had only counted comments and PIs it could not place, so extensions and CDATA it dropped went
   unreported; a unit test now forces `format` over kept extensions and requires each to be named.
 - **Fallbacks**, each observable (`store.writerStats`, a `rendered` event with `lost`, one terminal note per
@@ -1161,6 +1176,33 @@ identical in Chrome, Firefox and WebKit. Writes: 11 (`false`) + 3 (`input`) per 
   declaration / DOCTYPE fact of the file unchanged, `&company;` and the `acme:` extensions still there;
   replace ≤ 10 changed lines (the tags, the DI id, a label bpmn-js re-measures), the collapsed rename
   ≤ 5 (the name and the new label, placed below the event in the file's coordinates).
+- Verifier round 7 found: (D-A, major) a wrench that keeps the element's tag dropped the extensions
+  bpmn-js drops on replace, written as `minimal` with no note: camunda7-modeler's start event to a
+  message start event lost `camunda:asyncBefore`/`camunda:exclusive`; the start events of bizagi-export
+  and signavio-export to a timer start event lost their `extensionElements` (Bizagi, Signavio metadata),
+  and the re-created DI shape lost its DI `extension` elements and its label's id and `labelStyle` (the
+  last two also on a tag-changing wrench). The writer kept extensions only when the tag changed; bpmn-js'
+  replace keeps the id and, for another event definition (also a boundary event's interrupting toggle,
+  a sub-process to an event sub-process), the tag. Fixed by the rule above: extension content
+  bpmn-js drops from an element it still has is always kept, with no need to recognise a replace (bpmn-js
+  removes it only on replace); the DI re-created on replace keeps its DI extensions and its label (id,
+  style); and a safety net reports any extension still missing. (Expanding/collapsing a sub-process is
+  not a replace in bpmn-js: the element and its DI stay.) (D-B, minor) a sub-process' first
+  `<incoming>`/`<outgoing>` went next to its nearest sibling in bpmn-js' output, a flow element that is
+  elsewhere on disk (an undo put a start event back in its old place, bpmn-js appends it) → `format`
+  ("bpmn:outgoing after bpmn:startEvent"). Fixed: the schema order now governs with respect to every
+  child on disk. Unit tests replay the gestures captured in Chrome (`c7m-start-msg`, `bz-start-timer`,
+  `sg-start-timer`: wrench, undo, redo; `bz-task-service`: a tag-changing wrench and undo;
+  `cn-sub-start-out`, `cn-sub-start-wrench`: the two D-B gestures): every write minimal, nothing lost,
+  every unknown-namespace fact, DI extension and label style of the original in every text, schema
+  order everywhere; the wrench changes only the new event definition, the DI id and what bpmn-js
+  re-measured; redo gives the wrenched text again; undo gives the original (camunda7-modeler,
+  bz-task-service) or the original up to the label bpmn-js keeps re-measured and its number spelling
+  (≤ 2 / 6 lines). Synthetic tests cover a same-tag replace with a re-created DI, a later save and both
+  undos (back to the original text), the safety net, and the D-B placement. UI tests (three browsers):
+  the start-event wrench and undo on camunda7-modeler, signavio-export and bizagi-export. All the new
+  tests fail without the fix. The verifier's fuzz (`fuzz.mjs`, 13 files, seeds 1–3, 3 479 writes with
+  replace of tasks, gateways and events): every write minimal, no XSD problem, no loss.
 - Verifier round 6 (after the final round) found: (major) writes after a wrench could produce
   schema-invalid BPMN reported as `minimal lost=0`. The wrench keeps on disk the `<extensionElements>`
   bpmn-js drops; when the element's `<incoming>` / `<outgoing>` were later removed and added again
@@ -1275,14 +1317,14 @@ verifier's probes cover; the known limits below are where the result is not byte
   from bpmn-js' output.
 - After an undo, bpmn-js may re-add a reference (`<incoming>`/`<outgoing>`) at the end of its list (the
   file follows: a removed and an added line), and may respell a number in a waypoint it changed during
-  the delete and back on undo (a line pair). After a type change and its undo, the DI label bpmn-js
-  dropped and brings back is written as bpmn-js has it (e.g. Signavio's `302.0` becomes `302`, its
-  `labelStyle` is gone). A restored edge whose `sourceElement`/`targetElement` bpmn-js dropped
+  the delete and back on undo (a line pair). After a replace and its undo, the DI values bpmn-js changed
+  and brings back are written as bpmn-js has them: the label it re-measured on replace keeps its new
+  bounds, and numbers are spelled its way (e.g. Signavio's `30.0` becomes `30`; up to 3 line pairs). A restored edge whose `sourceElement`/`targetElement` bpmn-js dropped
   (camunda7-loan-approval) loses those two DI attributes (bpmn-js's model, a line pair).
 - In a collapsed sub-process of a bpmn-js < 9 file, bpmn-js ≥ 9 puts the diagram's top-left element at
   (180, 160) on every import, so positions inside it are relative (as in any bpmn-js ≥ 9 tool). Other
   bpmn-js ≥ 9 tools show the labels there displaced (their import does not shift labels).
-- Extensions kept on a type change are on disk but not in the open windows' model until the file is
+- Extensions kept on a replace are on disk but not in the open windows' model until the file is
   reloaded (bpmn-js dropped them from the model on replace).
 - Element order is not compared (by design: DI order is kept as on disk, new elements go next to their
   nearest sibling); neither are namespace prefixes (only the namespaces themselves).
