@@ -1,6 +1,6 @@
-# local-bpmn — implementation plan
+# bpmn-edit — implementation plan
 
-Source spec: `local-bpmn.md`. Work is split into small **vertical slices**: each step ends with something a
+Source spec: `bpmn-edit.md`. Work is split into small **vertical slices**: each step ends with something a
 real user can do, so it can be verified end to end.
 
 Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (verified)
@@ -9,7 +9,7 @@ Status legend: `[ ]` todo · `[~]` in progress · `[x]` done (verified)
 
 A step is marked `[x]` only after a verifier agent has done an **end-to-end check as a user would use it**:
 
-- start the real CLI (`node bin/local-bpmn.js <file>` — and `npx` from a packed tarball in the final step),
+- start the real CLI (`node bin/bpmn-edit.js <file>` — and `npx` from a packed tarball in the final step),
 - drive a **real browser** (Playwright, headless Chromium) against the running server: open the URL, click,
   drag, type, read what's on screen,
 - observe real side effects (the `.bpmn` file on disk, a second browser window, the public tunnel URL).
@@ -52,7 +52,7 @@ cannot tell host and collaborator apart:
 - [x] **S1. Open a diagram in the browser**
   - Scaffold `package.json` (bin, engines, `type: module`, `files`), deps `ws`, `chokidar`, `commander`, `open`,
     `bpmn-js`; dev `playwright`. `scripts/vendor.js` copies bpmn-js dist into `web/vendor/bpmn-js/`.
-  - `bin/local-bpmn.js <file> [--port] [--no-open]`, `src/server.js` (node:http, static `web/`, `GET /api/file`),
+  - `bin/bpmn-edit.js <file> [--port] [--no-open]`, `src/server.js` (node:http, static `web/`, `GET /api/file`),
     `web/index.html` + `web/app.js` (toolbar with file name + full-height canvas, renders the XML, fits viewport).
     Port fallback if busy. Clear error + non-zero exit for missing/invalid file.
   - Fixture `test/fixtures/order.bpmn`.
@@ -103,7 +103,7 @@ cannot tell host and collaborator apart:
     keep live-tunnel E2E runs few, `retries: 0`); tunnel e2e must open `/s/<token>`; Host check must accept the
     tunnel host; show download/startup progress on the spinner (startup 7–13 s); add a timeout to the binary
     download fetch.
-  - `src/tunnel.js`: find `cloudflared` on PATH or download platform binary to `~/.local-bpmn/bin/`; spawn
+  - `src/tunnel.js`: find `cloudflared` on PATH or download platform binary to `~/.bpmn-edit/bin/`; spawn
     quick tunnel, parse `*.trycloudflare.com` URL; provider interface. Host-only `POST/DELETE /api/share`;
     security model above. UI: Share → spinner → URL + Copy; Stop sharing. Share button hidden for collaborators.
   - **E2E (real tunnel):** click Share in the host window; a `https://…trycloudflare.com/s/<token>` URL appears;
@@ -122,9 +122,9 @@ cannot tell host and collaborator apart:
   - **E2E:** collaborator window via the public link; Stop sharing → overlay, reload of old link fails;
     re-share gives a new link that works; Ctrl-C the CLI → overlay in collaborator; restart scenario for reconnect.
 
-- [x] **S9. Ship it: `npx local-bpmn`** (verified 2026-10-13: tarball install + npx, fresh cloudflared download, real share)
+- [x] **S9. Ship it: `npx bpmn-edit`** (verified 2026-10-13: tarball install + npx, fresh cloudflared download, real share)
   - README (usage, sharing, security notes, bpmn.io license/watermark). LICENSE. `files` whitelist.
-  - **E2E:** `npm pack`; install the tarball into a fresh temp dir; `npx local-bpmn flows/order.bpmn` from a fresh
+  - **E2E:** `npm pack`; install the tarball into a fresh temp dir; `npx bpmn-edit flows/order.bpmn` from a fresh
     git repo opens the browser editor (use `--no-open` + Playwright), edit → on disk, Share → public link works.
     Full `test/e2e` suite green.
 
@@ -134,13 +134,10 @@ cannot tell host and collaborator apart:
   - **E2E:** `npm run test:e2e` runs the whole suite × 3 browsers; Chrome must be green; Firefox/WebKit results
     reported, failures triaged into fix-now vs documented known issues.
 
-- [ ] **S11. Rename to `bpmn-edit`** (after the Q2 merge lands; decided 2026-10-13 by product owner)
-  - Package name, CLI command (`npx bpmn-edit`), terminal prefix, env vars `LOCAL_BPMN_*` → `BPMN_EDIT_*`, cache dir
-    `~/.local-bpmn/` → `~/.bpmn-edit/`, side files `.local-bpmn-unsaved-*` → `.bpmn-edit-unsaved-*`, header names,
-    README, docs, tests, scripts. Spec file renamed accordingly. npm name `bpmn-edit` free as of 2026-10-13.
-  - Package metadata: `repository`/`homepage`/`bugs` → https://github.com/DreadBoy/bpmn-edit; version `1.0.0`.
-  - **E2E:** full suite × 3 browsers green; `npm pack` → install tarball → `npx bpmn-edit` from a fresh repo works
-    (edit → disk, Share via one real tunnel); `git grep -i 'local-bpmn\|local_bpmn'` only hits historical docs.
+- [x] **S11. Rename to `bpmn-edit`** (verified 2026-10-14: 3 browsers green, tarball + `npx bpmn-edit` + real share)
+  - Former name local-bpmn; env vars now `BPMN_EDIT_*`, cache `~/.bpmn-edit/`, header `X-Bpmn-Edit-Host`, version
+    1.0.0, repo/homepage/bugs → DreadBoy/bpmn-edit. npm note: `bpmn-edit@0.0.1` existed in 2021 (unpublished
+    2022-01-07); 1.0.0 is free, 0.0.1 can never be reused.
 
 - [ ] **S12. Release via GitHub Actions** (after S11 and Q4-impl)
   - Modelled on DreadBoy/glyphmark: `release.yml` (push to main → check: `npm ci` + unit tests → publish if the
@@ -157,7 +154,7 @@ cannot tell host and collaborator apart:
   overwrites); IDE temp+rename landing in the ~2 ms check-to-rename gap of the final Ctrl-C write is overwritten
   (~1/70); stale-save detection only within 5 s of our write chain, and not after exit; deliberate revert within 5 s
   gives notice + side file; element comparison literal on entities/CDATA/prefixes; SIGKILL loses accepted-unwritten
-  edits; notice tooltip no longer hoverable (pointer-events none); `.local-bpmn-replaced-*` link left on Ctrl-C
+  edits; notice tooltip no longer hoverable (pointer-events none); `.bpmn-edit-replaced-*` link left on Ctrl-C
   within 2 s of replacing a broken file.
 - S10 residuals: load-sensitive timings (s2 coalescing failed once at load ~150, q1 limits, WebKit s5 at 90 s);
   WebKit-only "network connection was lost" filter in s8 drop tests; fixed 20 px `#users` height clips with larger
@@ -167,7 +164,7 @@ cannot tell host and collaborator apart:
   host cookie (HttpOnly, SameSite=Strict) set by the printed link so any localhost tab in that browser can share.
 - S9 residuals: README race text must be updated when Q2 lands, formatting-churn paragraph after Q4-impl;
   downloaded cloudflared not checksum-verified (documented); full-XML per edit (~107 KB on 304 elements) not in
-  README; not published to npm (name `local-bpmn` free as of 2026-10-13).
+  README; not published to npm (name `bpmn-edit` free as of 2026-10-13).
 - S8 residuals: Share button enabled while reconnecting ("Failed to fetch"); dead share URL + controls still
   visible behind "Session ended" overlay; user re-added at end of list if keepalive evicts before reconnect;
   hidden tabs detect dead connection only after ~2 min (timer throttling); >10 MB update (1009) resent on every
