@@ -1,0 +1,106 @@
+name: Version
+
+# Manually triggered version bump. Takes the new version as its only input,
+# writes it to package.json and package-lock.json, and commits the pair as
+# `bump version to <version>`.
+#
+# The lockfile matters: it embeds the package's own version, and a bump that
+# skips it leaves the two out of sync.
+#
+# Pushes made with the default GITHUB_TOKEN do NOT trigger other workflows, so
+# the bump commit landing on main would not start Release on its own. The last
+# step therefore dispatches Release explicitly. Release is idempotent (it probes
+# npm before publishing), so a redundant run is a cheap no-op.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: 'New version, e.g. 1.1.0 (no leading v)'
+        required: true
+        type: string
+
+concurrency:
+  group: version
+  cancel-in-progress: false
+
+jobs:
+  bump:
+    name: Bump version
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      actions: write
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+        with:
+          ref: ${{ github.ref_name }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v6
+        with:
+          node-version: 24
+
+      # Checked up front so a typo fails with a clear message before anything
+      # is written. Only plain X.Y.Z: release.yml runs `npm publish` without
+      # `--tag`, which npm 11 refuses for prereleases, and npm strips `+build`
+      # metadata. The new version must be greater than the current one, since
+      # a version that is lower or already published can never be published.
+      - name: Validate the requested version
+        env:
+          VERSION: ${{ inputs.version }}
+        run: |
+          set -euo pipefail
+          if ! printf '%s' "$VERSION" | grep -Eq '^(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)\.(0|[1-9][0-9]*)$'; then
+            echo "::error::\"$VERSION\" is not a plain X.Y.Z version (expected e.g. 1.1.0; no leading v or zeros, no prerelease or build suffix)"
+            exit 1
+          fi
+          current=$(node -p "require('./package.json').version")
+          if ! node -e '
+            const [next, cur] = process.argv.slice(1).map((v) => v.split(".").map(Number));
+            const cmp = next[0] - cur[0] || next[1] - cur[1] || next[2] - cur[2];
+            process.exit(cmp > 0 ? 0 : 1);
+          ' "$VERSION" "$current"; then
+            echo "::error::$VERSION is not greater than the current version $current"
+            exit 1
+          fi
+          echo "::notice::bumping $current -> $VERSION"
+
+      # `npm version --no-git-tag-version` rewrites the version in package.json
+      # and both version fields of package-lock.json, and nothing else. Unlike
+      # `npm pkg set` + `npm install` (glyphmark's approach) it does not
+      # re-resolve dependencies, so the bump commit cannot pick up unrelated
+      # lockfile churn. There are no version lifecycle scripts to run. We tag
+      # nothing: the npm registry is the release record, and Release probes it.
+      - name: Write the version into package.json and package-lock.json
+        env:
+          VERSION: ${{ inputs.version }}
+        run: npm version "$VERSION" --no-git-tag-version
+
+      - name: Commit and push
+        env:
+          VERSION: ${{ inputs.version }}
+          ACTOR: ${{ github.actor }}
+          ACTOR_ID: ${{ github.actor_id }}
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          set -euo pipefail
+          git config user.name "$ACTOR"
+          git config user.email "$ACTOR_ID+$ACTOR@users.noreply.github.com"
+          git add package.json package-lock.json
+          if git diff --cached --quiet; then
+            echo "::error::nothing to commit; package.json and the lockfile were already at $VERSION"
+            exit 1
+          fi
+          git diff --cached
+          git commit -m "bump version to $VERSION"
+          git push origin "HEAD:$REF_NAME"
+
+      # See the header: the push above cannot trigger Release by itself.
+      - name: Trigger Release
+        if: github.ref_name == 'main'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: gh workflow run release.yml --ref main

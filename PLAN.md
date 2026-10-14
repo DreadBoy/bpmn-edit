@@ -139,7 +139,8 @@ cannot tell host and collaborator apart:
     1.0.0, repo/homepage/bugs → DreadBoy/bpmn-edit. npm note: `bpmn-edit@0.0.1` existed in 2021 (unpublished
     2022-01-07); 1.0.0 is free, 0.0.1 can never be reused.
 
-- [ ] **S12. Release via GitHub Actions** (after S11 and Q4-impl)
+- [x] **S12. Release via GitHub Actions** (after S11 and Q4-impl) — workflows ready; first manual publish + trusted
+  publisher config pending owner (see docs/release-procedure.md "Owner steps").
   - Modelled on DreadBoy/glyphmark: `release.yml` (push to main → check: `npm ci` + unit tests → publish if the
     version is not on npm, npm Trusted Publishing/OIDC, provenance, Node 24) and `version.yml` (manual bump →
     dispatch Release). E2E stays local (needs macOS + real Chrome + tunnels).
@@ -148,8 +149,19 @@ cannot tell host and collaborator apart:
   - Product owner: configure trusted publisher on npmjs.com (`dread_boy`); the very first publish may have to be
     manual if npm requires the package to exist first (check). Push to https://github.com/DreadBoy/bpmn-edit
     only on explicit go-ahead.
+  - Done: `.github/workflows/release.yml` (check on `macos-latest`: `npm ci`, unit tests, vendor drift check;
+    publish on `ubuntu-latest` with OIDC, npm >= 11.5.1 guard, `npm view` no-op guard, no install/build) and
+    `version.yml` (plain X.Y.Z greater than current, `npm version --no-git-tag-version`, commit as the dispatching
+    actor's noreply address, dispatch Release). Verified locally: actionlint+shellcheck clean, `act -n` (0.2.89),
+    probe/guard/bump scripts, `npm pack` (34 files, 426 kB) installed from tarball and smoke-tested in Chrome.
+  - No CI e2e for now (decision in docs/release-procedure.md); follow-up: non-blocking macOS workflow with
+    `BPMN_EDIT_SKIP_TUNNEL_E2E=1 npx playwright test --project=chrome`, measured on GitHub before gating.
 
 ## Backlog (small known issues, fold into a later step)
+- Linux: the server cannot start (found in S12). `wildcardListenerOn()` in `src/server.js` binds `0.0.0.0`/`::` with
+  `exclusive: true` after our own loopback binds; Linux answers EADDRINUSE, so every port looks taken ("No free port
+  found"); unit tests fail/hang there. Fix: skip the probe on Linux (redundant there — a loopback bind already fails
+  next to a foreign wildcard listener). Out of v1 scope; then the Release `check` job can move to ubuntu.
 - Q2 residuals: unsent edit lost if a disk change lands and the window closes before it is sent (host never
   overwrites); IDE temp+rename landing in the ~2 ms check-to-rename gap of the final Ctrl-C write is overwritten
   (~1/70); stale-save detection only within 5 s of our write chain, and not after exit; deliberate revert within 5 s
