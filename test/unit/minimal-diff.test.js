@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import WebSocket from 'ws';
 import { createFileStore } from '../../src/file.js';
 import {
-  checkForms, checkMinimal, checkModel, detectStyle, escapeAttr, facts, load, minimalDiff, parse, preserveFormat,
+  checkForms, checkMinimal, checkModel, checkOrder, detectStyle, escapeAttr, facts, load, minimalDiff, parse, preserveFormat,
   renderForDisk, XmlError,
 } from '../../src/minimal-diff.js';
 import { createServer } from '../../src/server.js';
@@ -29,6 +29,32 @@ function changedLines(a, b) {
   }
   return x.length + y.length - 2 * t[0][0];
 }
+
+/**
+ * Children of BPMN elements out of the BPMN 2.0 XSD's order (its head: documentation*, extensionElements?,
+ * auditing?, monitoring?, categoryValueRef*, then a flow node's incoming*, outgoing*, then the rest).
+ * Elements in other namespaces are not ranked. Returns descriptions (empty: in order).
+ */
+function schemaOrderProblems(xml) {
+  const RANK = ['documentation', 'extensionElements', 'auditing', 'monitoring', 'categoryValueRef', 'incoming', 'outgoing'];
+  const problems = [];
+  const visit = (el) => {
+    const kids = el.children.filter((c) => c.kind === 'element');
+    if (el.uri === MODEL) {
+      const ranked = kids.filter((c) => c.uri === MODEL).map((c) => [c.local, RANK.includes(c.local) ? RANK.indexOf(c.local) : RANK.length]);
+      for (let k = 1; k < ranked.length; k++) {
+        if (ranked[k][1] < ranked[k - 1][1]) problems.push(`${el.name}#${el.attrs.find((a) => a.local === 'id')?.value}: ${ranked[k][0]} after ${ranked[k - 1][0]}`);
+      }
+      if (ranked.filter(([l]) => l === 'extensionElements').length > 1) problems.push(`${el.name}: two extensionElements`);
+    }
+    kids.forEach(visit);
+  };
+  visit(parse(xml).root);
+  return problems;
+}
+
+/** Line (1-based) on which element `id` starts. */
+const lineOf = (xml, id) => xml.slice(0, load(xml).ids.get(id).start).split('\n').length;
 
 /** `xml` with only the name of element `id` replaced (the ideal edit of a rename). */
 function idealRename(xml, id, name) {
@@ -446,6 +472,73 @@ describe('minimal-diff writer: what is inside replaced and moved elements', () =
     assert.equal(W4.text, D);
   });
 
+  // Verifier Q4-impl round 6: after a type change, references written back (undo) or added (a new flow)
+  // went in front of the kept extensionElements: schema-invalid BPMN, reported as minimal lost=0.
+  for (const doc of [true, false]) {
+    const taskX = (type, { ext = true, out = 'F1' } = {}) => [type, { id: 'A', name: 'Alpha', ...(ext ? { 'acme:sla': 'PT2H' } : {}) }, [
+      ...(doc ? [['bpmn2:documentation', {}, 'Checks the stock']] : []),
+      ...(ext ? [['bpmn2:extensionElements', {}, [['acme:retry', { n: '3' }], ['#pi', 'acme-lint off']]]] : []),
+      ...(out ? [['bpmn2:outgoing', {}, out]] : []),
+    ]];
+    const taskY = (incoming) => ['bpmn2:task', { id: 'B', name: 'Beta' }, incoming ? [['bpmn2:incoming', {}, incoming]] : []];
+    const flow = (id) => ['bpmn2:sequenceFlow', { id, sourceRef: 'A', targetRef: 'B' }];
+    const edge = (id) => ['bpmndi:BPMNEdge', { id: `${id}_di`, bpmnElement: id }, [['di:waypoint', { x: '200', y: '140' }], ['di:waypoint', { x: '300', y: '140' }]]];
+    const D0 = disk(m([taskX('bpmn2:task'), taskY('F1')]), prolog);
+    const B0 = bpmnjs(m([taskX('bpmn2:task'), taskY('F1')]));
+    const U1 = bpmnjs(m([taskX('bpmn2:serviceTask', { ext: false }), taskY('F1')]));
+    const U2 = bpmnjs(m([taskX('bpmn2:serviceTask', { ext: false, out: null }), taskY(null)], { flows: [], edges: [] }));
+    const label = doc ? 'with documentation' : 'without documentation';
+
+    it(`type change, delete the flow, undo: the reference goes after the kept extensions (${label})`, () => {
+      const memory = new Map();
+      const W1 = renderForDisk({ disk: D0, base: B0, out: U1, memory });
+      const W2 = renderForDisk({ disk: W1.text, base: U1, out: U2, memory });
+      const W3 = renderForDisk({ disk: W2.text, base: U2, out: U1, memory });
+      for (const w of [W1, W2, W3]) assert.equal(w.mode, 'minimal', w.reason);
+      for (const w of [W1, W2, W3]) assert.deepEqual(schemaOrderProblems(w.text), []);
+      assert.equal(W3.text, W1.text);
+    });
+
+    it(`type change, delete the flow, a new flow: its reference goes after the kept extensions (${label})`, () => {
+      const W1 = renderForDisk({ disk: D0, base: B0, out: U1 });
+      const W2 = renderForDisk({ disk: W1.text, base: U1, out: U2 });
+      const U3 = bpmnjs(m([taskX('bpmn2:serviceTask', { ext: false, out: 'F2' }), taskY('F2')], { flows: [flow('F2')], edges: [edge('F2')] }));
+      const W3 = renderForDisk({ disk: W2.text, base: U2, out: U3 });
+      assert.equal(W3.mode, 'minimal', W3.reason);
+      assert.deepEqual(schemaOrderProblems(W3.text), []);
+      assert.equal(W3.text, disk(m([taskX('bpmn2:serviceTask', { out: 'F2' }), taskY('F2')], { flows: [flow('F2')], edges: [edge('F2')] }), prolog));
+    });
+  }
+
+  it('a new documentation goes in front of the kept extensions', () => {
+    const taskX = (type, { ext = true, doc = false } = {}) => [type, { id: 'A', name: 'Alpha' }, [
+      ...(doc ? [['bpmn2:documentation', {}, 'New']] : []),
+      ...(ext ? [['bpmn2:extensionElements', {}, [['acme:retry', { n: '3' }]]]] : []),
+      ['bpmn2:outgoing', {}, 'F1'],
+    ]];
+    const D0 = disk(m([taskX('bpmn2:task'), taskB('bpmn2:task')]), prolog);
+    const U1 = bpmnjs(m([taskX('bpmn2:serviceTask', { ext: false }), taskB('bpmn2:task')]));
+    const W1 = renderForDisk({ disk: D0, base: bpmnjs(m([taskX('bpmn2:task'), taskB('bpmn2:task')])), out: U1 });
+    const U2 = bpmnjs(m([taskX('bpmn2:serviceTask', { ext: false, doc: true }), taskB('bpmn2:task')]));
+    const W2 = renderForDisk({ disk: W1.text, base: U1, out: U2 });
+    assert.equal(W2.mode, 'minimal', W2.reason);
+    assert.deepEqual(schemaOrderProblems(W2.text), []);
+    assert.equal(W2.text, disk(m([taskX('bpmn2:serviceTask', { doc: true }), taskB('bpmn2:task')]), prolog));
+  });
+
+  it('the check refuses children out of the schema order', () => {
+    const U1 = bpmnjs(m([taskA('bpmn2:serviceTask', { extensions: false, sla: false }), taskB('bpmn2:task')]));
+    const W1 = renderForDisk({ disk: D, base: B, out: U1 }).text;
+    // The same text with the kept extensionElements moved after <outgoing>.
+    const ext = /[ \t]*<bpmn2:extensionElements>[\s\S]*?<\/bpmn2:extensionElements>\r\n/.exec(W1)[0];
+    const out = /[ \t]*<bpmn2:outgoing>F1<\/bpmn2:outgoing>\r\n/.exec(W1)[0];
+    const wrong = W1.replace(ext, '').replace(out, out + ext);
+    assert.deepEqual(checkOrder(load(D), load(U1), load(W1)), []);
+    assert.deepEqual(checkOrder(load(D), load(U1), load(wrong)), ['#A: bpmn2:extensionElements after bpmn2:outgoing']);
+    // A file that is out of order already is not held against the write.
+    assert.deepEqual(checkOrder(load(wrong), load(U1), load(wrong)), []);
+  });
+
   it('a fallback names every kept extension, comment, PI and CDATA it drops', () => {
     // The file has extensions bpmn-js' model lacks (kept on a type change); a change next to a comment
     // forces the 'format' fallback, written from bpmn-js' output.
@@ -721,6 +814,37 @@ describe('minimal-diff writer: gestures captured in the browser (test/fixtures/q
     assert.equal(texts[5], texts[3]); // undo of the expand: collapsed as before
     assert.equal(texts[8], texts[4]); // redo, redo: expanded as before
     for (const [k, limit] of [[3, 30], [4, 20]]) assert.ok(changedLines(texts[k - 1], texts[k]) <= limit, `${k}: ${changedLines(texts[k - 1], texts[k])}`);
+  });
+
+  // Verifier Q4-impl round 6: after a wrench, references written back (undo) or added (a new flow, a move
+  // back out of a sub-process) went in front of the kept extensionElements: schema-invalid, minimal lost=0.
+  it('c8-wrench-flows: wrench, delete both flows, connect again: the new reference after the kept extensions', async () => {
+    const { texts, writes } = await replay('c8-wrench-flows');
+    allMinimal(writes);
+    for (const t of texts) assert.deepEqual(schemaOrderProblems(t), []);
+    assert.deepEqual(kept(texts[texts.length - 1]), kept(texts[0]));
+  });
+
+  it('cn-wrench-flows-undo: wrench, delete both flows, undo, undo: back to the text after the wrench', async () => {
+    const { texts, writes } = await replay('cn-wrench-flows-undo');
+    allMinimal(writes);
+    for (const t of texts) assert.deepEqual(schemaOrderProblems(t), []);
+    assert.deepEqual(kept(texts[texts.length - 1]), kept(texts[0]));
+    assert.ok(changedLines(texts[1], texts[5]) <= 2, String(changedLines(texts[1], texts[5])));
+  });
+
+  it('cn-wrench-sub-undo, cn-sub-ship-undo: undo of a move into a sub-process puts the task back where it was', async () => {
+    // [capture, task, index of the text before the move, changed lines allowed]: bpmn-js re-adds the
+    // gateway's reference to the flow it brings back last, and re-measures the gateway's label.
+    for (const [name, id, before, allowed] of [['cn-wrench-sub-undo', 'Task_CheckStock', 2, 0], ['cn-sub-ship-undo', 'Task_ShipOrder', 1, 4]]) {
+      const { texts, writes } = await replay(name);
+      allMinimal(writes);
+      for (const t of texts) assert.deepEqual(schemaOrderProblems(t), [], name);
+      assert.deepEqual(kept(texts[texts.length - 1]), kept(texts[0]), name);
+      assert.equal(lineOf(texts[texts.length - 1], id), lineOf(texts[before], id), name);
+      const changed = changedLines(texts[before], texts[texts.length - 1]);
+      assert.ok(changed <= allowed, `${name}: ${changed}`);
+    }
   });
 
   it('cn-sub-wrench, cn-sub-del: a wrenched task in the sub-process keeps its kept extensions through collapse, expand, delete, undo', async () => {

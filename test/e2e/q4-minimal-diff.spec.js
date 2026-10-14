@@ -835,4 +835,124 @@ test.describe('what is inside edited elements is kept (UI gestures)', () => {
       await t.close();
     }
   });
+
+  /**
+   * Children of BPMN elements out of the BPMN 2.0 XSD's order (documentation*, extensionElements?,
+   * auditing?, monitoring?, categoryValueRef*, incoming*, outgoing*, then the rest). Descriptions.
+   */
+  function schemaOrderProblems(xml) {
+    const MODEL = 'http://www.omg.org/spec/BPMN/20100524/MODEL';
+    const RANK = ['documentation', 'extensionElements', 'auditing', 'monitoring', 'categoryValueRef', 'incoming', 'outgoing'];
+    const problems = [];
+    const visit = (el) => {
+      const kids = el.children.filter((c) => c.kind === 'element');
+      if (el.uri === MODEL) {
+        const ranks = kids.filter((c) => c.uri === MODEL).map((c) => [c.local, RANK.includes(c.local) ? RANK.indexOf(c.local) : RANK.length]);
+        for (let k = 1; k < ranks.length; k++) if (ranks[k][1] < ranks[k - 1][1]) problems.push(`${el.name}: ${ranks[k][0]} after ${ranks[k - 1][0]}`);
+      }
+      kids.forEach(visit);
+    };
+    visit(parse(xml).root);
+    return problems;
+  }
+
+  /** Deletes a flow with its context pad (selected through bpmn-js: a click may miss a thin line). */
+  async function deleteByPad(page, id) {
+    await page.mouse.click(1500, 80);
+    await page.evaluate((flow) => {
+      const modeler = window.bpmnModeler;
+      modeler.get('selection').select(modeler.get('elementRegistry').get(flow));
+    }, id);
+    await expect(page.locator('.djs-context-pad.open')).toBeVisible();
+    await page.locator('.djs-context-pad.open .entry[data-action="delete"]').click();
+  }
+
+  // Verifier Q4-impl round 6: after a wrench, references bpmn-js adds back (undo, a new flow, a move
+  // out of a sub-process) were written in front of the extensionElements kept on the type change:
+  // schema-invalid BPMN, reported as minimal lost=0.
+  test('camunda8-modeler: wrench, delete both flows, connect again: the reference goes after the kept extensions', async ({ browser }) => {
+    const t = await open(browser, 'camunda8-modeler.bpmn');
+    const id = 'Activity_1kpg3ok';
+    try {
+      await replaceWith(t.page, id, 'replace-with-service-task');
+      let now = await saved(t.page, t.cli, t.fixture.file, 0);
+      for (const flow of ['Flow_0rfbpf0', 'Flow_0o6zxl7']) {
+        const count = writes(t.cli).length;
+        await deleteByPad(t.page, flow);
+        now = await saved(t.page, t.cli, t.fixture.file, count);
+        expect(load(now).ids.has(flow)).toBe(false);
+      }
+      const count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      await shapeOf(t.page, 'StartEvent_1').click();
+      await t.page.locator('.djs-context-pad.open .entry[data-action="connect"]').click();
+      const target = await shapeOf(t.page, id).boundingBox();
+      await t.page.mouse.move(target.x + target.width / 2, target.y + target.height / 2, { steps: 8 });
+      await t.page.mouse.click(target.x + target.width / 2, target.y + target.height / 2);
+      now = await saved(t.page, t.cli, t.fixture.file, count);
+      const task = load(now).ids.get(id);
+      expect(task.local).toBe('serviceTask');
+      expect(task.children.filter((c) => c.kind === 'element').map((c) => c.local)).toEqual(['extensionElements', 'incoming']);
+      expect(now).toContain('zeebe:formDefinition');
+      expect(schemaOrderProblems(now)).toEqual([]);
+      await expectKept(t, now);
+    } finally {
+      await t.close();
+    }
+  });
+
+  test('comments-nonascii: wrench, delete both flows, undo, undo: the references go back after the kept extensions', async ({ browser }) => {
+    const t = await open(browser, 'comments-nonascii.bpmn');
+    const id = 'Task_CheckStock';
+    try {
+      await replaceWith(t.page, id, 'replace-with-service-task');
+      const wrenched = await saved(t.page, t.cli, t.fixture.file, 0);
+      let now = wrenched;
+      for (const step of ['Flow_ToCheckStock', 'Flow_ToGateway', 'undo', 'undo']) {
+        const count = writes(t.cli).length;
+        if (step === 'undo') {
+          await t.page.mouse.click(1500, 80);
+          await t.page.keyboard.press('ControlOrMeta+z');
+        } else await deleteByPad(t.page, step);
+        now = await saved(t.page, t.cli, t.fixture.file, count);
+        expect(schemaOrderProblems(now), step).toEqual([]);
+      }
+      expect(load(now).ids.get(id).children.filter((c) => c.kind === 'element').map((c) => c.local))
+        .toEqual(['documentation', 'extensionElements', 'incoming', 'outgoing']);
+      await expectKept(t, now);
+      expect(await changedLines(t.fixture.dir, wrenched, now)).toBeLessThanOrEqual(2); // a label bpmn-js re-measures
+    } finally {
+      await t.close();
+    }
+  });
+
+  test('comments-nonascii: wrench, drag into a new sub-process, undo: the task back in place, after its kept extensions', async ({ browser }) => {
+    const t = await open(browser, 'comments-nonascii.bpmn');
+    const id = 'Task_CheckStock';
+    try {
+      await replaceWith(t.page, id, 'replace-with-service-task');
+      await saved(t.page, t.cli, t.fixture.file, 0);
+      let count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      const sub = await createSubProcess(t.page);
+      const before = await saved(t.page, t.cli, t.fixture.file, count);
+      count = writes(t.cli).length;
+      await dragInto(t.page, id, sub);
+      const inside = await saved(t.page, t.cli, t.fixture.file, count);
+      expect(load(inside).ids.get(id).parent.path).toBe(`#${sub}`);
+      count = writes(t.cli).length;
+      await t.page.mouse.click(1500, 80);
+      await t.page.keyboard.press('ControlOrMeta+z');
+      const now = await saved(t.page, t.cli, t.fixture.file, count);
+      expect(load(now).ids.get(id).parent.path).toBe('#Process_Order');
+      expect(schemaOrderProblems(now)).toEqual([]);
+      await expectKept(t, now);
+      // Where it was before the drag (bpmn-js appends it to the process), up to a re-measured label.
+      const lineOf = (xml) => xml.slice(0, load(xml).ids.get(id).start).split('\n').length;
+      expect(lineOf(now)).toBe(lineOf(before));
+      expect(await changedLines(t.fixture.dir, before, now)).toBeLessThanOrEqual(4);
+    } finally {
+      await t.close();
+    }
+  });
 });

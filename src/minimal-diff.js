@@ -599,6 +599,50 @@ export function checkMinimal(D, B, U, W, restored = []) {
 }
 
 /**
+ * Where a child of a BPMN element goes in the BPMN 2.0 XSD's sequence: documentation*, extensionElements?,
+ * auditing?, monitoring?, categoryValueRef* (tBaseElement, tFlowElement), a flow node's incoming*,
+ * outgoing*, then everything else (type-specific; bpmn-js writes those in their order). Elements in other
+ * namespaces (extension content outside extensionElements) have no rank. Null for children of elements
+ * in other namespaces.
+ */
+const SCHEMA_HEAD = ['documentation', 'extensionElements', 'auditing', 'monitoring', 'categoryValueRef', 'incoming', 'outgoing'];
+function schemaRank(child) {
+  if (child.parent?.uri !== BPMN_MODEL_NS || child.uri !== BPMN_MODEL_NS) return null;
+  const k = SCHEMA_HEAD.indexOf(child.local);
+  return k === -1 ? SCHEMA_HEAD.length : k;
+}
+
+/** Children of `el` out of the schema order (see schemaRank), and a second extensionElements. */
+function orderProblems(el) {
+  if (el.uri !== BPMN_MODEL_NS) return [];
+  const ranked = elementChildren(el).filter((c) => schemaRank(c) !== null);
+  const problems = [];
+  for (let k = 1; k < ranked.length; k++) {
+    if (schemaRank(ranked[k]) < schemaRank(ranked[k - 1])) problems.push(`${ranked[k].name} after ${ranked[k - 1].name}`);
+  }
+  if (ranked.filter(isExtensionElements).length > 1) problems.push(`a second ${ranked.find(isExtensionElements).name}`);
+  return problems;
+}
+
+/**
+ * Order check of a result `W` (the facts compared by checkMinimal have no order): the children of every
+ * BPMN element must be in the schema's order (see schemaRank), unless that element is out of order on
+ * disk (D) or in bpmn-js' output (U) already. Returns descriptions of the problems (empty: fine).
+ */
+export function checkOrder(D, U, W) {
+  const byPath = (doc) => new Map([...walk(doc.root)].map((e) => [e.path, e]));
+  const [pd, pu] = [byPath(D), byPath(U)];
+  const problems = [];
+  for (const w of walk(W.root)) {
+    const found = orderProblems(w);
+    if (!found.length) continue;
+    if ([pd.get(w.path), pu.get(w.path)].some((e) => e && orderProblems(e).length)) continue;
+    problems.push(...found.map((p) => `${w.path.replace(/\{[^}]*\}/g, '')}: ${p}`));
+  }
+  return problems;
+}
+
+/**
  * Independent second opinion (src/elements.js, its own tokenizer): every element the result changed
  * compared with the disk must be one that bpmn-js changed (base -> out). Namespace declarations are
  * ignored (a declaration may be placed differently). Null documents (not readable that way): no
@@ -917,6 +961,7 @@ function writeMinimal(D, B, U, memory = new Map()) {
   const offered = new Map();
   const cut = new Set(); // elements of D removed
   const moving = []; // [u, d]: moved to another parent, relocated with its text
+  const movedFrom = []; // [id, { parent, prev, next }]: where moved elements were (see movedKey)
   const intoNew = new Map(); // element of U moved into a new element -> { mark, indent } where its text goes
   const retyped = []; // [u, d]: replaced by another type (same id), renamed in place
   const renamed = new Map(); // element of D -> its new qualified name
@@ -1301,6 +1346,20 @@ function writeMinimal(D, B, U, memory = new Map()) {
     for (let k = at - 1; k >= 0 && !prev; k--) prev = anchor(siblings[k]);
     let next = null;
     if (!prev) for (let k = at + 1; k < siblings.length && !next; k++) next = anchor(siblings[k]);
+    // Children only the disk has (extensions kept on a type change) are where the schema wants them,
+    // which bpmn-js' order does not know: the new child goes past those the schema puts before it
+    // (e.g. an <incoming> after a kept <extensionElements>), and in front of those it puts after it.
+    const rank = schemaRank(u);
+    if (rank !== null) {
+      const settled = elementChildren(dParent).filter((d) => !cut.has(d) && !isMoving(d));
+      const matched = new Set(counterpart.values());
+      const diskOnly = (d) => idOf(d) === null && !matched.has(d);
+      const from = prev ? settled.indexOf(prev) + 1 : next ? settled.indexOf(next) : 0;
+      let k = from;
+      while (k < settled.length && diskOnly(settled[k]) && (schemaRank(settled[k]) ?? -1) < rank) k += 1;
+      while (k > 0 && diskOnly(settled[k - 1]) && (schemaRank(settled[k - 1]) ?? -1) > rank) k -= 1;
+      if (k !== from) [prev, next] = k > 0 ? [settled[k - 1], null] : [null, settled[0]];
+    }
     const parentIndent = lineIndent(text, dParent.start) ?? '';
     if (prev) {
       const indent = lineIndent(text, prev.start) ?? parentIndent + unit;
@@ -1450,9 +1509,33 @@ function writeMinimal(D, B, U, memory = new Map()) {
     const oldIndent = lineIndent(text, d.start) ?? '';
     const reindent = (indent) => own.split('\n')
       .map((line, k) => (k > 0 && line.startsWith(oldIndent) ? indent + line.slice(oldIndent.length) : line)).join('\n');
+    // Where it was (its neighbours with an id), for a move back (bpmn-js appends it to the parent).
+    const oldParentId = d.parent ? idOf(d.parent) : null;
+    if (!outOfRemoved && oldParentId !== null) {
+      const siblings = elementChildren(d.parent);
+      const at = siblings.indexOf(d);
+      movedFrom.push([id, {
+        parent: oldParentId,
+        prev: siblings.slice(0, at).reverse().map(idOf).filter((x) => x !== null).slice(0, NEIGHBOURS),
+        next: siblings.slice(at + 1).map(idOf).filter((x) => x !== null).slice(0, NEIGHBOURS),
+      }]);
+    }
     if (!outOfRemoved) removeElement(d);
     if (!spot) {
-      placeAt(u, dParent, reindent);
+      const was = memory.get(movedKey(id))?.[0];
+      const there = (nearId) => {
+        const near = D.ids.get(nearId);
+        return near && near.parent === dParent && !cut.has(near) && !isMoving(near) && status.get(nearId) === 'kept' ? near : null;
+      };
+      const prev = was?.parent === idOf(dParent) ? was.prev.map(there).find(Boolean) : null;
+      const next = was?.parent === idOf(dParent) && !prev ? was.next.map(there).find(Boolean) : null;
+      if (prev) {
+        const indent = lineIndent(text, prev.start);
+        edit(prev.end, prev.end, eol + (indent ?? '') + reindent(indent ?? oldIndent));
+      } else if (next) {
+        const indent = lineIndent(text, next.start);
+        edit(next.start, next.start, reindent(indent ?? oldIndent) + (indent === null ? '' : eol + indent));
+      } else placeAt(u, dParent, reindent);
       continue;
     }
     const holder = edits.find((e) => e.str.includes(spot.mark));
@@ -1461,7 +1544,7 @@ function writeMinimal(D, B, U, memory = new Map()) {
   }
   if (edits.some((e) => e.str.includes('\u0000'))) throw new WriterFallback('an element moved into a new one was not placed');
 
-  return { text: applyEdits(text, edits), removed: removedNow, restored, unused };
+  return { text: applyEdits(text, edits), removed: removedNow, restored, unused, movedFrom };
 }
 
 /** Short description of a comment or processing instruction (for notes about what was not kept). */
@@ -1571,7 +1654,9 @@ function minimalWrite(disk, base, out, memory) {
   result.lost = lostFromMemory(result.unused, load(result.text));
   if (result.text === disk) return result;
   const W = load(result.text);
-  const problems = [...checkMinimal(D, B, U, W, result.restored), ...checkForms(diskText, baseText, out, result.text)];
+  const problems = [
+    ...checkMinimal(D, B, U, W, result.restored), ...checkOrder(D, U, W), ...checkForms(diskText, baseText, out, result.text),
+  ];
   if (problems.length) {
     throw new WriterFallback(`check failed: ${problems.slice(0, 3).join(', ')}${problems.length > 3 ? ` (+${problems.length - 3} more)` : ''}`);
   }
@@ -1727,6 +1812,12 @@ const MEMORY_SIZE = 200;
 /** How many neighbours on each side a removed element remembers (see writeMinimal). */
 const NEIGHBOURS = 20;
 const MEMORY_VERSIONS = 5;
+/**
+ * Key in `memory` (see writeMinimal) of where element `id` was before a write moved it to another
+ * parent: [{ parent, prev, next }] (ids). A move back puts it there again, where bpmn-js appends it to
+ * the parent (e.g. undo of a drag into a sub-process). Never an id (XML has no U+0000).
+ */
+const movedKey = (id) => `\u0000moved\u0000${id}`;
 
 /**
  * What `out` written as it is loses of the file on disk: its comments, PIs and DOCTYPE (a plain scan,
@@ -1800,7 +1891,7 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
   const reasons = [];
   const why = (err) => (err instanceof WriterFallback || err instanceof XmlError ? err.message : `internal error: ${err.message}`);
   try {
-    const { text, removed, lost: forgotten } = minimalWrite(disk, base, out, memory ?? new Map());
+    const { text, removed, movedFrom, lost: forgotten } = minimalWrite(disk, base, out, memory ?? new Map());
     // Without a base, what bpmn-js does not keep on import looks like an edit: say what went.
     const lost = [...(base === null ? lostFacts(load(disk), load(text), load(out)) : []), ...forgotten];
     if (memory) {
@@ -1808,6 +1899,10 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
         const versions = (memory.get(id) ?? []).filter((v) => v.text !== entry.text || v.form !== entry.form);
         memory.delete(id);
         memory.set(id, [...versions, entry].slice(-MEMORY_VERSIONS));
+      }
+      for (const [id, entry] of movedFrom) {
+        memory.delete(movedKey(id));
+        memory.set(movedKey(id), [entry]);
       }
       while (memory.size > MEMORY_SIZE) memory.delete(memory.keys().next().value);
     }
@@ -1840,6 +1935,7 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
   } catch {
     // bpmn-js' output cannot be read here: what the remembered texts of elements it has hold is lost.
     for (const [id, versions] of memory ?? []) {
+      if (id.startsWith('\u0000')) continue; // not an element (see movedKey)
       if (typeof out === 'string' && out.includes(`id="${id}"`) && !disk.includes(`id="${id}"`)) lost.push(...lostByRaw(versions[versions.length - 1].text));
     }
   }
