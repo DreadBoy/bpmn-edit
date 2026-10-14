@@ -989,6 +989,16 @@ format-preserving fallback. This step implements it and verifies it against the 
     on disk. The DI shape or edge that bpmn-js re-creates with a new id on replace is matched to the old
     one (same `bpmnElement`, same plane) and patched in place (its id changes). So comments, PIs, CDATA,
     entity references and extensions inside moved or replaced elements stay where they were.
+  - **Where a new child goes.** Next to its nearest sibling in bpmn-js' output that is on disk, and in
+    the BPMN 2.0 schema's order with respect to children only the disk has (the extensions kept on a
+    type change, which bpmn-js' order does not know): the head of the XSD sequence is ranked
+    (`documentation`, `extensionElements`, `auditing`, `monitoring`, `categoryValueRef`, then a flow
+    node's `incoming`, `outgoing`, then everything else in bpmn-js' order), and a new child goes past
+    disk-only children ranked before it (an `<incoming>` after a kept `<extensionElements>`) and in front
+    of those ranked after it (a new `<documentation>` before it). An element moved back to the parent it
+    was moved out of (e.g. undo of a drag into a sub-process; bpmn-js appends it to the parent) goes
+    back next to its old neighbours there (remembered for the run, like removed elements), not to the
+    end of the parent.
   - New elements are rendered in the file's style, detected from the file: line ending, indent unit,
     quote, `/>` or ` />`, attribute layout (one line, one per line aligned under the first, or with a
     hanging indent), and the file's namespace prefixes (a namespace bpmn-js writes as `bpmn:` is written
@@ -1047,7 +1057,11 @@ format-preserving fallback. This step implements it and verifies it against the 
   bpmn-js changed (`base → out`) must be in the result with `out`'s value (layout moved back by an import
   offset, see above), elements bpmn-js removed must be gone (except the extensions of a replaced element),
   comments/PIs/CDATA/declaration/DOCTYPE of everything on disk must be as on disk — inside moved and
-  replaced elements too — and every other fact exactly as on disk. A
+  replaced elements too — and every other fact exactly as on disk. The facts have no order, so an
+  order check (`checkOrder`): the children of every BPMN element of the result must be in the schema's
+  ranked order (see "Where a new child goes"), with at most one `extensionElements`, unless that element
+  is out of order on disk or in bpmn-js' output already (a file that is invalid that way is not held
+  against the write). A
   second opinion with an independent tokenizer (`src/elements.js` element forms): every element the
   result changed compared with the disk must be one bpmn-js changed. Any mismatch → fallback.
 - **What a fallback loses** is computed from the models (file vs text written, and the remembered text of
@@ -1147,6 +1161,26 @@ identical in Chrome, Firefox and WebKit. Writes: 11 (`false`) + 3 (`input`) per 
   declaration / DOCTYPE fact of the file unchanged, `&company;` and the `acme:` extensions still there;
   replace ≤ 10 changed lines (the tags, the DI id, a label bpmn-js re-measures), the collapsed rename
   ≤ 5 (the name and the new label, placed below the event in the file's coordinates).
+- Verifier round 6 (after the final round) found: (major) writes after a wrench could produce
+  schema-invalid BPMN reported as `minimal lost=0`. The wrench keeps on disk the `<extensionElements>`
+  bpmn-js drops; when the element's `<incoming>` / `<outgoing>` were later removed and added again
+  (undo of deleting its flows, a new connection, undo of a drag into a sub-process), the writer put them
+  next to their nearest sibling in bpmn-js' output — after `<documentation>`, or at the start of the
+  element when it had no other child — i.e. in front of the kept `<extensionElements>` (camunda8-modeler:
+  wrench, delete both flows, connect; comments-nonascii: wrench, delete both flows, undo, undo; wrench,
+  drag into a new sub-process, undo). bpmn-js reopens such a file, schema-validating engines (Camunda 7,
+  Zeebe) reject it; the check did not see it because its facts have no order. Fixed: new children are
+  placed in the schema's order with respect to disk-only children, and the order check makes any other
+  ordering mistake a fallback instead of a silent write (both above). Also (cosmetic, correct model):
+  undo of a drag into a sub-process put the element's text at the end of its parent (bpmn-js appends
+  it; comments-nonascii `Task_ShipOrder` went from line 29 to 48); a move back now goes next to its old
+  neighbours. Unit tests replay the three gestures and the drag-undo captured in Chrome
+  (`c8-wrench-flows`, `cn-wrench-flows-undo`, `cn-wrench-sub-undo`, `cn-sub-ship-undo`): every write
+  minimal, nothing lost, every text in schema order, the undos back to the text before (identical; the
+  drag-undo of `Task_ShipOrder` ≤ 4 lines: bpmn-js re-adds the gateway's reference to the restored flow
+  last and re-measures its label); synthetic tests cover the same with and without `<documentation>`,
+  a new `<documentation>` in front of kept extensions, and the order check itself. The three gestures
+  are UI tests in all three browsers. The new writer tests fail without the fix.
 - Verifier final round found: (D1) delete + undo still fell back to `format` in two layouts, and
   `format` did not count what the restored element's remembered text had, so its comment, PI, CDATA and
   kept extensions went without a note: a task appended to the deleted one lost all its references with
