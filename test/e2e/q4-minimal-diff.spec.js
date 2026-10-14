@@ -955,4 +955,47 @@ test.describe('what is inside edited elements is kept (UI gestures)', () => {
       await t.close();
     }
   });
+
+  // Verifier Q4-impl round 7, D-A: a wrench that keeps the element's tag (another event definition)
+  // dropped the extensions bpmn-js drops on replace, written as minimal without a note.
+  /** Extensions of a text: facts in namespaces bpmn-js does not know, DI extensions, label styles. */
+  const extensionFacts = (xml) => [...facts(load(xml))].filter(([key, value]) => {
+    const [type, , detail] = key.split('\u0000');
+    const uri = type === 'el' ? /^\{([^}]*)\}/.exec(value)?.[1] : type === 'attr' ? /^\{([^}]*)\}/.exec(detail)?.[1] : '';
+    return (Boolean(uri) && !/omg\.org|bpmn\.io|w3\.org/.test(uri)) || value === '{http://www.omg.org/spec/DD/20100524/DI}extension'
+      || (type === 'attr' && detail === '{}labelStyle');
+  }).map(([key, value]) => `${key.split('\u0000')[0]} ${key.split('\u0000')[2]} ${value}`).sort();
+  for (const [file, id, entry, needles, undoLines] of [
+    ['camunda7-modeler.bpmn', 'StartEvent_1', 'replace-with-message-start',
+      ['<bpmn:startEvent id="StartEvent_1" camunda:asyncBefore="true" camunda:exclusive="false">'], 0],
+    ['signavio-export.bpmn', 'sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F', 'replace-with-timer-start',
+      ['<signavio:signavioMetaData metaKey="bgcolor" metaValue="#ffffff"/>', '<bpmndi:BPMNLabel labelStyle="sid-dc3ba873-47b5-4027-8306-93aeab017ac3">'], 6],
+    ['bizagi-export.bpmn', '_6b5db6a9-037a-49ad-9201-09201e2aaa97', 'replace-with-timer-start',
+      ['<bizagi:BizagiProperty name="bgColor" value="White" />', '<BPMNLabel id="DiagramElement_05d5265d-2b92-499c-a022-e339533d6089" labelStyle="Style_35e829d8-1dc4-443b-8f15-7bfc8038eab5">'], 2],
+  ]) {
+    test(`${file.replace('.bpmn', '')}: a wrench to another start event keeps the extensions bpmn-js drops; undo`, async ({ browser }) => {
+      const t = await open(browser, file);
+      try {
+        await replaceWith(t.page, id, entry);
+        const now = await saved(t.page, t.cli, t.fixture.file, 0);
+        const event = load(now).ids.get(id);
+        expect(event.local).toBe('startEvent');
+        expect(event.children.filter((c) => c.kind === 'element').map((c) => c.local)).toContain(entry.includes('message') ? 'messageEventDefinition' : 'timerEventDefinition');
+        for (const needle of needles) expect(now).toContain(needle);
+        expect(extensionFacts(now)).toEqual(extensionFacts(t.original));
+        expect(schemaOrderProblems(now)).toEqual([]);
+        await expectKept(t, now);
+        // Undo: the file as it was (up to the label bpmn-js re-measured, and numbers it writes its way).
+        const count = writes(t.cli).length;
+        await t.page.mouse.click(1500, 80);
+        await t.page.keyboard.press('ControlOrMeta+z');
+        const undone = await saved(t.page, t.cli, t.fixture.file, count);
+        expect(extensionFacts(undone)).toEqual(extensionFacts(t.original));
+        await expectKept(t, undone);
+        expect(await changedLines(t.fixture.dir, t.original, undone)).toBeLessThanOrEqual(undoLines);
+      } finally {
+        await t.close();
+      }
+    });
+  }
 });

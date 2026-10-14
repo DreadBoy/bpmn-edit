@@ -6,7 +6,7 @@ import { afterEach, beforeEach, describe, it } from 'node:test';
 import WebSocket from 'ws';
 import { createFileStore } from '../../src/file.js';
 import {
-  checkForms, checkMinimal, checkModel, checkOrder, detectStyle, escapeAttr, facts, load, minimalDiff, parse, preserveFormat,
+  checkForms, checkMinimal, checkModel, checkOrder, detectStyle, escapeAttr, facts, load, lostExtensions, minimalDiff, parse, preserveFormat,
   renderForDisk, XmlError,
 } from '../../src/minimal-diff.js';
 import { createServer } from '../../src/server.js';
@@ -410,6 +410,73 @@ describe('minimal-diff writer: what is inside replaced and moved elements', () =
     assert.equal(changedLines(D, text), 4); // the start and end tag
   });
 
+  it('a replace that keeps the tag keeps the extensions bpmn-js drops, also of the DI shape it re-creates', () => {
+    // Verifier Q4-impl round 7, D-A. bpmn-js' replace (e.g. another event definition: the same tag) drops
+    // unknown attributes, extension elements, and re-creates the DI shape with a new id, without its DI
+    // extension and its label's id and style.
+    const shapes = (diId, old) => [['bpmndi:BPMNShape', { id: diId, bpmnElement: 'A' }, [
+      ...(old ? [['di:extension', {}]] : []),
+      ['dc:Bounds', { x: ['100.0', '100'], y: '100', width: '100', height: '80' }],
+      ['bpmndi:BPMNLabel', old ? { id: 'A_label', labelStyle: 'S1', 'acme:hint': 'x' } : {}, [
+        ...(old ? [['di:extension', {}]] : []), ['dc:Bounds', { x: '90', y: '190', width: old ? '0' : '55', height: '14' }]]],
+    ]], shapeNode('B', '300', '100')];
+    const before = m([taskA('bpmn2:task'), taskB('bpmn2:task')], { shapes: shapes('A_di', true) });
+    const D1 = disk(before, prolog);
+    const B1 = bpmnjs(before);
+    const U1 = bpmnjs(m([taskA('bpmn2:task', { extensions: false, sla: false }), taskB('bpmn2:task')], { shapes: shapes('Event_1x_di', false) }));
+    const memory = new Map();
+    const W1 = renderForDisk({ disk: D1, base: B1, out: U1, memory });
+    assert.equal(W1.mode, 'minimal', W1.reason);
+    assert.equal(W1.lost, undefined, W1.lost?.join(' | '));
+    // The new DI id and what bpmn-js changed in the label; everything else as it was.
+    assert.equal(W1.text, D1.replace("id='A_di'", "id='Event_1x_di'").replace("width='0'", "width='55'"));
+    // The next save has the label without an id in its base and output: it is still the label on disk.
+    const U2 = U1.replace('<dc:Bounds x="90" y="190" width="55"', '<dc:Bounds x="95" y="190" width="55"');
+    const W2 = renderForDisk({ disk: W1.text, base: U1, out: U2, memory });
+    assert.equal(W2.mode, 'minimal', W2.reason);
+    assert.equal(W2.text, W1.text.replace("x='90'", "x='95'"));
+    // Undo of both: back to the original text.
+    const W3 = renderForDisk({ disk: W2.text, base: U2, out: U1, memory });
+    const W4 = renderForDisk({ disk: W3.text, base: U1, out: B1, memory });
+    assert.deepEqual([W3.mode, W4.mode], ['minimal', 'minimal'], W4.reason);
+    assert.equal(W4.text, D1);
+  });
+
+  it('a minimal write that would drop extensions of an element bpmn-js still has reports them (safety net)', () => {
+    // An extension the writer would not keep (here: bpmn-js changed the element's only child, which holds
+    // it, so the child is rewritten): reported in 'lost', never silent. An extension in an element bpmn-js
+    // removed goes without a note.
+    const ev = (def) => ['bpmn2:startEvent', { id: 'E' }, [def]];
+    const before = m([ev(['bpmn2:timerEventDefinition', { 'acme:calendar': 'work' }, [['bpmn2:timeDuration', {}, 'PT1H']]]), taskB('bpmn2:task')]);
+    const after = m([ev(['bpmn2:messageEventDefinition', {}]), taskB('bpmn2:task')]);
+    const W = renderForDisk({ disk: disk(before, prolog), base: bpmnjs(before), out: bpmnjs(after) });
+    assert.equal(W.mode, 'minimal', W.reason);
+    assert.equal(W.lost, undefined); // the timer definition (and its attribute) is what bpmn-js removed
+    // The same attribute on the event itself, which bpmn-js keeps: kept.
+    const before2 = m([['bpmn2:startEvent', { id: 'E', 'acme:calendar': 'work' }, [['bpmn2:timerEventDefinition', {}]]], taskB('bpmn2:task')]);
+    const after2 = m([['bpmn2:startEvent', { id: 'E' }, [['bpmn2:messageEventDefinition', {}]]], taskB('bpmn2:task')]);
+    const W2 = renderForDisk({ disk: disk(before2, prolog), base: bpmnjs(before2), out: bpmnjs(after2) });
+    assert.equal(W2.mode, 'minimal', W2.reason);
+    assert.ok(W2.text.includes("<bpmn2:startEvent id='E' acme:calendar='work'>"), W2.text);
+    // The net itself: a written text without the event's extension attribute is reported.
+    assert.deepEqual(lostExtensions(load(disk(before2, prolog)), load(disk(after2, prolog)), load(bpmnjs(after2))), ['attribute acme:calendar in E']);
+  });
+
+  it('a new reference of a sub-process goes in front of its flow elements, whatever their order on disk', () => {
+    // Verifier Q4-impl round 7, D-B: on disk the start event is first (an undo put it back there), in
+    // bpmn-js' output last; the new <outgoing> went next to the task, after the start event.
+    const sub = (kids) => ['bpmn2:subProcess', { id: 'S' }, kids];
+    const se = ['bpmn2:startEvent', { id: 'SE' }];
+    const t = ['bpmn2:task', { id: 'T' }];
+    const D2 = disk(m([sub([se, t]), taskB('bpmn2:task')]), prolog);
+    const B2 = bpmnjs(m([sub([t, se]), taskB('bpmn2:task')]));
+    const U2 = bpmnjs(m([sub([['bpmn2:outgoing', {}, 'F9'], t, se]), taskB('bpmn2:task')]));
+    const W = renderForDisk({ disk: D2, base: B2, out: U2 });
+    assert.equal(W.mode, 'minimal', W.reason);
+    assert.deepEqual(schemaOrderProblems(W.text), []);
+    assert.deepEqual(load(W.text).ids.get('S').children.filter((c) => c.kind === 'element').map((c) => c.local), ['outgoing', 'startEvent', 'task']);
+  });
+
   it('extensions kept on a type change go when the element is deleted later', () => {
     const U1 = bpmnjs(m([taskA('bpmn2:userTask', { extensions: false, sla: false }), taskB('bpmn2:task')]));
     const W1 = renderForDisk({ disk: D, base: B, out: U1 });
@@ -552,10 +619,16 @@ describe('minimal-diff writer: what is inside replaced and moved elements', () =
     assert.ok(lost.includes('attribute acme:sla in A'), lost.join(' | '));
     assert.ok(lost.some((l) => l.startsWith('element acme:retry')), lost.join(' | '));
     assert.ok(lost.some((l) => l.startsWith('processing instruction <?acme-lint off?>')), lost.join(' | '));
-    // And without a base ('unbased'), kept extensions bpmn-js does not have are reported too.
+    // Without a base ('unbased'), extensions bpmn-js does not have are kept as well (bpmn-js never drops
+    // extensions of an element it still has, except on replace); what is lost is reported.
     const unbased = renderForDisk({ disk: W1, base: null, out: U1.replace('name="Beta"', 'name="Beta 2"') });
     assert.equal(unbased.mode, 'unbased', unbased.reason);
-    assert.ok(unbased.lost.includes('attribute acme:sla in A'), unbased.lost.join(' | '));
+    assert.ok(!(unbased.lost ?? []).some((l) => /acme/.test(l)), unbased.lost?.join(' | '));
+    assert.ok(unbased.text.includes("acme:sla='PT2H'") && unbased.text.includes('acme:retry'));
+    // In 'format', kept extensions bpmn-js does not have are reported.
+    const unbasedFormat = renderForDisk({ disk: disk2, base: null, out });
+    assert.equal(unbasedFormat.mode, 'format', unbasedFormat.reason);
+    assert.ok(unbasedFormat.lost.includes('attribute acme:sla in A'), unbasedFormat.lost.join(' | '));
   });
 
   it('an id that comes back with another model and goes again does not hide its first text (cut, paste, undo, undo)', () => {
@@ -844,6 +917,81 @@ describe('minimal-diff writer: gestures captured in the browser (test/fixtures/q
       assert.equal(lineOf(texts[texts.length - 1], id), lineOf(texts[before], id), name);
       const changed = changedLines(texts[before], texts[texts.length - 1]);
       assert.ok(changed <= allowed, `${name}: ${changed}`);
+    }
+  });
+
+  // Verifier Q4-impl round 7, D-A: a wrench that keeps the element's tag (another event definition) was
+  // written like any edit: the extensions bpmn-js drops on replace (unknown attributes, extensionElements,
+  // the re-created DI shape's DI extension and its label's id and style) went, 'minimal' without a note.
+  // [capture, element, text that must stay, lines an undo may differ from the original (bpmn-js keeps the
+  // label it re-measured, and writes the numbers it changed back its way: 30.0 -> 30)]
+  const BZ_START = '_6b5db6a9-037a-49ad-9201-09201e2aaa97';
+  const SG_START = 'sid-C069430A-FCD2-404F-B0F8-3A4D85BBB31F';
+  /** Per DI shape (by bpmnElement): its DI extensions, label ids and label styles. */
+  const diExtras = (xml) => {
+    const doc = load(xml);
+    const shapes = [...doc.ids.values()].filter((e) => e.uri === DI && e.local === 'BPMNShape');
+    return shapes.map((s) => {
+      const all = [];
+      const visit = (e) => {
+        for (const c of e.children.filter((x) => x.kind === 'element')) {
+          if (c.uri === DDI && c.local === 'extension') all.push(`${e.local}:extension`);
+          if (c.local === 'BPMNLabel') all.push(`label id=${c.attrs.find((a) => a.local === 'id')?.value} style=${c.attrs.find((a) => a.local === 'labelStyle')?.value}`);
+          visit(c);
+        }
+      };
+      visit(s);
+      return `${s.attrs.find((a) => a.local === 'bpmnElement').value}: ${all.join(', ')}`;
+    }).sort();
+  };
+  for (const [name, id, needles, undoLines] of [
+    ['c7m-start-msg', 'StartEvent_1', ['<bpmn:startEvent id="StartEvent_1" camunda:asyncBefore="true" camunda:exclusive="false">'], 0],
+    ['bz-start-timer', BZ_START, ['<bizagi:BizagiProperty name="bgColor" value="White" />',
+      '<BPMNLabel id="DiagramElement_05d5265d-2b92-499c-a022-e339533d6089" labelStyle="Style_35e829d8-1dc4-443b-8f15-7bfc8038eab5">'], 2],
+    ['sg-start-timer', SG_START, ['<signavio:signavioMetaData metaKey="bgcolor" metaValue="#ffffff"/>',
+      '<bpmndi:BPMNLabel labelStyle="sid-dc3ba873-47b5-4027-8306-93aeab017ac3">'], 6],
+  ]) {
+    it(`${name}: a wrench that keeps the tag keeps the extensions bpmn-js drops; undo, redo`, async () => {
+      const { texts, writes } = await replay(name);
+      allMinimal(writes);
+      const [original, wrenched, undone, redone] = texts;
+      assert.notEqual(wrenched, original);
+      assert.equal(load(wrenched).ids.get(id).local, 'startEvent');
+      for (const needle of needles) assert.ok(wrenched.includes(needle), needle);
+      for (const t of texts) {
+        assert.deepEqual(kept(t), kept(original));
+        assert.deepEqual(diExtras(t), diExtras(original));
+        assert.deepEqual(schemaOrderProblems(t), []);
+      }
+      assert.ok(changedLines(original, undone) <= undoLines, String(changedLines(original, undone)));
+      assert.equal(redone, wrenched);
+    });
+  }
+
+  it('bz-task-service: a wrench that changes the tag keeps the DI extension of the shape bpmn-js re-creates; undo', async () => {
+    const { texts, writes } = await replay('bz-task-service');
+    allMinimal(writes);
+    const [original, wrenched, undone] = texts;
+    const id = '_5a972b87-735d-454a-b31c-f52fb3afc5c7';
+    assert.equal(load(wrenched).ids.get(id).local, 'serviceTask');
+    assert.deepEqual(kept(wrenched), kept(original));
+    // The shape keeps its DI extension; bpmn-js re-creates it without a label (a task's label is inside
+    // it): the old label goes like one whose name is cleared (and comes back with the undo).
+    assert.deepEqual(diExtras(wrenched).filter((s) => !s.startsWith(id)), diExtras(original).filter((s) => !s.startsWith(id)));
+    assert.equal(diExtras(wrenched).find((s) => s.startsWith(id)), `${id}: BPMNShape:extension`);
+    assert.equal(undone, original);
+  });
+
+  // Verifier Q4-impl round 7, D-B: the first <outgoing> of a sub-process went next to its nearest sibling
+  // in bpmn-js' output, a flow element that is elsewhere on disk (a start event moved back into it by an
+  // undo goes back to its old place, bpmn-js appends it): after a flow element, 'format' fallback.
+  it('cn-sub-start-out, cn-sub-start-wrench: a new reference of a sub-process goes in front of its flow elements', async () => {
+    for (const name of ['cn-sub-start-out', 'cn-sub-start-wrench']) {
+      const { texts, writes } = await replay(name);
+      allMinimal(writes);
+      for (const t of texts) assert.deepEqual(schemaOrderProblems(t), [], name);
+      assert.deepEqual(kept(texts[texts.length - 1]), kept(texts[0]), name);
+      assert.ok(changedLines(texts[texts.length - 2], texts[texts.length - 1]) <= 13, name); // reference, task, flow, shape, edge
     }
   });
 

@@ -501,6 +501,70 @@ function aliasPath(path, back) {
   return back.has(id) ? `#${back.get(id)}${end === -1 ? '' : path.slice(end)}` : path;
 }
 
+/** Map(old id in B -> new id in U) of the DI shapes and edges bpmn-js re-created on replace (see diAliases). */
+const replacedDi = (B, U) => new Map([...diAliases(B, U)].map(([fresh, old]) => [old, fresh]));
+
+/**
+ * bpmn-js re-creates the DI shape of an element it replaces (with a new id, see diAliases), with a label
+ * without an id, and the saves after that have that label without an id too. The label on disk (with its
+ * id, its style and extensions) is that label: in `B` and `U`, a DI shape whose shape on disk (same id,
+ * or the one it re-creates) has exactly one label, with an id, and that has exactly one label without an
+ * id gets that id (unless the id is used there). Returns the new texts { base, out }, or null if none.
+ */
+function adoptLabelIds(D, B, U) {
+  const aliases = diAliases(B, U);
+  const labelOf = (el) => {
+    const labels = elementChildren(el).filter((c) => c.uri === BPMN_DI_NS && c.local === 'BPMNLabel');
+    return labels.length === 1 ? labels[0] : null;
+  };
+  const adopt = (doc, onDisk) => {
+    const at = [];
+    for (const [id, el] of doc.ids) {
+      const d = isDiElement(el) ? D.ids.get(onDisk(id)) : null;
+      const label = d && isDiElement(d) ? labelOf(el) : null;
+      const dLabel = label && labelOf(d);
+      const labelId = dLabel ? idOf(dLabel) : null;
+      if (labelId !== null && idOf(label) === null && !doc.ids.has(labelId)) at.push([label.nameEnd, ` id="${escapeAttr(labelId)}"`]);
+    }
+    at.sort((x, y) => y[0] - x[0]);
+    return at.reduce((text, [offset, str]) => text.slice(0, offset) + str + text.slice(offset), doc.text);
+  };
+  const base = adopt(B, (id) => id);
+  const out = adopt(U, (id) => aliases.get(id) ?? id);
+  return base === B.text && out === U.text ? null : { base, out };
+}
+
+/**
+ * Safety net: what a minimal write `W` drops of the file's (`D`) extension content (see
+ * isExtensionContent; and attributes in namespaces bpmn-js does not know) from an element bpmn-js
+ * still has in `U`. The writer keeps all of it (see markKept); should it not, the loss is reported,
+ * never silent. An extension belongs to its nearest ancestor that is not extension content; it goes
+ * without a note when bpmn-js removed that one (`back`: old -> new ids of DI re-created on replace).
+ * Descriptions, for notes.
+ */
+export function lostExtensions(D, W, U, back = new Map()) {
+  const fw = facts(W);
+  const inU = new Set([...walk(U.root)].map((e) => e.path));
+  const map = (path) => aliasPath(path, back);
+  const where = (path) => map(path).replace(/\{[^}]*\}/g, '').replace(/^#/, '');
+  const lost = [];
+  const visit = (e, owner) => {
+    if (!isExtensionContent(e)) owner = e;
+    if (!inU.has(map(owner.path))) return; // gone with an element bpmn-js removed
+    const path = map(e.path);
+    if (e !== owner && !fw.has(`el${SEP}${path}${SEP}`)) {
+      lost.push(`element ${e.name} in ${where(e.parent.path)}`);
+      return;
+    }
+    for (const a of e.attrs) {
+      if (isUnknownNs(a.uri) && !fw.has(`attr${SEP}${path}${SEP}${attrKey(a)}`)) lost.push(`attribute ${a.name} in ${where(e.path)}`);
+    }
+    for (const c of elementChildren(e)) visit(c, owner);
+  };
+  visit(D.root, D.root);
+  return lost;
+}
+
 /** Facts with the old ids of `aliases` replaced by the new ones (paths, and parent values). */
 function aliasFacts(f, back) {
   if (!back.size) return f;
@@ -512,22 +576,33 @@ function aliasFacts(f, back) {
   return out;
 }
 
+const isDiExtension = (el) => el.uri === DD_DI_NS && el.local === 'extension';
 /**
- * When bpmn-js replaces an element by another type (same id), it drops the extensions of the old one
- * (attributes and elements in namespaces it does not know, `extensionElements`). They are kept on
- * disk: the new type can carry them as well. Marks, below element `b` (of the base), the paths whose
- * content is kept that way (`keep`) and the paths whose unknown-namespace attributes are kept (`attrs`).
+ * Extension content: elements in namespaces bpmn-js does not know, `extensionElements`, and DI
+ * `extension` elements. bpmn-js never removes it from an element that stays, except when it replaces
+ * the element (the wrench; same id, with or without another tag): its new element and DI shape lack
+ * the old one's extensions. It is kept on disk (the new element can carry it as well).
  */
-function markKept(b, keep, attrs, inside = false) {
-  attrs.add(b.path);
-  const kept = inside || isUnknownNs(b.uri) || isExtensionElements(b);
-  if (kept) keep.add(b.path);
-  for (const c of elementChildren(b)) if (idOf(c) === null) markKept(c, keep, attrs, kept);
+const isExtensionContent = (el) => isUnknownNs(el.uri) || isExtensionElements(el) || isDiExtension(el);
+
+/**
+ * Marks, below element `b` (of the base; one that bpmn-js still has), the paths (mapped by `mapPath`)
+ * whose content is kept when bpmn-js drops it (`keep`: extension content, see isExtensionContent) and
+ * the paths whose unknown-namespace attributes are kept when bpmn-js drops them (`attrs`).
+ */
+function markKept(b, keep, attrs, mapPath, inside = false) {
+  const path = mapPath(b.path);
+  attrs.add(path);
+  const kept = inside || isExtensionContent(b);
+  if (kept) keep.add(path);
+  for (const c of elementChildren(b)) if (idOf(c) === null) markKept(c, keep, attrs, mapPath, kept);
 }
 
 /**
  * The 3-way check of a minimal-diff result `W` (all four annotated documents): for every fact,
- * - extensions bpmn-js dropped when it replaced an element by another type: as on disk (see markKept);
+ * - extensions bpmn-js dropped from an element it still has (it does that only when it replaces the
+ *   element, see isExtensionContent; and a label's `labelStyle` in a DI shape it re-created on replace,
+ *   see diAliases): as on disk (see markKept);
  * - under an element bpmn-js removed: gone from W;
  * - comments, PIs, CDATA, XML declaration, DOCTYPE in what is on disk: as on disk (bpmn-js drops them
  *   on import);
@@ -551,10 +626,11 @@ export function checkMinimal(D, B, U, W, restored = []) {
   const [pu, pb] = [byPath(U), byPath(B)];
   const keep = new Set();
   const keepAttrs = new Set();
-  for (const [id, b] of B.ids) {
-    const u = U.ids.get(id);
-    if (u && qn(u) !== qn(b)) markKept(b, keep, keepAttrs);
-  }
+  const mapPath = (p) => aliasPath(p, back);
+  for (const [id, b] of B.ids) if (U.ids.has(back.get(id) ?? id)) markKept(b, keep, keepAttrs, mapPath);
+  // In a DI shape bpmn-js re-created on replace: its label's style too (bpmn-js never writes one).
+  const keepStyle = new Set();
+  for (const old of back.keys()) for (const e of walk(B.ids.get(old))) keepStyle.add(mapPath(e.path));
   const removed = new Set();
   for (const b of walk(B.root)) {
     const path = aliasPath(b.path, back);
@@ -573,7 +649,8 @@ export function checkMinimal(D, B, U, W, restored = []) {
     const path = pathOf(key);
     const detail = key.split(SEP)[2];
     const droppedByType = (keep.has(path) && !fu.has(`el${SEP}${path}${SEP}`))
-      || (type === 'attr' && fb.has(key) && !fu.has(key) && keepAttrs.has(path) && isUnknownNs(/^\{([^}]*)\}/.exec(detail)?.[1]));
+      || (type === 'attr' && fb.has(key) && !fu.has(key) && keepAttrs.has(path) && fu.has(`el${SEP}${path}${SEP}`)
+        && (isUnknownNs(/^\{([^}]*)\}/.exec(detail)?.[1]) || (detail === '{}labelStyle' && keepStyle.has(path))));
     let ok;
     // Written back from memory: exactly its old text's content (which may hold more than bpmn-js' model
     // of it, e.g. extensions kept on a type change), every element bpmn-js has, under bpmn-js' parent.
@@ -1151,8 +1228,16 @@ function writeMinimal(D, B, U, memory = new Map()) {
     }
   };
 
-  /** Patches what bpmn-js changed from `b` to `u` into `d`. `keep`: keep extensions bpmn-js dropped (markKept). */
-  const diffElement = (b, u, d, keep = false) => {
+  /** In a DI shape bpmn-js re-created on replace (see diAliases): element `b` of the base. */
+  const inReplacedDi = (b) => {
+    for (let e = b; e; e = e.parent) if (aliased.has(idOf(e))) return true;
+    return false;
+  };
+  /**
+   * Patches what bpmn-js changed from `b` to `u` into `d`. Extension content bpmn-js dropped stays (see
+   * isExtensionContent, markKept); `replacedDi`: in a DI shape re-created on replace, a label's style too.
+   */
+  const diffElement = (b, u, d, replacedDi = inReplacedDi(b)) => {
     counterpart.set(u, d);
     for (const [p, uri] of Object.entries(u.nsDecls)) {
       if (b.nsDecls[p] !== uri && uri && p) offered.set(d, { ...offered.get(d), [p]: uri });
@@ -1182,7 +1267,7 @@ function writeMinimal(D, B, U, memory = new Map()) {
       }
     }
     for (const [key, ba] of bA) {
-      if (uKeys.has(key) || (keep && isUnknownNs(ba.uri))) continue;
+      if (uKeys.has(key) || isUnknownNs(ba.uri) || (replacedDi && key === '{}labelStyle')) continue;
       const da = dA.get(key);
       if (da) removeAttr(d, da);
     }
@@ -1213,13 +1298,13 @@ function writeMinimal(D, B, U, memory = new Map()) {
         if (dc) sameShape(uc, dc);
       } else {
         if (!dc) throw new WriterFallback(`${uc.path}: cannot find it on disk`);
-        diffElement(bc, uc, dc, keep);
+        diffElement(bc, uc, dc, replacedDi);
       }
     }
     const claimed = new Set();
     for (const { b: bc } of pairs) claimed.add(dFor(bc));
     for (const bc of removed) {
-      if (keep && (isUnknownNs(bc.uri) || isExtensionElements(bc))) {
+      if (isExtensionContent(bc)) {
         claimed.add(dFor(bc));
         continue;
       }
@@ -1253,9 +1338,8 @@ function writeMinimal(D, B, U, memory = new Map()) {
       const d = D.ids.get(onDiskId(id));
       const b = B.ids.get(onDiskId(id));
       if (!d) throw new WriterFallback(`#${id} is not on disk`);
-      const retype = qn(b) !== qn(u);
-      diffElement(b, u, d, retype);
-      if (retype) retyped.push([u, d]);
+      diffElement(b, u, d);
+      if (qn(b) !== qn(u)) retyped.push([u, d]);
       moving.push([u, d]);
       intoNew.set(u, { mark: `\u0000move:${id}\u0000`, indent: null });
       for (const c of elementChildren(u)) visit(c);
@@ -1274,9 +1358,8 @@ function writeMinimal(D, B, U, memory = new Map()) {
         // import): nothing to write unless it changed itself; its descendants may be on disk.
         if (contentForm(b) !== contentForm(u) || parentPath(b) !== parentPath(u)) throw new WriterFallback(`#${id} is not on disk`);
       } else {
-        const retype = qn(b) !== qn(u);
-        diffElement(b, u, d, retype);
-        if (retype) retyped.push([u, d]);
+        diffElement(b, u, d);
+        if (qn(b) !== qn(u)) retyped.push([u, d]);
         if (parentPath(u) !== parentPath(b)) moving.push([u, d]);
       }
     } else if (u === U.root) {
@@ -1346,18 +1429,23 @@ function writeMinimal(D, B, U, memory = new Map()) {
     for (let k = at - 1; k >= 0 && !prev; k--) prev = anchor(siblings[k]);
     let next = null;
     if (!prev) for (let k = at + 1; k < siblings.length && !next; k++) next = anchor(siblings[k]);
-    // Children only the disk has (extensions kept on a type change) are where the schema wants them,
-    // which bpmn-js' order does not know: the new child goes past those the schema puts before it
-    // (e.g. an <incoming> after a kept <extensionElements>), and in front of those it puts after it.
+    // The schema's order (see schemaRank) wins over the nearest sibling: the disk may have children
+    // bpmn-js' order does not know (extensions kept on a replace), or have its children in another
+    // order than bpmn-js (e.g. a start event moved back into a sub-process goes back to its old place,
+    // bpmn-js appends it). The new child goes past every child on disk the schema puts before it (e.g.
+    // an <incoming> after a kept <extensionElements>) and in front of every one it puts after it (an
+    // <outgoing> of a sub-process in front of its flow elements). Unless the disk is out of that order.
     const rank = schemaRank(u);
     if (rank !== null) {
       const settled = elementChildren(dParent).filter((d) => !cut.has(d) && !isMoving(d));
-      const matched = new Set(counterpart.values());
-      const diskOnly = (d) => idOf(d) === null && !matched.has(d);
       const from = prev ? settled.indexOf(prev) + 1 : next ? settled.indexOf(next) : 0;
-      let k = from;
-      while (k < settled.length && diskOnly(settled[k]) && (schemaRank(settled[k]) ?? -1) < rank) k += 1;
-      while (k > 0 && diskOnly(settled[k - 1]) && (schemaRank(settled[k - 1]) ?? -1) > rank) k -= 1;
+      let lo = 0;
+      settled.forEach((d, k) => {
+        if ((schemaRank(d) ?? rank) < rank) lo = k + 1;
+      });
+      const after = settled.findIndex((d) => (schemaRank(d) ?? rank) > rank);
+      const hi = after === -1 ? settled.length : after;
+      const k = lo <= hi ? Math.min(Math.max(from, lo), hi) : from;
       if (k !== from) [prev, next] = k > 0 ? [settled[k - 1], null] : [null, settled[0]];
     }
     const parentIndent = lineIndent(text, dParent.start) ?? '';
@@ -1637,7 +1725,7 @@ export function minimalDiff(disk, base, out, memory = new Map()) {
 function minimalWrite(disk, base, out, memory) {
   let D = load(disk);
   let B = base === null ? D : load(base);
-  const U = load(out);
+  let U = load(out);
   for (const doc of [D, B, U]) assertBpmn(doc);
   // Elements bpmn-js brings back changed (e.g. undo re-adds its flow references in another order):
   // their remembered text, and bpmn-js' text of them then, go back first; the changes are patched in.
@@ -1650,12 +1738,19 @@ function minimalWrite(disk, base, out, memory) {
       [D, B] = [load(diskText), load(baseText)];
     }
   }
+  // Labels of DI shapes bpmn-js re-created on replace: the label on disk (with its id) is that label.
+  let outText = out;
+  const adopted = adoptLabelIds(D, B, U);
+  if (adopted) {
+    [baseText, outText] = [adopted.base, adopted.out];
+    [B, U] = [load(baseText), load(outText)];
+  }
   const result = writeMinimal(D, B, U, memory);
-  result.lost = lostFromMemory(result.unused, load(result.text));
-  if (result.text === disk) return result;
   const W = load(result.text);
+  result.lost = [...lostFromMemory(result.unused, W), ...lostExtensions(D, W, U, replacedDi(B, U))];
+  if (result.text === disk) return result;
   const problems = [
-    ...checkMinimal(D, B, U, W, result.restored), ...checkOrder(D, U, W), ...checkForms(diskText, baseText, out, result.text),
+    ...checkMinimal(D, B, U, W, result.restored), ...checkOrder(D, U, W), ...checkForms(diskText, baseText, outText, result.text),
   ];
   if (problems.length) {
     throw new WriterFallback(`check failed: ${problems.slice(0, 3).join(', ')}${problems.length > 3 ? ` (+${problems.length - 3} more)` : ''}`);
@@ -1835,11 +1930,12 @@ function lostByRaw(disk) {
 /**
  * What the file `D` has that the text written (`W`) does not, other than in elements the edit deleted
  * (not in `U`, bpmn-js' output): comments, PIs, CDATA sections, the XML declaration and DOCTYPE, and
- * elements and attributes in namespaces bpmn-js does not know (extensions). Descriptions, for notes.
+ * elements and attributes in namespaces bpmn-js does not know (extensions) and DI extensions. `back`:
+ * old -> new ids of DI shapes bpmn-js re-created on replace (those are not deleted). Descriptions, for notes.
  */
-function lostFacts(D, W, U) {
-  const [fd, fw] = [facts(D), facts(W)];
-  const byPath = new Map([...walk(D.root)].map((e) => [e.path, e]));
+function lostFacts(D, W, U, back = new Map()) {
+  const [fd, fw] = [aliasFacts(facts(D), back), facts(W)];
+  const byPath = new Map([...walk(D.root)].map((e) => [aliasPath(e.path, back), e]));
   const deleted = (path) => {
     const id = /^#([^/]+)/.exec(path)?.[1];
     return id !== undefined && !U.ids.has(id);
@@ -1861,9 +1957,9 @@ function lostFacts(D, W, U) {
       else if (type === 'cdata') lost.push(`a CDATA section ${where(path)}`);
       else if (type === 'doctype') lost.push('the DOCTYPE');
       else if (type === 'decl') lost.push('the XML declaration');
-    } else if (type === 'el' && !fw.has(key) && isUnknownNs(/^\{([^}]*)\}/.exec(value)?.[1])) {
+    } else if (type === 'el' && !fw.has(key) && (isUnknownNs(/^\{([^}]*)\}/.exec(value)?.[1]) || value === `{${DD_DI_NS}}extension`)) {
       lostPaths.add(path);
-      lost.push(`element ${byPath.get(path)?.name ?? value} ${where(byPath.get(path)?.parent?.path ?? '')}`);
+      lost.push(`element ${byPath.get(path)?.name ?? value} ${where(aliasPath(byPath.get(path)?.parent?.path ?? '', back))}`);
     } else if (type === 'attr' && !fw.has(key) && isUnknownNs(/^\{([^}]*)\}/.exec(detail)?.[1])) {
       const el = byPath.get(path);
       const name = el?.attrs.find((a) => attrKey(a) === detail)?.name ?? detail;
@@ -1882,7 +1978,9 @@ function lostFacts(D, W, U) {
  *              comments and PIs carried over where their elements still exist (checked);
  *   'raw'      last resort: bpmn-js' output as it is;
  *   'new'      nothing on disk to keep (missing or broken file): bpmn-js' output as it is.
- * `lost`: descriptions of comments / PIs / the DOCTYPE of the file that this text does not keep.
+ * `lost`: descriptions of what of the file this text does not keep (comments, PIs, CDATA, the DOCTYPE,
+ * extensions; in a 'minimal' write only ever extensions or remembered texts it could not keep, see
+ * lostExtensions, lostFromMemory).
  * `memory` (optional, a Map kept by the caller across writes): the text of elements cut from the file,
  * so that an element bpmn-js brings back unchanged (undo) gets its old text again (see writeMinimal).
  */
@@ -1919,7 +2017,13 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
     const U = load(out);
     const problems = checkModel(W, U);
     if (problems.length) throw new WriterFallback(`format check failed: ${problems.slice(0, 3).join(', ')}`);
-    const lost = [...lostFacts(load(disk), W, U), ...lostOfRemembered(disk, U, W, memory)];
+    let back = new Map();
+    try {
+      if (base !== null) back = replacedDi(load(base), U);
+    } catch {
+      // bpmn-js' serialisation of the disk text cannot be read: DI re-created on replace is not known
+    }
+    const lost = [...lostFacts(load(disk), W, U, back), ...lostOfRemembered(disk, U, W, memory)];
     return { text, mode: 'format', reason: reasons.join('; '), ...(lost.length ? { lost } : {}) };
   } catch (err) {
     reasons.push(why(err));
