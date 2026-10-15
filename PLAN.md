@@ -174,7 +174,7 @@ provenance; adds the Q4 minimal-diff writer).
     scripts working. Both are a few lines in `bin/bpmn-edit.js` (`node:readline`); the e2e test drives a real
     TTY via a pseudo-terminal (e.g. `script -q`), or tests the non-TTY branch plus `--create`.
 
-- [ ] **V2-2. User-facing README.** Requested by product owner 2026-10-15. The current README (243 lines) mixes
+- [x] **V2-2. User-facing README.** Requested by product owner 2026-10-15. The current README (243 lines) mixes
   usage with internals (side-file names, race handling, host secret, grace periods).
   - Keep in README only what a user needs: what it is (one paragraph + screenshot), install/run, sharing in
     plain words, what happens to your file (auto-save, git-friendly diffs, edits from your IDE are merged), a short
@@ -182,6 +182,21 @@ provenance; adds the Q4 minimal-diff writer).
   - Move the technical detail, unchanged, to `docs/how-it-works.md` and link it. No information is dropped.
   - Verify: a fresh reader with no project context follows the README from scratch (`npx bpmn-edit`) and gets
     to editing and sharing without opening any other file; every technical fact removed exists in the docs file.
+  - Done: README rewritten for users (hero animation, requirements,
+    install/run + options incl. `--create`, creating a file per V2-1, sharing, what happens to your file incl.
+    side files, safety, short limitations, link to the project page and docs, license + watermark). All old
+    technical text moved nearly verbatim to `docs/how-it-works.md` (plus V2-1 details: TTY rule, exit 1, `wx`).
+    Media in `docs/images/` (not in the npm package, checked with `npm pack --dry-run`): `hero.gif` (1200 px,
+    ~15 s, 0.7 MB; real CLI output with the host secret shown as `?host=…`, then real Chrome editing via
+    Playwright screencast), `hero.mp4` + `hero-poster.png` for V2-3, `editor.png`, `share.png` (stand-in tunnel
+    `BPMN_EDIT_TEST_TUNNEL=fake`, no real tunnel URL shown), `git-diff.png` (real `git diff` after a UI rename).
+    Capture scripts kept in scratch (not in the repo).
+  - Verified 2026-10-15 (fresh verifier, round 1, HAPPY): packed tarball run via npx in a fresh repo, real
+    Chrome: start line, auto-save, one-line diff, `--port` fallback, `-V`/`-h`/`--no-open`, local share
+    (fake tunnel) with presence/sync/stop; every removed fact found in `docs/how-it-works.md`; links, anchors and
+    image paths resolve; media real, legible, no secrets; tarball has no images. `--create`/`[y/N]` not
+    verifiable until V2-1 lands. Release order: push this README to main only together with V2-1 and after Pages
+    is enabled (it documents `--create` and links the Pages URL).
 
 - [ ] **V2-3. Project web page on GitHub Pages.** Requested by product owner 2026-10-15.
   - One static page in `site/` (plain HTML/CSS, no build step), deployed by a `pages.yml` workflow
