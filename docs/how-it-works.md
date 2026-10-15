@@ -47,16 +47,20 @@ waiting for the editors but still finishes writing to disk (including the last c
 
 When the path does not exist:
 
-- **Interactive terminal** (stdin and stdout are both TTYs): bpmn-edit asks
-  `new.bpmn does not exist. Create it? [y/N]`. On yes it writes a blank diagram (one start event, like the
-  bpmn.io demo) and opens it. On no (or just Enter) or Ctrl-C it exits with status 1.
-- **Not interactive** (scripts, CI, piped input or output): it does not wait for an answer. It prints an error
-  telling you to pass `--create` and exits with status 1.
+- **Interactive terminal** (stdin, stdout and stderr, where the question goes, are all TTYs): bpmn-edit asks
+  `new.bpmn does not exist. Create it? [y/N]` (with the path as you typed it). On `y` or `yes` (any letter
+  case) it writes a blank diagram (one start event, like the bpmn.io demo), prints `bpmn-edit: created new.bpmn`
+  and opens it. Any other answer, an empty one, Ctrl-C or Ctrl-D prints `bpmn-edit: error: new.bpmn was not
+  created` and exits with status 1.
+- **Not interactive** (scripts, CI, piped input or output): it does not wait for an answer. It prints
+  `bpmn-edit: error: File not found: new.bpmn (pass --create to create it)` and exits with status 1.
 - **`--create`**: creates the file without asking. If the file already exists, it is opened unchanged.
 
-In every case bpmn-edit refuses (exit status 1) when the parent folder does not exist or the file name does not
-end in `.bpmn`; it never creates folders. The new file is created atomically and never overwrites anything
-(it is opened with the exclusive-create flag `wx`, so a file that appears in the meantime is left alone).
+In every case bpmn-edit refuses (exit status 1) when the file name does not end in `.bpmn` (any letter case,
+e.g. `Order.BPMN`; `cannot create x.txt: the name must end in .bpmn`) or the parent folder does not exist
+(`cannot create a/b.bpmn: folder a does not exist (bpmn-edit does not create folders)`); it never creates
+folders. The new file is created atomically and never overwrites anything (it is opened with the
+exclusive-create flag `wx`, so a file that appears in the meantime is opened as it is).
 
 ## Saving and changes on disk
 

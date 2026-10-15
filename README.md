@@ -1,29 +1,24 @@
 # bpmn-edit
 
-![Typing npx bpmn-edit order.bpmn in a terminal, then the diagram opens in the browser and a task is renamed](docs/images/hero.gif)
+![A terminal runs npx bpmn-edit order.bpmn and the diagram opens in the browser. The host clicks Share and gets a link; a collaborator opens it in a second window, both appear in each other's users list with coloured selections, and the collaborator's rename of a task shows up live in the host's window, which then says Saved](docs/images/hero.gif)
 
-Edit a `.bpmn` file from your repo in your browser. One command opens it in a visual editor
-([bpmn-js](https://bpmn.io)). Every change is saved straight back to the file. Want help? Click **Share** and
-send the link, and others can edit with you live. No account, no project setup. Your file stays where it is,
-on your disk.
+Edit a `.bpmn` file from your repo together, live. One command opens it in a visual editor
+([bpmn-js](https://bpmn.io)) in your browser. Click **Share**, send the link, and your colleagues edit with
+you in real time. They need nothing but a browser: no install, no account. Every change is saved straight
+back to the file on your disk, with clean git diffs.
 
 Project page: **https://dreadboy.github.io/bpmn-edit/**
 
-## Requirements
+## Quick start
 
-- [Node.js](https://nodejs.org) 20.19 or later.
-- Supported for now: **macOS** with **Google Chrome**. Other systems and browsers may work, but they are not
-  officially supported yet (the automated tests also run in Firefox and Safari's engine, WebKit).
-
-## Install and run
-
-There is nothing to install. In your project folder, run:
+In your project folder, run:
 
 ```sh
 npx bpmn-edit path/to/file.bpmn
 ```
 
-The editor opens in your browser, and the terminal shows a line like this:
+There is nothing to install; you need [Node.js](https://nodejs.org) 20.19 or later. The editor opens in your
+browser, and the terminal shows a line like this:
 
 ```
 bpmn-edit: editing path/to/file.bpmn at http://localhost:3000/?host=<secret>
@@ -33,34 +28,6 @@ Keep the terminal open while you work. When you are done, press **Ctrl-C** in th
 are saved first, then bpmn-edit stops.
 
 ![The bpmn-edit editor showing an order-handling process with three lanes](docs/images/editor.png)
-
-### Options
-
-| Option | What it does |
-|---|---|
-| `-p, --port <n>` | Use this port instead of `3000`. If it is taken, the next free one is used. |
-| `--create` | Create the file if it does not exist yet, without asking. |
-| `--no-open` | Don't open the browser. Open the printed link yourself. |
-| `-V, --version` | Show the version. |
-| `-h, --help` | Show help. |
-
-### Creating a new file
-
-Point bpmn-edit at a file that does not exist yet, and it asks first:
-
-```
-new.bpmn does not exist. Create it? [y/N]
-```
-
-Answer `y` and you get a blank diagram with one start event, ready to edit. Anything else, and nothing is
-created. This catches typos like `oder.bpmn`.
-
-In scripts or CI (where nobody can answer), bpmn-edit doesn't ask. It stops with an error that tells you to add
-`--create`. With `--create`, the file is created without a question; if it already exists, it is simply opened
-as it is.
-
-A few rules: the folder must already exist, and the name must end in `.bpmn`. bpmn-edit never creates folders
-and never overwrites a file.
 
 ## Sharing
 
@@ -76,6 +43,43 @@ The first time you share, bpmn-edit downloads a small helper from Cloudflare (`c
 already have it installed. That takes a few extra seconds, once.
 
 ![Live sharing: Ana and Ben are both connected, and Ben's selection is outlined in his colour](docs/images/share.png)
+
+Anyone with the link can view and edit until you stop sharing; see [Safety](#safety).
+
+## Requirements
+
+- [Node.js](https://nodejs.org) 20.19 or later.
+- Supported for now: **macOS** with **Google Chrome**. Other systems and browsers may work, but they are not
+  officially supported yet (the automated tests also run in Firefox and Safari's engine, WebKit).
+- Your collaborators only need a browser.
+
+## Options
+
+| Option | What it does |
+|---|---|
+| `-p, --port <n>` | Use this port instead of `3000`. If it is taken, the next free one is used. |
+| `--create` | Create the file if it does not exist yet, without asking. |
+| `--no-open` | Don't open the browser. Open the printed link yourself. |
+| `-V, --version` | Show the version. |
+| `-h, --help` | Show help. |
+
+## Creating a new file
+
+Point bpmn-edit at a file that does not exist yet, and it asks first:
+
+```
+new.bpmn does not exist. Create it? [y/N]
+```
+
+Answer `y` and you get a blank diagram with one start event, ready to edit. Anything else (or just Enter), and
+nothing is created. This catches typos like `oder.bpmn`.
+
+In scripts or CI (where nobody can answer), bpmn-edit doesn't ask. It stops with
+`File not found: new.bpmn (pass --create to create it)`. With `--create`, the file is created without a
+question; if it already exists, it is simply opened as it is.
+
+A few rules: the folder must already exist, and the name must end in `.bpmn`. bpmn-edit never creates folders
+and never overwrites a file.
 
 ## What happens to your file
 

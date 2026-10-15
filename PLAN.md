@@ -228,10 +228,45 @@ provenance; adds the Q4 minimal-diff writer).
     skip link, reduced motion; all links resolve (docs link after push); Lighthouse a11y 100 desktop+mobile;
     actionlint clean; no secrets in media. Live URL check pending the owner enabling Pages (Source: GitHub Actions).
 
+- [x] **V2-4. Sharing first (README, page, hero).** Requested by product owner 2026-10-15. The main purpose is
+  local files plus collaboration, so sharing leads everywhere.
+  - Page: "What it does" starts with Edit in the browser, Live sharing, Nothing for your collaborators to set up;
+    the rest reordered and tightened; tagline, sub-tagline, hero and section order put sharing first.
+  - README: sharing in the intro under the hero; Sharing section directly after install/run; new-file text
+    matches the real V2-1 messages in `bin/bpmn-edit.js`.
+  - New hero GIF + MP4 (~20–25 s, real CLI + real editor, stand-in tunnel): command and output, editor opens,
+    Share and link, collaborator window side by side, both in the users list with coloured selections, the
+    collaborator's edit appears live in the host window, "Saved". Host secret, share token and tunnel hostname
+    masked. GIF < ~5 MB and legible. Poster (webp) and og:image (jpg) regenerated in `docs/images/` and
+    `site/media/`. No light-grey frame (fixes the dark-mode slab nit). Alt/aria texts updated.
+  - Self-check: frames have no secret/token; page in Chrome at 1280/375 px light+dark, no horizontal scroll, no
+    console errors; Lighthouse a11y ≥ 95; `npm pack --dry-run` has no docs/ or site/.
+  - Done: page tagline "Edit your .bpmn files together, live.", lede leads
+    with Share; hero text and recording side by side on wide screens; sections: hero → Sharing step by step →
+    What it does (Edit in the browser, Live sharing, Nothing for your collaborators to set up, then the rest,
+    tightened) → security → git diffs → requirements. README: sharing in the intro, Quick start → Sharing →
+    Requirements → Options → Creating a new file (exact V2-1 messages; how-it-works gets the exact messages and
+    the stdin/stdout/stderr TTY rule). New hero (21.6 s, 960×864, two windows stacked: host above, terminal
+    then collaborator below; real CLI + Chrome via screencast, stand-in tunnel): `docs/images/hero.gif` 0.86 MB
+    (15 fps), `hero.mp4` 0.28 MB in docs/images and site/media, posters (png, webp, 1200×630 jpg og:image).
+    Host secret shown as `?host=…`; the share link is masked inside the page before it is ever drawn
+    (`https://<random>.trycloudflare.com/s/…`), also in the terminal; the token never reaches a frame. No grey
+    margin (frames are the dark terminal or the white editor). Self-check: Chrome 1280/375 light+dark, no
+    horizontal scroll, no console errors; Lighthouse mobile+desktop a11y/best practices/SEO 100;
+    `npm pack --dry-run` 37 files, none from docs/ or site/.
+  - Verified 2026-10-15 (fresh verifier, round 1, HAPPY): tarball via npx in a fresh repo, real Chrome: edit,
+    one-line diff, local share (fake tunnel) with presence and a collaborator rename live in the host in ~0.3 s;
+    new file via real TTY prompt (y / n / Enter), non-TTY error and `--create`, messages match README and docs;
+    no fact lost; hero storyboard holds, OCR over 216 frames + byte scan show no secret/token/hostname; page in
+    Chrome/Firefox/WebKit 1280/375 light+dark clean, item order exact, Lighthouse a11y 100, links 200,
+    actionlint clean. Nits to v3.
+
 ## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
-- V2-2/V2-3 residuals (nits): hero video/poster has a light-grey margin around the terminal that reads as a bright
-  slab in the page's dark mode (tighter crop or dark variant); `share.png` context pad clips the "Order rejected"
-  label; README images on npmjs.com resolve via GitHub only after `docs/images` is on main.
+- V2-2/V2-3/V2-4 residuals (nits): `share.png`/`share.webp` context pad clips the "Order rejected" label and the
+  link shows the stand-in hostname `test-….trycloudflare.com/s/…` (token cut off; unlike the hero's masking);
+  hero windows are stacked rather than side by side; on wide screens the page's two-column hero shows the video
+  at ~504 CSS px (toolbar text ~6 px at 1×; wider media column would help); hero editor crop hides the pool/lane
+  labels and top lane; paused video's native controls cover the bottom of the poster (reduced motion).
 - V2-1 residuals (minor, none loses or overwrites data):
   - Dangling symlink: `ln -s /nonexistent/t.bpmn dang.bpmn; bpmn-edit dang.bpmn` prompts "does not exist. Create
     it?" and after `y` (or with `--create`) fails with `File not found: dang.bpmn`. Nothing created; refuse up front
