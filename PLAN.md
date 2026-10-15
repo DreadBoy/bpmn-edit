@@ -157,7 +157,7 @@ cannot tell host and collaborator apart:
   - No CI e2e for now (decision in docs/release-procedure.md); follow-up: non-blocking macOS workflow with
     `BPMN_EDIT_SKIP_TUNNEL_E2E=1 npx playwright test --project=chrome`, measured on GitHub before gating.
 
-## v2 (after the 1.0.x releases)
+## v2 (scope fixed 2026-10-15 by product owner: V2-1, V2-2, V2-3 only; everything else is v3)
 
 v1 shipped: 1.0.0 (2026-10-14, manual publish of d305f2a) and 1.0.1 (2026-10-15, via release.yml with
 provenance; adds the Q4 minimal-diff writer).
@@ -196,7 +196,7 @@ provenance; adds the Q4 minimal-diff writer).
     resolve, Lighthouse accessibility ≥ 95; workflow passes actionlint; after the owner enables Pages, the live
     URL serves it.
 
-## Backlog (small known issues, fold into a later step)
+## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
 - Q4-impl residuals (none loses data silently; fallbacks report what they drop):
   - Reported `format` fallbacks (low): editing documentation/condition text that holds a comment or CDATA, or a
     text annotation with an inline comment (`lost=` names it; for CDATA the output is still a 3-line diff);
@@ -263,6 +263,9 @@ provenance; adds the Q4 minimal-diff writer).
 Public link proves the MVP, so S7 moves up: **S4 → Q1 (in progress) → S7 → S5 → S6 → S8**, then Q2, Q4-impl,
 Q3 wrap-up, S9, S10. Quality over speed: verified properly, no rushing.
 
+v2 order (2026-10-15): **V2-2 README → V2-3 web page → V2-1 create file**, released as 1.1.0. Verify
+loops: at most a few rounds, then triage (only silent data loss or a broken release blocks).
+
 ## Parallelisation
 
 Slices touch the same files (`server.js`, `app.js`), so they run mostly sequentially. Exception: the tunnel
@@ -304,7 +307,7 @@ implement the decision if it changes anything. These steps are as mandatory as t
   - [x] **Q4-impl** — verified 2026-10-15 after 5 more fresh verify rounds (fixed: delete+undo restore, schema
     order from the BPMN XSD, extensions kept on every replace, size-bounded undo memory): unit 297/297, chrome/
     firefox/webkit 171 pass / 2 skip / 0 fail each, Q2 race ×3 green, ~2,500 UI + ~8,000 fuzz writes all
-    `minimal` with no XSD regressions and no unreported loss. Residuals in Backlog ("Q4-impl residuals").
+    `minimal` with no XSD regressions and no unreported loss. Residuals in v3 ("Q4-impl residuals").
   - (original acceptance) (after Q2; touches the write path). **E2E acceptance** over every file in `test/fixtures/q4`:
     one-label rename ≤1 unrelated line on first and later saves; zero information loss (comments, PIs,
     DOCTYPE/entities, CDATA, unknown extensions, prefixes, defaults, number spelling); EOL/indent/quotes/attr order/
