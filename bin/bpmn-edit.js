@@ -1,9 +1,10 @@
 #!/usr/bin/env node
-// CLI entry: `bpmn-edit <file> [--port <n>] [--no-open]`
+// CLI entry: `bpmn-edit <file> [--create] [--port <n>] [--no-open]`
 import { readFileSync } from 'node:fs';
 import { basename } from 'node:path';
 import { Command, InvalidArgumentError, Option } from 'commander';
 import open from 'open';
+import { askYesNo, CreateError, ensureFile } from '../src/create.js';
 import { createFileStore } from '../src/file.js';
 import { renderForDisk } from '../src/minimal-diff.js';
 import { createServer } from '../src/server.js';
@@ -37,6 +38,7 @@ const program = new Command()
   .version(pkg.version)
   .argument('<file>', 'path to the .bpmn file')
   .option('-p, --port <n>', 'preferred port (falls back to the next free one)', parsePort, 3000)
+  .option('--create', 'create the file with a blank diagram if it does not exist (no question asked)')
   .option('--no-open', 'do not open the browser')
   // Delay before edits are written to disk; hidden, used by tests to observe a pending write.
   .addOption(new Option('--write-delay <ms>').argParser(parseDelay).default(250).hideHelp())
@@ -44,6 +46,10 @@ const program = new Command()
     // Route commander's own errors through the same "bpmn-edit: error:" prefix.
     outputError: (str, write) => write(`bpmn-edit: ${str}`),
   })
+  .addHelpText('after', `
+A missing <file> ending in .bpmn is offered for creation when run in a terminal
+(\`new.bpmn does not exist. Create it? [y/N]\`); elsewhere (scripts, CI, pipes) pass
+--create. Folders are never created.`)
   .exitOverride((err) => {
     process.exit(err.exitCode === 0 ? 0 : 1);
   })
@@ -51,6 +57,19 @@ const program = new Command()
 
 const [filePath] = program.args;
 const options = program.opts();
+
+// A missing file: created with a blank diagram after asking (only when a person is at the terminal:
+// stdin, stdout and stderr, where the question goes, are all terminals) or with --create (V2-1).
+try {
+  const interactive = Boolean(process.stdin.isTTY && process.stdout.isTTY && process.stderr.isTTY);
+  const { created } = await ensureFile({
+    path: filePath, create: options.create === true, interactive, ask: (question) => askYesNo(question),
+  });
+  if (created) process.stderr.write(`bpmn-edit: created ${filePath}\n`);
+} catch (err) {
+  if (!(err instanceof CreateError)) throw err;
+  fail(err.message);
+}
 
 // Saves keep the file's own formatting (Q4, src/minimal-diff.js). BPMN_EDIT_DEBUG_WRITES=1 prints how
 // each save was written (hidden, for tests).

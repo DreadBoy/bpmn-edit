@@ -162,7 +162,10 @@ cannot tell host and collaborator apart:
 v1 shipped: 1.0.0 (2026-10-14, manual publish of d305f2a) and 1.0.1 (2026-10-15, via release.yml with
 provenance; adds the Q4 minimal-diff writer).
 
-- [ ] **V2-1. Create a new file.** Requested by product owner 2026-10-14; v1 refuses a missing path.
+- [x] **V2-1. Create a new file.** Requested by product owner 2026-10-14; v1 refuses a missing path.
+  Verified 2026-10-15: real pty prompt (y/yes/n/empty/Ctrl-C/Ctrl-D), non-TTY exits 1 fast, --create new/existing
+  (byte-identical), refusals, appear-during-prompt race (no overwrite), Chrome edits saved mode=minimal and reopen;
+  unit 311/311, Chrome e2e 184 passed / 2 skipped.
   - Missing path, interactive terminal (stdin and stdout are TTYs): ask `new.bpmn does not exist. Create it? [y/N]`.
     On yes, write a blank diagram (one start event, like the bpmn.io demo) and open it. On no or Ctrl+C, exit 1.
   - Missing path, not interactive (scripts, CI, piped): don't block. Print an error telling the user to pass
@@ -229,6 +232,17 @@ provenance; adds the Q4 minimal-diff writer).
 - V2-2/V2-3 residuals (nits): hero video/poster has a light-grey margin around the terminal that reads as a bright
   slab in the page's dark mode (tighter crop or dark variant); `share.png` context pad clips the "Order rejected"
   label; README images on npmjs.com resolve via GitHub only after `docs/images` is on main.
+- V2-1 residuals (minor, none loses or overwrites data):
+  - Dangling symlink: `ln -s /nonexistent/t.bpmn dang.bpmn; bpmn-edit dang.bpmn` prompts "does not exist. Create
+    it?" and after `y` (or with `--create`) fails with `File not found: dang.bpmn`. Nothing created; refuse up front
+    with "is a broken symlink".
+  - Trailing slash: `bpmn-edit --create slash.bpmn/` says `cannot create slash.bpmn/ (ENOENT)` without the reason.
+  - Prompt and `created` line show the path as typed (e.g. a long absolute path), not just the file name.
+  - File appearing while the prompt waits is opened silently; a short "appeared meanwhile, opening it" notice
+    would be friendlier.
+  - README startup paragraph still begins "The file must exist and be a regular file" (fold into V2-2 wording).
+  - Ctrl-C typed before readline takes the terminal (keys buffered before the prompt) could leave the prompt
+    waiting; seen only with scripted input arriving instantly.
 - Q4-impl residuals (none loses data silently; fallbacks report what they drop):
   - Reported `format` fallbacks (low): editing documentation/condition text that holds a comment or CDATA, or a
     text annotation with an inline comment (`lost=` names it; for CDATA the output is still a 3-line diff);
