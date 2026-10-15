@@ -198,7 +198,7 @@ provenance; adds the Q4 minimal-diff writer).
     verifiable until V2-1 lands. Release order: push this README to main only together with V2-1 and after Pages
     is enabled (it documents `--create` and links the Pages URL).
 
-- [ ] **V2-3. Project web page on GitHub Pages.** Requested by product owner 2026-10-15.
+- [x] **V2-3. Project web page on GitHub Pages.** Requested by product owner 2026-10-15.
   - One static page in `site/` (plain HTML/CSS, no build step), deployed by a `pages.yml` workflow
     (`actions/upload-pages-artifact` + `actions/deploy-pages`) on pushes that touch `site/`. Not `/docs`, which
     holds internal notes.
@@ -210,8 +210,25 @@ provenance; adds the Q4 minimal-diff writer).
   - Verify: page renders in Chrome, Firefox and WebKit at desktop and phone width, no console errors, all links
     resolve, Lighthouse accessibility ≥ 95; workflow passes actionlint; after the owner enables Pages, the live
     URL serves it.
+  - Done: `site/index.html` + `style.css` + `main.js` (copy button with aria-live status, hero video autoplay
+    only without prefers-reduced-motion, native controls) + `favicon.svg`; media in `site/media/` (hero.mp4,
+    WebP poster/screenshots with 800/900 px variants, JPEG poster for og:image), ~400 KB total, system fonts, no external requests. Light
+    and dark via prefers-color-scheme; sharing steps drawn as a small BPMN process (start event → tasks → end
+    event), vertical on phones. `.github/workflows/pages.yml` (checkout@v6, configure-pages@v6,
+    upload-pages-artifact@v5 with `path: site`, deploy-pages@v5; actionlint clean). `homepage` in package.json
+    set to the Pages URL; `npm pack --dry-run` has no `site/`. Self-check (Chrome, Firefox, WebKit at 1280 and
+    375 px, light and dark): no console errors, no horizontal scroll, images load, copy puts the command on the
+    clipboard; Lighthouse (desktop and mobile) accessibility 100, best practices 100, SEO 100. The docs link
+    (`docs/how-it-works.md` on main) 404s until V2-2 is pushed.
+  - Verified 2026-10-15 (fresh verifier, round 1, HAPPY; then targeted wording fixes re-checked): Chrome, Firefox,
+    WebKit at 1280/375 light+dark, no console errors/failed requests/horizontal scroll, copy button, keyboard +
+    skip link, reduced motion; all links resolve (docs link after push); Lighthouse a11y 100 desktop+mobile;
+    actionlint clean; no secrets in media. Live URL check pending the owner enabling Pages (Source: GitHub Actions).
 
 ## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
+- V2-2/V2-3 residuals (nits): hero video/poster has a light-grey margin around the terminal that reads as a bright
+  slab in the page's dark mode (tighter crop or dark variant); `share.png` context pad clips the "Order rejected"
+  label; README images on npmjs.com resolve via GitHub only after `docs/images` is on main.
 - Q4-impl residuals (none loses data silently; fallbacks report what they drop):
   - Reported `format` fallbacks (low): editing documentation/condition text that holds a comment or CDATA, or a
     text annotation with an inline comment (`lost=` names it; for CDATA the output is still a 3-line diff);

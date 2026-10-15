@@ -1,0 +1,219 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>bpmn-edit: edit BPMN files from your repo in the browser</title>
+  <meta name="description" content="One command opens a .bpmn file from your repo in a visual editor. Every change is saved straight back to the file, with clean git diffs. Click Share and others can edit with you live.">
+  <meta name="color-scheme" content="light dark">
+  <meta property="og:type" content="website">
+  <meta property="og:title" content="bpmn-edit">
+  <meta property="og:description" content="Edit a .bpmn file from your repo in your browser. Saved straight back to disk, clean git diffs, live sharing.">
+  <meta property="og:url" content="https://dreadboy.github.io/bpmn-edit/">
+  <meta property="og:image" content="https://dreadboy.github.io/bpmn-edit/media/hero-poster.jpg">
+  <link rel="icon" href="favicon.svg" type="image/svg+xml">
+  <link rel="stylesheet" href="style.css">
+  <script src="main.js" defer></script>
+</head>
+<body>
+  <a class="skip" href="#main">Skip to content</a>
+
+  <header class="top">
+    <div class="wrap top-row">
+      <a class="brand" href="./" aria-label="bpmn-edit home">
+        <svg class="brand-mark" viewBox="0 0 32 20" aria-hidden="true" focusable="false">
+          <circle cx="6" cy="10" r="4.5"/>
+          <path d="M11 10h4"/>
+          <rect x="16" y="3" width="14" height="14" rx="3"/>
+        </svg>
+        bpmn-edit
+      </a>
+      <nav aria-label="Project links">
+        <ul class="nav">
+          <li><a href="https://github.com/DreadBoy/bpmn-edit">GitHub</a></li>
+          <li><a href="https://www.npmjs.com/package/bpmn-edit">npm</a></li>
+          <li><a href="https://github.com/DreadBoy/bpmn-edit/blob/main/docs/how-it-works.md">Docs</a></li>
+        </ul>
+      </nav>
+    </div>
+  </header>
+
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="wrap">
+        <h1 id="hero-title">Edit a .bpmn file from your repo in your browser.</h1>
+        <p class="lede">One command opens it in a visual editor (<a href="https://bpmn.io">bpmn-js</a>). Every
+          change is saved straight back to the file. Want help? Click Share and send the link, and others can edit
+          with you live. No account, no project setup. Your file stays where it is, on your disk.</p>
+
+        <div class="cmd">
+          <pre class="cmd-text"><code id="cmd"><span class="prompt" aria-hidden="true">$ </span>npx bpmn-edit file.bpmn</code></pre>
+          <button class="copy" type="button" data-copy="npx bpmn-edit file.bpmn" aria-label="Copy command: npx bpmn-edit file.bpmn">
+            <span class="copy-label">Copy</span>
+          </button>
+          <p class="copy-status" role="status" aria-live="polite"></p>
+        </div>
+        <p class="hint">Nothing to install. Needs Node.js 20.19 or later.</p>
+
+        <figure class="window hero-media">
+          <video id="hero-video" muted loop playsinline controls preload="metadata"
+                 poster="media/hero-poster.webp" width="1200" height="750"
+                 aria-label="Screen recording: typing npx bpmn-edit order.bpmn in a terminal, then the diagram opens in the browser and a task is renamed">
+            <source src="media/hero.mp4" type="video/mp4">
+          </video>
+          <figcaption>Run the command, the diagram opens in your browser, rename a task: it is already saved.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="features" aria-labelledby="features-title">
+      <div class="wrap">
+        <h2 id="features-title">What it does</h2>
+        <ul class="feature-list">
+          <li>
+            <h3>Edit in the browser</h3>
+            <p>A full BPMN modeler opens on your file. Drag, connect, rename, done. Keep the terminal open while
+              you work and press Ctrl-C when you are finished.</p>
+          </li>
+          <li>
+            <h3>It saves itself</h3>
+            <p>There is no save button. Each change lands in the file a moment after you make it. On Ctrl-C your
+              last edits are saved first, then bpmn-edit stops.</p>
+          </li>
+          <li>
+            <h3>Clean git diffs</h3>
+            <p>A save changes only what you edited. Rename a task and <code>git diff</code> shows that one line;
+              the rest of the file keeps its exact formatting, comments and all.</p>
+          </li>
+          <li>
+            <h3>Your other tools keep working</h3>
+            <p>If your IDE, a <code>git checkout</code> or anything else changes the file, the editor shows the new
+              version right away. Edits in progress are put on top of it instead of being lost.</p>
+          </li>
+          <li>
+            <h3>Live sharing</h3>
+            <p>Click Share and send the link. Everyone appears with their own colour, and you can see what each
+              person has selected.</p>
+          </li>
+          <li>
+            <h3>New files, too</h3>
+            <p>Point it at a file that does not exist yet and it asks <code>Create it? [y/N]</code>, which catches
+              typos. In scripts, pass <code>--create</code>.</p>
+          </li>
+          <li>
+            <h3>Nothing for your collaborators to set up</h3>
+            <p>They open the link in their browser. No account, no install, no sign-up.</p>
+          </li>
+        </ul>
+      </div>
+    </section>
+
+    <section class="diff" aria-labelledby="diff-title">
+      <div class="wrap split">
+        <div class="split-text">
+          <h2 id="diff-title">Review diagrams like code</h2>
+          <p>A save changes only what you edited, and the rest of the file keeps its exact formatting. A pull
+            request shows what actually happened to the process.</p>
+          <p>In rare cases a save rewrites more of the file than you edited; the terminal tells you when that
+            happens.</p>
+        </div>
+        <figure class="shot">
+          <img src="media/git-diff.webp" srcset="media/git-diff-900.webp 900w, media/git-diff.webp 1800w" sizes="(min-width: 56rem) 40rem, calc(100vw - 2rem)" width="1800" height="758" loading="lazy" decoding="async"
+               alt="git diff after renaming the task Check stock to Check stock levels: one removed line and one added line, nothing else changed">
+          <figcaption><code>git diff</code> after renaming one task: a single changed line.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="share" aria-labelledby="share-title">
+      <div class="wrap">
+        <h2 id="share-title">Sharing, step by step</h2>
+        <div class="flow-wrap">
+        <span class="flow-start" aria-hidden="true"></span>
+        <ol class="flow" aria-describedby="flow-note">
+          <li class="flow-task"><span>Click <strong>Share</strong> in the editor’s toolbar.</span></li>
+          <li class="flow-task"><span>After a few seconds you get a link. Click <strong>Copy</strong> and send it.</span></li>
+          <li class="flow-task"><span>They open the link and edit with you, live.</span></li>
+          <li class="flow-task"><span>Everyone has their own colour; you see each other’s selection.</span></li>
+          <li class="flow-task"><span>Click <strong>Stop sharing</strong>. The link stops working right away.</span></li>
+        </ol>
+        <span class="flow-end" aria-hidden="true"></span>
+        </div>
+        <p id="flow-note" class="note">Every time you click Share (or restart bpmn-edit) you get a new link. The
+          first time, bpmn-edit downloads a small helper from Cloudflare (<code>cloudflared</code>) unless you already
+          have it, which takes a few extra seconds once.</p>
+
+        <figure class="window shot-wide">
+          <img src="media/share.webp" srcset="media/share-800.webp 800w, media/share.webp 1600w" sizes="(min-width: 68rem) 64rem, calc(100vw - 3rem)" width="1600" height="1000" loading="lazy" decoding="async"
+               alt="The editor while sharing: Ana and Ben are both listed in the toolbar, the share link with Copy and Stop sharing buttons is shown, and Ben's selected task is outlined in his colour">
+          <figcaption>Ana and Ben are both connected. Ben’s selection is outlined in his colour.</figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <section class="security" aria-labelledby="security-title">
+      <div class="wrap">
+        <h2 id="security-title">How sharing is secured</h2>
+        <p class="section-lede">What a share link allows, and what stays on your machine.</p>
+        <div class="sec-grid">
+          <div>
+            <h3>The share link</h3>
+            <ul>
+              <li>Sharing opens a Cloudflare quick tunnel to your machine and gives you a random link with a long,
+                unguessable token in it.</li>
+              <li><strong>Anyone with the link can view and edit the diagram</strong> until you click Stop sharing
+                or stop bpmn-edit. There are no accounts or passwords, so send it only to people you trust.</li>
+              <li>Each share, and each restart, makes a new link. The old one stops working.</li>
+              <li>Collaborators can reach this one diagram and its file name (not its path), nothing else on your machine.</li>
+              <li>Shared traffic passes through Cloudflare’s network. Don’t share diagrams you wouldn’t send
+                through a third party.</li>
+            </ul>
+          </div>
+          <div>
+            <h3>What stays with you</h3>
+            <ul>
+              <li>The file stays on your disk; bpmn-edit reads and writes it locally. While you share,
+                collaborators get the diagram (not the file or its path) from your running editor.</li>
+              <li>The server listens on <code>localhost</code> only. Without sharing, nothing leaves your machine.</li>
+              <li>The link printed in your terminal holds a private host secret: whoever opens it can start and stop
+                sharing. Keep it to yourself.</li>
+            </ul>
+          </div>
+        </div>
+        <p class="more"><a href="https://github.com/DreadBoy/bpmn-edit/blob/main/docs/how-it-works.md#security-notes">Read the full security notes</a></p>
+      </div>
+    </section>
+
+    <section class="start" aria-labelledby="start-title">
+      <div class="wrap split">
+        <div class="split-text">
+          <h2 id="start-title">Requirements</h2>
+          <ul class="reqs">
+            <li><a href="https://nodejs.org">Node.js</a> 20.19 or later.</li>
+            <li>Supported for now: macOS with Google Chrome. Other systems and browsers may work, but are not
+              officially supported yet.</li>
+            <li>Your collaborators only need a browser.</li>
+          </ul>
+        </div>
+        <div class="split-text">
+          <h2>Learn more</h2>
+          <ul class="links">
+            <li><a href="https://github.com/DreadBoy/bpmn-edit">Source code and README on GitHub</a></li>
+            <li><a href="https://www.npmjs.com/package/bpmn-edit">bpmn-edit on npm</a></li>
+            <li><a href="https://github.com/DreadBoy/bpmn-edit/blob/main/docs/how-it-works.md">How bpmn-edit works</a>: timings, edge cases, security</li>
+            <li><a href="https://github.com/DreadBoy/bpmn-edit/issues">Report an issue</a></li>
+          </ul>
+        </div>
+      </div>
+    </section>
+  </main>
+
+  <footer class="foot">
+    <div class="wrap foot-row">
+      <svg class="end-event" viewBox="0 0 24 24" aria-hidden="true" focusable="false"><circle cx="12" cy="12" r="9"/></svg>
+      <p>bpmn-edit is <a href="https://github.com/DreadBoy/bpmn-edit/blob/main/LICENSE">MIT licensed</a>.
+        The editor is built on <a href="https://bpmn.io">bpmn-js</a> by bpmn.io.</p>
+    </div>
+  </footer>
+</body>
+</html>

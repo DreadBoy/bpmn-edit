@@ -1,0 +1,54 @@
+name: Pages
+
+# Publishes the project page (site/, plain HTML and CSS, no build step) to
+# GitHub Pages at https://dreadboy.github.io/bpmn-edit/.
+#
+# Runs on pushes to main that touch site/ or this file, and on demand. The
+# Pages artifact is only site/; docs/ holds internal notes and is not
+# published.
+#
+# One-time owner step before the first run: repo Settings -> Pages -> Source
+# "GitHub Actions". Until then the deploy step fails with a 404 from the Pages
+# API.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Let a running deployment finish; a newer push then deploys after it.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy to GitHub Pages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v6
+
+      - name: Configure Pages
+        uses: actions/configure-pages@v6
+
+      - name: Upload site/
+        uses: actions/upload-pages-artifact@v5
+        with:
+          path: site
+
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v5
