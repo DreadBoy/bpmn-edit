@@ -1591,14 +1591,26 @@ function writeMinimal(D, B, U, memory = new Map()) {
     map.set(to, [...(map.get(to) ?? []), plan]);
     chained.set(id, to);
   }
-  const emit = (plan, indent, seen = new Set()) => {
-    const id = idOf(plan.u);
-    if (seen.has(id)) throw new WriterFallback(`#${id}: restored elements in a cycle`);
-    seen.add(id);
-    const own = plan.same ? reindentText(plan.kept.text, plan.kept.indent, indent) : render(plan.u, plan.dParent, indent);
-    const pre = (precedes.get(id) ?? []).map((p) => emit(p, indent, seen) + eol + indent).join('');
-    const post = (follows.get(id) ?? []).map((p) => eol + indent + emit(p, indent, seen)).join('');
-    return pre + own + post;
+  // The plan, with the ones placed before and after it (theirs too); without recursion, as a chain can
+  // be thousands long (select all, delete, undo).
+  const emit = (root, indent) => {
+    const seen = new Set();
+    const parts = [];
+    const stack = [root];
+    while (stack.length) {
+      const plan = stack.pop();
+      if (typeof plan === 'string') {
+        parts.push(plan);
+        continue;
+      }
+      const id = idOf(plan.u);
+      if (seen.has(id)) throw new WriterFallback(`#${id}: restored elements in a cycle`);
+      seen.add(id);
+      const own = plan.same ? reindentText(plan.kept.text, plan.kept.indent, indent) : render(plan.u, plan.dParent, indent);
+      const seq = [...(precedes.get(id) ?? []).flatMap((p) => [p, eol + indent]), own, ...(follows.get(id) ?? []).flatMap((p) => [eol + indent, p])];
+      for (let k = seq.length - 1; k >= 0; k--) stack.push(seq[k]);
+    }
+    return parts.join('');
   };
   for (const u of inserts) {
     const dParent = counterpart.get(u.parent);
@@ -1816,7 +1828,9 @@ function minimalWrite(disk, base, out, memory) {
   }
   const result = writeMinimal(D, B, U, memory);
   const W = load(result.text);
-  result.lost = [...lostFromMemory(result.unused, W), ...lostExtensions(D, W, U, replacedDi(B, U))];
+  result.lost = [
+    ...lostFromMemory(result.unused, W), ...lostOfEvicted((id) => D.ids.has(id), U, W, memory), ...lostExtensions(D, W, U, replacedDi(B, U)),
+  ];
   if (result.text === disk) return result;
   const problems = [
     ...checkMinimal(D, B, U, W, result.restored), ...checkOrder(D, U, W), ...checkForms(diskText, baseText, outText, result.text),
@@ -1920,29 +1934,73 @@ function restoreFirst(D, B, U, memory) {
  */
 function lostFromMemory(unused, W) {
   if (!unused?.length) return [];
-  const { fm, byPath } = restoredFacts(unused);
-  const fw = facts(W);
+  return lostOfFacts(reportableFacts(unused), W);
+}
+
+/**
+ * The facts of remembered texts (`texts`: [{ id, text, scope }]) that a write from bpmn-js' output can
+ * lose: comments, PIs, CDATA, elements and attributes in namespaces bpmn-js does not know. Each
+ * { key, value, path, el?, desc }: small (kept as tombstones, see bound), compared by lostOfFacts.
+ */
+function reportableFacts(texts) {
+  const { fm, byPath } = restoredFacts(texts);
   const where = (path) => path.replace(/\{[^}]*\}/g, '').replace(/^#/, '');
+  const short = (value) => (value.length > 40 ? `${value.slice(0, 40)}…` : value);
+  const items = [];
+  for (const [key, value] of fm) {
+    const [type, path, detail] = key.split(SEP);
+    if (path.startsWith('/')) continue; // the wrapper
+    if (type === 'comment') items.push({ key, value, path, desc: `comment "${short(value)}"` });
+    else if (type === 'pi') items.push({ key, value, path, desc: `processing instruction ${short(value)}` });
+    else if (type === 'cdata') items.push({ key, value, path, desc: `a CDATA section in ${where(path)}` });
+    else if (type === 'el' && isUnknownNs(/^\{([^}]*)\}/.exec(value)?.[1])) {
+      const el = byPath.get(path);
+      items.push({ key, value, path, el: true, desc: `element ${el?.name ?? value} in ${where(el?.parent?.path ?? path.replace(/\/[^/]*$/, ''))}` });
+    } else if (type === 'attr' && isUnknownNs(/^\{([^}]*)\}/.exec(detail)?.[1])) {
+      const name = byPath.get(path)?.attrs.find((a) => attrKey(a) === detail)?.name ?? detail;
+      items.push({ key, value, path, desc: `attribute ${name} in ${where(path)}` });
+    }
+  }
+  return items;
+}
+
+/** The descriptions of `items` (see reportableFacts) that the written text `W` does not have. */
+function lostOfFacts(items, W) {
+  const fw = facts(W);
   const lostPaths = new Set();
   const under = (path) => {
     for (let p = path; p; p = p.slice(0, Math.max(p.lastIndexOf('/'), 0))) if (lostPaths.has(p)) return true;
     return false;
   };
   const lost = [];
-  for (const [key, value] of fm) {
-    const [type, path, detail] = key.split(SEP);
-    if (path.startsWith('/') || under(path) || fw.get(key) === value) continue; // the wrapper; gone with an element named; kept
-    if (type === 'comment') lost.push(`comment "${value.length > 40 ? `${value.slice(0, 40)}…` : value}"`);
-    else if (type === 'pi') lost.push(`processing instruction ${value.length > 40 ? `${value.slice(0, 40)}…` : value}`);
-    else if (type === 'cdata') lost.push(`a CDATA section in ${where(path)}`);
-    else if (type === 'el' && isUnknownNs(/^\{([^}]*)\}/.exec(value)?.[1])) {
-      lostPaths.add(path);
-      const el = byPath.get(path);
-      lost.push(`element ${el?.name ?? value} in ${where(el?.parent?.path ?? path.replace(/\/[^/]*$/, ''))}`);
-    } else if (type === 'attr' && isUnknownNs(/^\{([^}]*)\}/.exec(detail)?.[1])) {
-      const name = byPath.get(path)?.attrs.find((a) => attrKey(a) === detail)?.name ?? detail;
-      lost.push(`attribute ${name} in ${where(path)}`);
-    }
+  for (const { key, value, path, el, desc } of items) {
+    if (under(path) || fw.get(key) === value) continue; // gone with an element named; kept
+    if (el) lostPaths.add(path);
+    lost.push(desc);
+  }
+  return lost;
+}
+
+/**
+ * What elements bpmn-js brings back (in `U`, `onDisk(id)` false) lose of their old text when the run's
+ * memory no longer holds it (evicted, see bound): the facts kept of it (its tombstone), or, when even
+ * that is gone, a note that it may have lost some. Descriptions, for notes.
+ */
+function lostOfEvicted(onDisk, U, W, memory) {
+  const state = memory ? memoryStates.get(memory) : null;
+  if (!state?.cut.size) return [];
+  const items = [];
+  const forgotten = [];
+  for (const id of U.ids.keys()) {
+    if (!state.cut.has(id) || onDisk(id) || memory.get(id)?.length) continue;
+    const tomb = state.tombs.get(id);
+    if (tomb) items.push(...tomb);
+    else forgotten.push(id);
+  }
+  const lost = items.length ? lostOfFacts(items, W) : [];
+  if (forgotten.length) {
+    lost.push(`any comments, PIs, CDATA or unknown-namespace content of ${forgotten.length} element(s) brought back after more`
+      + ` removals than this run remembers (${forgotten.slice(0, 3).join(', ')}${forgotten.length > 3 ? ', …' : ''})`);
   }
   return lost;
 }
@@ -1953,7 +2011,7 @@ function lostFromMemory(unused, W) {
  * have written that text back. Descriptions, for notes.
  */
 function lostOfRemembered(disk, U, W, memory) {
-  if (!memory?.size) return [];
+  if (!memory?.size && !memoryStates.get(memory ?? {})?.cut.size) return [];
   let D;
   try {
     D = load(disk);
@@ -1968,11 +2026,19 @@ function lostOfRemembered(disk, U, W, memory) {
     const kept = [...versions].reverse().find((v) => v.form === form) ?? versions[versions.length - 1];
     back.push({ id, text: kept.text, scope: kept.scope });
   }
-  return lostFromMemory(back, W);
+  return [...lostFromMemory(back, W), ...lostOfEvicted((id) => Boolean(D?.ids.has(id)), U, W, memory)];
 }
 
-/** How many removed elements `memory` keeps (see writeMinimal), and versions of each. */
-const MEMORY_SIZE = 200;
+/**
+ * How much text of removed elements `memory` keeps per run (see writeMinimal): their text, model form
+ * and bpmn-js' text, in UTF-16 code units (16 Mi, ~32 MB; see entrySize), the oldest evicted first —
+ * select all, delete and undo of 8 000 tasks with their shapes still fits; and versions of
+ * each (MEMORY_VERSIONS). An evicted element leaves a tombstone (the facts of its text a write from
+ * bpmn-js' output would lose, see reportableFacts) within MEMORY_TOMB_BUDGET; every id cut in the run
+ * is kept too (ids are small), so one brought back without either is still reported (lostOfEvicted).
+ */
+const MEMORY_BUDGET = 16 * 1024 * 1024;
+const MEMORY_TOMB_BUDGET = 2 * 1024 * 1024;
 /** How many neighbours on each side a removed element remembers (see writeMinimal). */
 const NEIGHBOURS = 20;
 const MEMORY_VERSIONS = 5;
@@ -1982,6 +2048,59 @@ const MEMORY_VERSIONS = 5;
  * the parent (e.g. undo of a drag into a sub-process). Never an id (XML has no U+0000).
  */
 const movedKey = (id) => `\u0000moved\u0000${id}`;
+
+/** Per run `memory`: { cut: every id a write cut, tombs: Map(id -> reportableFacts) oldest first, tombSize }. */
+const memoryStates = new WeakMap();
+const entrySizes = new WeakMap(); // memory entry -> its size (see MEMORY_BUDGET)
+const entrySize = (entry) => {
+  if (!entrySizes.has(entry)) {
+    entrySizes.set(entry, 64 + (entry.text?.length ?? 0) + (entry.form?.length ?? 0) + (entry.baseText?.length ?? 0)
+      // Neighbour lists and scopes hold ids, prefixes and URIs that are also elsewhere: a reference each.
+      + 4 * ((entry.prev?.length ?? 0) + (entry.next?.length ?? 0) + (entry.movedOut?.length ?? 0))
+      + 8 * (Object.keys(entry.scope ?? {}).length + Object.keys(entry.baseScope ?? {}).length));
+  }
+  return entrySizes.get(entry);
+};
+const tombSize = (id, items) => 32 + id.length + items.reduce((n, i) => n + 32 + i.key.length + i.value.length + i.path.length + i.desc.length, 0);
+
+/**
+ * Keeps `memory` within `limits` after a write that cut `cutNow` (ids): evicts the oldest texts beyond
+ * the budget, leaving a tombstone of each evicted element, and the oldest tombstones beyond theirs.
+ */
+function bound(memory, cutNow, { budget = MEMORY_BUDGET, tombs = MEMORY_TOMB_BUDGET } = {}) {
+  let state = memoryStates.get(memory);
+  if (!state) memoryStates.set(memory, (state = { cut: new Set(), tombs: new Map(), tombSize: 0 }));
+  const dropTomb = (id) => {
+    const tomb = state.tombs.get(id);
+    if (!tomb) return;
+    state.tombs.delete(id);
+    state.tombSize -= tombSize(id, tomb);
+  };
+  for (const id of cutNow) {
+    state.cut.add(id);
+    dropTomb(id); // remembered again
+  }
+  let size = 0;
+  for (const versions of memory.values()) for (const v of versions) size += entrySize(v);
+  for (const [id, versions] of memory) {
+    if (size <= budget) break;
+    memory.delete(id);
+    for (const v of versions) size -= entrySize(v);
+    if (id.startsWith('\u0000')) continue; // not an element (see movedKey)
+    let items;
+    try {
+      items = [...new Map(reportableFacts(versions.map((v) => ({ id, text: v.text, scope: v.scope }))).map((i) => [i.key, i])).values()];
+    } catch {
+      continue; // unreadable: no tombstone, reported as forgotten (see lostOfEvicted)
+    }
+    state.tombs.set(id, items);
+    state.tombSize += tombSize(id, items);
+  }
+  for (const id of state.tombs.keys()) {
+    if (state.tombSize <= tombs) break;
+    dropTomb(id);
+  }
+}
 
 /**
  * What `out` written as it is loses of the file on disk: its comments, PIs and DOCTYPE (a plain scan,
@@ -2051,9 +2170,10 @@ function lostFacts(D, W, U, back = new Map()) {
  * extensions; in a 'minimal' write only ever extensions or remembered texts it could not keep, see
  * lostExtensions, lostFromMemory).
  * `memory` (optional, a Map kept by the caller across writes): the text of elements cut from the file,
- * so that an element bpmn-js brings back unchanged (undo) gets its old text again (see writeMinimal).
+ * so that an element bpmn-js brings back unchanged (undo) gets its old text again (see writeMinimal);
+ * bounded by `limits` ({ budget, tombs }, see MEMORY_BUDGET; smaller ones in tests).
  */
-export function renderForDisk({ disk, base = null, out, memory = null }) {
+export function renderForDisk({ disk, base = null, out, memory = null, limits = {} }) {
   if (typeof disk !== 'string') return { text: out, mode: 'new' };
   const reasons = [];
   const why = (err) => (err instanceof WriterFallback || err instanceof XmlError ? err.message : `internal error: ${err.message}`);
@@ -2071,7 +2191,7 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
         memory.delete(movedKey(id));
         memory.set(movedKey(id), [entry]);
       }
-      while (memory.size > MEMORY_SIZE) memory.delete(memory.keys().next().value);
+      bound(memory, removed.map(([id]) => id), limits);
     }
     return {
       text, mode: base === null ? 'unbased' : 'minimal', ...(base === null ? { reason: 'no base' } : {}), ...(lost.length ? { lost } : {}),
@@ -2110,6 +2230,12 @@ export function renderForDisk({ disk, base = null, out, memory = null }) {
     for (const [id, versions] of memory ?? []) {
       if (id.startsWith('\u0000')) continue; // not an element (see movedKey)
       if (typeof out === 'string' && out.includes(`id="${id}"`) && !disk.includes(`id="${id}"`)) lost.push(...lostByRaw(versions[versions.length - 1].text));
+    }
+    const state = memory ? memoryStates.get(memory) : null;
+    for (const id of state?.cut ?? []) {
+      if (memory.get(id)?.length || typeof out !== 'string' || !out.includes(`id="${id}"`) || disk.includes(`id="${id}"`)) continue;
+      const tomb = state.tombs.get(id);
+      lost.push(...(tomb ? tomb.map((i) => i.desc) : [`any comments, PIs, CDATA or unknown-namespace content of ${id}`]));
     }
   }
   return { text: out, mode: 'raw', reason: reasons.join('; '), ...(lost.length ? { lost } : {}) };

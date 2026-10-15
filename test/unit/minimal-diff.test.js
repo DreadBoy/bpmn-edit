@@ -548,6 +548,72 @@ describe('minimal-diff writer: what is inside replaced and moved elements', () =
     assert.ok(!plain.text.includes('checked by the warehouse'));
   });
 
+  describe('select-all delete and undo of a large diagram (the memory bound)', () => {
+    // Verifier Q4-impl round 9: the memory held 200 ids, so an undo after cutting more wrote the
+    // first ones from bpmn-js' output: their comments, PIs and CDATA gone, as `minimal`, with no note.
+    const extras = Array.from({ length: 300 }, (_, i) => ['bpmn2:task', { id: `T${i}`, name: `extra ${i}` }]);
+    const all = (tasks, shapes) => m(tasks, { shapes, ...(tasks.length ? {} : { flows: [], edges: [] }) });
+    const shapes = [shapeNode('A', ['100.0', '100'], '100'), shapeNode('B', '300', '100'), ...extras.map((_, i) => shapeNode(`T${i}`, `${i * 10}`, '400'))];
+    const Dbig = disk(all([taskA('bpmn2:task'), taskB('bpmn2:task'), ...extras], shapes), prolog);
+    const Bbig = bpmnjs(all([taskA('bpmn2:task', { extensions: false, sla: false }), taskB('bpmn2:task'), ...extras], shapes));
+    const Ubig = bpmnjs(all([], []));
+    const kept = (text) => [...facts(load(text))].filter(([k]) => /^(comment|pi|cdata)\u0000/.test(k) || k.includes(ACME)).map(([k, v]) => `${k}=${v}`);
+
+    it('comes back byte-exact (but for the process\' free comment), every write minimal', () => {
+      const memory = new Map();
+      const W1 = renderForDisk({ disk: Dbig, base: Bbig, out: Ubig, memory });
+      assert.equal(W1.mode, 'minimal', W1.reason);
+      assert.ok(memory.size > 600);
+      const W2 = renderForDisk({ disk: W1.text, base: Ubig, out: Bbig, memory });
+      assert.equal(W2.mode, 'minimal', W2.reason);
+      assert.equal(W2.lost, undefined, W2.lost?.join(' | '));
+      assert.deepEqual(kept(W2.text).sort(), kept(Dbig).sort());
+      // A comment between elements that are all cut stays in its parent; they come back before it.
+      const free = '\t\t<!-- the happy path -->\r\n';
+      assert.ok(W2.text.includes(free));
+      assert.equal(W2.text.replace(free, ''), Dbig.replace(free, ''));
+    });
+
+    it('thousands of elements come back too (a long chain of neighbours)', () => {
+      const many = Array.from({ length: 3000 }, (_, i) => ['bpmn2:task', { id: `T${i}`, name: `extra ${i}` }]);
+      const many3 = (a) => all([a, taskB('bpmn2:task'), ...many], [shapeNode('A', ['100.0', '100'], '100'), shapeNode('B', '300', '100')]);
+      const D3 = disk(many3(taskA('bpmn2:task')), prolog);
+      const B3 = bpmnjs(many3(taskA('bpmn2:task', { extensions: false, sla: false })));
+      const memory = new Map();
+      const W1 = renderForDisk({ disk: D3, base: B3, out: Ubig, memory });
+      const W2 = renderForDisk({ disk: W1.text, base: Ubig, out: B3, memory });
+      assert.deepEqual([W1.mode, W2.mode], ['minimal', 'minimal'], W2.reason);
+      assert.equal(W2.lost, undefined, W2.lost?.join(' | '));
+      assert.deepEqual(kept(W2.text).sort(), kept(D3).sort());
+    });
+
+    it('an element whose text the memory evicted is reported with what it lost, never silently', () => {
+      // A budget smaller than any text: everything evicted; A's tombstone names its comment, PI, CDATA, extension.
+      const memory = new Map();
+      const W1 = renderForDisk({ disk: Dbig, base: Bbig, out: Ubig, memory, limits: { budget: 1 } });
+      assert.equal(W1.mode, 'minimal', W1.reason);
+      assert.equal(memory.size, 0);
+      const W2 = renderForDisk({ disk: W1.text, base: Ubig, out: Bbig, memory, limits: { budget: 1 } });
+      assert.equal(W2.mode, 'minimal', W2.reason);
+      assert.ok(!W2.text.includes('checked by the warehouse'));
+      const lost = W2.lost?.join(' | ') ?? '';
+      for (const what of ['comment "checked by the warehouse"', 'processing instruction <?acme-lint off?>', 'a CDATA section in A/', 'element acme:retry', 'attribute acme:sla']) {
+        assert.ok(lost.includes(what), `${what} not in: ${lost}`);
+      }
+      assert.ok(!/T\d|extra/.test(lost), lost); // the extra tasks had nothing to lose
+    });
+
+    it('with the tombstones evicted too, a note says what may be lost', () => {
+      const memory = new Map();
+      const limits = { budget: 1, tombs: 0 };
+      const W1 = renderForDisk({ disk: Dbig, base: Bbig, out: Ubig, memory, limits });
+      const W2 = renderForDisk({ disk: W1.text, base: Ubig, out: Bbig, memory, limits });
+      assert.equal(W2.mode, 'minimal', W2.reason);
+      assert.equal(W2.lost?.length, 1, W2.lost?.join(' | '));
+      assert.match(W2.lost[0], /^any comments, PIs, CDATA or unknown-namespace content of \d+ element\(s\) brought back after more removals/);
+    });
+  });
+
   it('the check refuses text written back from memory that is not the remembered one', () => {
     const memory = new Map();
     const U1 = bpmnjs(m([taskB('bpmn2:task')], { flows: [], shapes: [shapeNode('B', '300', '100')], edges: [] }));
