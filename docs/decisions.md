@@ -1055,7 +1055,14 @@ format-preserving fallback. This step implements it and verifies it against the 
   same way as the file's old ones.
 - **Undo of a delete or a type change.** The store keeps (for the run) the text of every element with an
   id that a write cut from the file, with bpmn-js's model of it at that moment (up to 5 versions per
-  id, 200 ids). When bpmn-js brings an element back with exactly such a model (undo), that text is
+  id; bounded by size, not count: 16 Mi UTF-16 code units, ~32 MB, of remembered text per run, the
+  oldest evicted first — select all, delete and undo of 8 000 tasks with their shapes fits). An
+  evicted element leaves a tombstone: the facts of its text a write from bpmn-js's output would lose
+  (comments, PIs, CDATA, unknown-namespace elements and attributes), within 2 Mi units of their own;
+  and every id cut in the run is kept (ids are small). An element brought back without its text is
+  reported (`lost=`, warning): what its tombstone names that the write does not keep, or, with the
+  tombstone evicted too, a note that its comments, PIs, CDATA or unknown-namespace content may be
+  lost — never silently. When bpmn-js brings an element back with exactly such a model (undo), that text is
   written back (comments, PIs, CDATA, extensions kept on an earlier type change — bpmn-js's model then
   lacked them, and that model is what is matched), next to its old neighbour on disk; elements cut
   together (a task with its flows and their DI) go back next to each other in their old order. An
@@ -1198,6 +1205,20 @@ identical in Chrome, Firefox and WebKit. Writes: 11 (`false`) + 3 (`input`) per 
   declaration / DOCTYPE fact of the file unchanged, `&company;` and the `acme:` extensions still there;
   replace ≤ 10 changed lines (the tags, the DI id, a label bpmn-js re-measures), the collapsed rename
   ≤ 5 (the name and the new label, placed below the event in the file's coordinates).
+- Verifier round 9 found: (B1, blocking) silent loss under memory pressure: the memory held 200 ids
+  (elements and DI), evicting the oldest, so once a run had cut more, an undo wrote the older elements
+  from bpmn-js' output — comments, PIs and CDATA gone, as `minimal` with no `lost=` or warning
+  (comments-nonascii with 120 extra tasks: select all, delete, undo → `Task_CheckStock` lost its
+  comment, `<?acme-lint?>` PI and CDATA). Fixed: the memory is bounded by size (16 Mi units, ~32 MB),
+  evicted elements leave tombstones of their reportable facts, and every cut id is kept, so what an
+  element brought back without its text loses is reported (above). Undoing a select-all delete of
+  thousands of elements also overflowed the stack (restored neighbours were chained recursively,
+  falling back to `format`); that chain is now walked without recursion. Unit tests: select all, delete
+  and undo of 302 tasks with shapes (byte-exact but for the process' free comment, every write
+  `minimal`, nothing lost) and of 3 002 tasks (every fact kept); with a 1-unit budget the restored task
+  reports its comment, PI, CDATA, `acme:retry` and `acme:sla` (nothing for the extra tasks); with no
+  tombstone budget either, one note. All fail before the fix. The verifier's `bigdel.mjs`: N = 120,
+  2 000 and 8 000 extra tasks, both writes `minimal`, nothing missing.
 - Verifier round 8 found: (D1, major) an artifact added after delete + undo was written schema-invalid
   as `minimal` without a note: comments-nonascii, delete `Flow_ToGateway` (or a task, a gateway), undo,
   append a text annotation (or a group) → the annotation and its association between the restored flow
@@ -1360,12 +1381,13 @@ verifier's probes cover; the known limits below are where the result is not byte
   next to elements that are all gone) is named in a warning. It also writes bpmn-js's attribute order,
   number spelling and default attributes for that save. Each mode prints its note once per run.
 - Comments and PIs inside an element you delete are gone with it (the deletion is the edit); an undo in
-  the same run brings them back. The memory is per run of bpmn-edit and holds the last 200 elements:
-  deleting more at once (select all in bpmnio-demo-export: ~450 elements with their DI) and undoing
-  writes the ones it no longer holds from bpmn-js' output, in bpmn-js' order (the process' elements
-  come back reordered; correct model, nothing of the file lost there). In a file of bpmn-js < 9 that
-  undo also writes the diagrams bpmn-js ≥ 9 makes for collapsed sub-processes (their content's shapes
-  in a diagram of their own, in bpmn-js' coordinates) — bpmn-js' model, as before this round.
+  the same run brings them back. The memory is per run of bpmn-edit and bounded by size (~32 MB of
+  remembered text, above): beyond that, the oldest removed elements are written from bpmn-js' output on
+  undo, in bpmn-js' order, with what they lose reported (their tombstone, or a generic note). In a file
+  of bpmn-js < 9 the undo of a select-all delete also writes the diagrams bpmn-js ≥ 9 makes for
+  collapsed sub-processes (their content's shapes in a diagram of their own, in bpmn-js' coordinates)
+  — bpmn-js' model, as before. A comment (or PI) between elements that are all cut stays in their
+  parent, and the elements come back before it (it moves after them; a cosmetic diff, nothing lost).
 - Cut and paste writes the pasted element from bpmn-js's output: bpmn-js's copy does not carry
   extensions, and the file's comments/PIs/CDATA in it are not carried over (backlog).
 - After a sub-process is collapsed and expanded again (or the collapse undone), the shapes of its
