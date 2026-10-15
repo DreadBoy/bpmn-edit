@@ -172,6 +172,26 @@ cannot tell host and collaborator apart:
     TTY via a pseudo-terminal (e.g. `script -q`), or tests the non-TTY branch plus `--create`.
 
 ## Backlog (small known issues, fold into a later step)
+- Q4-impl residuals (none loses data silently; fallbacks report what they drop):
+  - Reported `format` fallbacks (low): editing documentation/condition text that holds a comment or CDATA, or a
+    text annotation with an inline comment (`lost=` names it; for CDATA the output is still a 3-line diff);
+    namespace declared on a sub-process and used by a child moved out/wrenched ("unbound prefix", `lost=1`);
+    appending inside a collapsed sub-process of a bpmn-js 7 file (bpmnio-demo-export, ~880 lines, README limit).
+  - CR inside element text (API/paste only, e.g. `updateLabel(annotation, "x\r\nz\rw")`) is written as the file's
+    line end; reopen reads `\n` (low; attribute values already write `&#9;/&#10;/&#13;`).
+  - An exception inside a modeling command (API misuse, e.g. `modeling.updateLabel(undefined, …)`) wedges the
+    commandStack: later edits are never sent and the status keeps "Saved" (outside Q4, not reachable via UI).
+  - Label cut on a tag-changing wrench where bpmn-js re-creates the shape without a label (Bizagi/Signavio task →
+    user task): reported as `lost=1` (label style) on every such wrench; could keep the label instead.
+  - Diff noise, model correct: new numbers `315` where the file spells `295.0`; empty element body left when all
+    references go; DI shape id changes on wrench; restored element's DI id/label re-measured after undo;
+    incoming/outgoing re-ordered on undo; wrench undo appends re-added attributes at the end of the tag; re-created
+    label Bounds in bpmn-js attribute order; `xmlns:xsi` left on root after conditional start + undo; content shapes
+    of a collapsed→expanded sub-process land after its shape; select-all delete + undo moves the process' leading
+    comment to the end, and a free comment between cut elements stays put while they go back before it; empty
+    `laneSet` after undo of pool+lane; `name=""` after undoing a label edit on an unnamed element; bpmnio-demo
+    select-all delete + undo comes back in bpmn-js order and adds bpmn-js ≥ 9's separate diagrams for collapsed
+    sub-processes.
 - Linux: the server cannot start (found in S12). `wildcardListenerOn()` in `src/server.js` binds `0.0.0.0`/`::` with
   `exclusive: true` after our own loopback binds; Linux answers EADDRINUSE, so every port looks taken ("No free port
   found"); unit tests fail/hang there. Fix: skip the probe on Linux (redundant there — a loopback bind already fails
@@ -256,10 +276,10 @@ implement the decision if it changes anything. These steps are as mandatory as t
     saves ≤1. **Silent information loss**: XML comments, processing instructions, DOCTYPE; a DOCTYPE entity gets
     corrupted to literal text. Recommendation: (c) server-side 3-way minimal-diff writer patching changed elements
     into the original text, verified against the bpmn-js model, falling back to (b) "preserve header/EOL/indent".
-  - [~] **Q4-impl** — implemented 2026-10-14 (commits "minimal-diff writer" on main); 4 verify rounds, last fixes
-    (M1 delete+undo with reordered flow refs, M2 signavio vertical move → `format` fallback) NOT independently
-    verified; Firefox/WebKit + Q2 ×3 not re-run on final code. **Next: one fresh verify round** (M1/M2 repros,
-    full 3-browser matrix, Q2 race ×3), then mark done. Writer is enabled; fallbacks report any loss.
+  - [x] **Q4-impl** — verified 2026-10-15 after 5 more fresh verify rounds (fixed: delete+undo restore, schema
+    order from the BPMN XSD, extensions kept on every replace, size-bounded undo memory): unit 297/297, chrome/
+    firefox/webkit 171 pass / 2 skip / 0 fail each, Q2 race ×3 green, ~2,500 UI + ~8,000 fuzz writes all
+    `minimal` with no XSD regressions and no unreported loss. Residuals in Backlog ("Q4-impl residuals").
   - (original acceptance) (after Q2; touches the write path). **E2E acceptance** over every file in `test/fixtures/q4`:
     one-label rename ≤1 unrelated line on first and later saves; zero information loss (comments, PIs,
     DOCTYPE/entities, CDATA, unknown extensions, prefixes, defaults, number spelling); EOL/indent/quotes/attr order/
