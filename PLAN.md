@@ -159,6 +159,9 @@ cannot tell host and collaborator apart:
 
 ## v2 (after the 1.0.x releases)
 
+v1 shipped: 1.0.0 (2026-10-14, manual publish of d305f2a) and 1.0.1 (2026-10-15, via release.yml with
+provenance; adds the Q4 minimal-diff writer).
+
 - [ ] **V2-1. Create a new file.** Requested by product owner 2026-10-14; v1 refuses a missing path.
   - Missing path, interactive terminal (stdin and stdout are TTYs): ask `new.bpmn does not exist. Create it? [y/N]`.
     On yes, write a blank diagram (one start event, like the bpmn.io demo) and open it. On no or Ctrl+C, exit 1.
@@ -170,6 +173,28 @@ cannot tell host and collaborator apart:
   - Why: the prompt catches typos (`oder.bpmn`) without making the common case verbose, and the flag keeps
     scripts working. Both are a few lines in `bin/bpmn-edit.js` (`node:readline`); the e2e test drives a real
     TTY via a pseudo-terminal (e.g. `script -q`), or tests the non-TTY branch plus `--create`.
+
+- [ ] **V2-2. User-facing README.** Requested by product owner 2026-10-15. The current README (243 lines) mixes
+  usage with internals (side-file names, race handling, host secret, grace periods).
+  - Keep in README only what a user needs: what it is (one paragraph + screenshot), install/run, sharing in
+    plain words, what happens to your file (auto-save, git-friendly diffs, edits from your IDE are merged), a short
+    safety note, short known limitations, license.
+  - Move the technical detail, unchanged, to `docs/how-it-works.md` and link it. No information is dropped.
+  - Verify: a fresh reader with no project context follows the README from scratch (`npx bpmn-edit`) and gets
+    to editing and sharing without opening any other file; every technical fact removed exists in the docs file.
+
+- [ ] **V2-3. Project web page on GitHub Pages.** Requested by product owner 2026-10-15.
+  - One static page in `site/` (plain HTML/CSS, no build step), deployed by a `pages.yml` workflow
+    (`actions/upload-pages-artifact` + `actions/deploy-pages`) on pushes that touch `site/`. Not `/docs`, which
+    holds internal notes.
+  - Content: tagline, short screen recording or screenshots (editing, live share with two cursors, clean git
+    diff), `npx bpmn-edit file.bpmn`, features, how sharing works and is secured (plain words), links to npm and
+    GitHub. Copy shares wording with the V2-2 README.
+  - Owner step: repo Settings → Pages → Source "GitHub Actions" (one time). Then set the repo's website field
+    and `homepage` in package.json to the Pages URL (ships with the next release).
+  - Verify: page renders in Chrome, Firefox and WebKit at desktop and phone width, no console errors, all links
+    resolve, Lighthouse accessibility ≥ 95; workflow passes actionlint; after the owner enables Pages, the live
+    URL serves it.
 
 ## Backlog (small known issues, fold into a later step)
 - Q4-impl residuals (none loses data silently; fallbacks report what they drop):
