@@ -261,6 +261,25 @@ provenance; adds the Q4 minimal-diff writer).
     Chrome/Firefox/WebKit 1280/375 light+dark clean, item order exact, Lighthouse a11y 100, links 200,
     actionlint clean. Nits to v3.
 
+- [~] **V2-5. Properties panel (signal name on a signal end event first).** Requested by product owner
+  2026-10-21: "we need to add attribute panel. I need ability to add signal name to signal end event".
+  - Use the official `bpmn-js-properties-panel` (BpmnPropertiesPanelModule + BpmnPropertiesProviderModule, no
+    Camunda/Zeebe extensions). Why: it already covers signal/message/error/escalation/timer/condition definitions,
+    names, IDs and documentation in the UI people know from Camunda Modeler; a hand-written panel would turn into
+    an open-ended edge-case hunt. It has no prebuilt browser bundle, so `scripts/vendor.js` builds one once
+    (esbuild, dev dependency) into `web/vendor/bpmn-js-properties-panel/` with its CSS, committed like bpmn-js.
+    No bundler at runtime; the release drift check covers the new bundle.
+  - UI: a right-side panel, collapsible (toggle in the toolbar, state remembered in `localStorage`); canvas
+    resizes; works for host and collaborators; usable at ~1000 px wide.
+  - Edits go through the commandStack, so they sync to other windows and reach disk like any edit. Creating a
+    signal adds `<bpmn:signal id name>` under `definitions` and `signalRef` on the event definition; the Q4
+    minimal-diff writer must save this as `mode=minimal` with no unreported loss; undo/redo works.
+  - **E2E (real CLI, real Chrome, real disk):** open a file with a signal end event (and one created from the
+    palette + wrench), open the panel, create a signal with name "OrderShipped" → on disk `bpmn:signal
+    name="OrderShipped"` and `signalRef` point at each other, `git diff` small; a second window sees the panel
+    value; rename the signal → disk + other window; pick an existing signal on a second event; undo/redo;
+    external IDE edit of the signal name shows in the open panel. Chrome green, Firefox/WebKit run by the matrix.
+
 ## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
 - V2-2/V2-3/V2-4 residuals (nits): `share.png`/`share.webp` context pad clips the "Order rejected" label and the
   link shows the stand-in hostname `test-….trycloudflare.com/s/…` (token cut off; unlike the hero's masking);
