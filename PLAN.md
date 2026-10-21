@@ -295,9 +295,21 @@ provenance; adds the Q4 minimal-diff writer).
     skipped; new spec 20/20 on Firefox + WebKit.
   - Backlog (v3 unless the owner pulls it forward):
     - Minor, on the requested path: a new signal's Name is pre-filled with its generated id; clicking and typing
-      appends ("Signal_3imqgu0OrderShipped"). Likely upstream behaviour.
+      appends ("Signal_3imqgu0OrderShipped"). Likely upstream behaviour. → fixed in V2-5a.
     - Minor: bundle carries unused Zeebe/FEEL/CodeMirror code from the package's single-file dist; loaded on
-      every page and nearly doubles the package. Needs a source entry point or transform.
+      every page and nearly doubles the package. Needs a source entry point or transform. Owner 2026-10-21: no
+      need to fix.
+
+- [~] **V2-5a. Select all on focus in the signal Name field.** Owner decision 2026-10-21 ("select all on focus"),
+  then push to main.
+  - Focusing the Name field of a signal (and of the sibling reference elements with the same generated-id
+    pre-fill: message, error, escalation) selects its whole text, by click or Tab, so typing replaces the generated
+    id. A second click inside the already-focused field places the caret normally. Done in our code
+    (`web/properties.js`), not by patching the vendored bundle; must survive panel re-renders and remote imports.
+  - **E2E (real CLI, real Chrome, real disk):** create a signal on a signal end event, click Name, type
+    "OrderShipped" → disk has `name="OrderShipped"` exactly; same via Tab; second click positions caret and
+    typing inserts; renaming an existing named signal also replaces; message/error/escalation behave the same;
+    other fields (element Name, ID, documentation) unchanged. Full unit + Chrome e2e green.
     - Nits: opening the panel doesn't pan the view (right side of the diagram goes under it); `xmlns:xsi` left
       on root after timer definition + undo; Tab during a stream of imports leaves focus on body; ID change in
       another window while typing says "someone else deleted it"; Cmd+Z in a field not seen during the tens-of-ms
