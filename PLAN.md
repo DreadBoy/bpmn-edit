@@ -280,7 +280,7 @@ provenance; adds the Q4 minimal-diff writer).
     value; rename the signal → disk + other window; pick an existing signal on a second event; undo/redo;
     external IDE edit of the signal name shows in the open panel. Chrome green, Firefox/WebKit run by the matrix.
 
-- [~] **V2-6. Colours (colour palette for diagram elements).** Requested by product owner 2026-10-21: "add colour
+- [x] **V2-6. Colours (colour palette for diagram elements).** Requested by product owner 2026-10-21: "add colour
   palette (probably using bpmn-js-color-picker). I need ability to add colour to parts of diagram".
   - Use the official `bpmn-js-color-picker` (context pad "Set color" entry → popup with the bpmn.io colour set and
     "Default" to clear). Why: it is the bpmn.io standard, small, and goes through `modeling.setColor`, which writes
@@ -298,8 +298,39 @@ provenance; adds the Q4 minimal-diff writer).
     small; a second window sees the colours live; multi-select colour; reset to Default → attributes gone; undo/redo;
     reopen shows the colours; external IDE edit of a colour shows in the open window; a Camunda-Modeler-coloured
     fixture round-trips. Chrome green, Firefox/WebKit run by the matrix.
+  - Done: `bpmn-js-color-picker` 0.7.2 + `esbuild` 0.28.2 pinned
+    devDependencies; `scripts/vendor.js` `buildColorPicker()` bundles it (IIFE, ~2.7 kB, only the plugin's 3
+    files, build fails on any file outside the package; deterministic) into `web/vendor/bpmn-js-color-picker/`
+    (bundle, CSS, LICENSE, VERSION); `web/app.js` passes `window.BpmnColorPickerModule` as `additionalModules`
+    to the one Modeler. Writer: colour edits were already `minimal`; new: a colour namespace declaration
+    bpmn-js drops (last colour removed) is removed from the file when unused, so colour + Default/undo gives
+    the file back byte for byte (docs/decisions.md "V2-6: colours"). Tests: `test/unit/colours.test.js` (22,
+    bpmn-moddle in Node), `test/e2e/v2-6-colours.spec.js` (8, UI clicks; Chrome, Firefox, WebKit green),
+    fixtures `test/fixtures/colours/` (plain, camunda-coloured, bioc-only, color-only, other-prefixes).
+    Backlog: re-apply `elements.setColor` on a conflict (now dropped with a notice like other unsupported commands).
+  - Verified 2026-10-21 (fresh verifier, round 1, HAPPY; README/docs wording then narrowed): real CLI + real Chrome
+    on own fixtures (uncoloured pool/lanes file, Camunda-style bioc-only / color-only / both, other prefixes,
+    declared-unused, default-namespace CRLF, prefixes bound to foreign URIs): task/gateway/flow/labels/pool/lane/
+    data object/sub-process/annotation, multi-select, Default, undo/redo chains, second window, collaborator via
+    stand-in tunnel, IDE edits while open, restart/reopen; every write `minimal lost=0`, well-formed, no new XSD
+    error, no stray attribute; `npm run vendor` no-op; unit 333/333, Chrome e2e 192 passed / 2 skipped (tunnel).
 
 ## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
+- V2-6 residuals (minor, no data loss):
+  - (minor) Colour changes are not re-applied after a conflict: a `setColor` racing another window's edit is
+    dropped with a notice (like other unsupported commands). Repro: host and collaborator colour the same task at
+    once; one gets "Your edit (set color) could not be merged… not applied".
+  - (minor) Undo after a full Default re-declares `xmlns:bioc`/`xmlns:color` at the end of the root's attributes,
+    so a file that came in coloured with the declaration mid-root keeps a one-line root diff. Repro: open a
+    Camunda-coloured file, Default on every coloured element, undo.
+  - (minor) A file declaring the colour namespaces without using them loses those declarations after colour +
+    Default (or full undo) in one session. XML equivalent.
+  - (minor) Colouring an element with an external label can make bpmn-js re-measure the label's `dc:Bounds` when
+    the stored size differs from the browser's (files from other tools); stays after Default/undo.
+  - (nit) bpmn-js-color-picker 0.7.2 (latest) logs "ContextPad#getPad is deprecated" on each Set color click;
+    re-check on every bpmn-js/diagram-js bump.
+  - (nit) Default on a gateway/event leaves its external label's `color:color` (upstream behaviour); the context
+    pad can cover a short adjacent flow while Shift-selecting (upstream UX).
 - V2-2/V2-3/V2-4 residuals (nits): `share.png`/`share.webp` context pad clips the "Order rejected" label and the
   link shows the stand-in hostname `test-….trycloudflare.com/s/…` (token cut off; unlike the hero's masking);
   hero windows are stacked rather than side by side; on wide screens the page's two-column hero shows the video

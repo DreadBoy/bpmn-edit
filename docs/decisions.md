@@ -1680,3 +1680,84 @@ timing-sensitive sync checks were only measured serially.
 | s5-toolbar-layout: both tests | WebKit | Too slow, not wrong: they wait for rendered frames many times over (the sweep: ~400 widths), and headless WebKit's frames take about twice as long as Chrome's; 14-57 s (busy machine) against the 30 s limit, Chrome 10-16 s. | `test.slow()` in WebKit (90 s), called in each test (a describe-level `test.slow()` with a `browserName` callback runs as a beforeAll hook and does not extend the tests' timeout). |
 | q1-concurrency: rapid back-and-forth edits … | Firefox (once) | Harness race: a remote update re-renders the diagram between finding a shape and measuring it, so `boundingBox()` was `null`. | `center()` (and `dragBy`) measure again until the shape is on screen. |
 | q2-ide-race (merged after S10): the five tests whose window goes through the test's WebSocket proxy and that check its page errors (reconnect, lost ack, …) | WebKit | Harness: the same `page.routeWebSocket` artefact as in s8-session above ("WebSocket connection … failed: The network connection was lost." for the proxied page once its cut connection is terminated); 3 of the 5 failed in the first run. | The same filter, for the proxied page only and in WebKit only: `proxiedPageErrors` moved to `test/e2e/helpers/cli.js`, used by both specs. |
+
+## V2-6: colours
+
+### Question
+
+The product owner asked for a colour palette (2026-10-21): "I need ability to add colour to parts of
+diagram". Which picker, how it gets into the page next to the vendored bpmn-js, and what a colour does to
+the file on disk.
+
+### Choices
+
+- **Picker: [bpmn-js-color-picker](https://github.com/bpmn-io/bpmn-js-color-picker) 0.7.2**, bpmn.io's own
+  plugin (MIT, peer `bpmn-js >= 14`). A context pad entry "Set color" on any selection (one element or many,
+  connections included) opens a popup with Default, Blue, Orange, Green, Red and Purple; it calls
+  `modeling.setColor`, so a colour is an ordinary command: undo/redo, sync to other windows and collaborators
+  and saving work as for any edit. Its own colour set and labels are used unchanged (no `colorPicker.colors`
+  config): the same palette as Camunda Modeler, so files look alike in both.
+- **Bundling.** The package ships ES module sources only. `scripts/vendor.js` (`buildColorPicker()`, a block
+  of its own) bundles it with esbuild (devDependency, pinned 0.28.2; the plugin pinned 0.7.2) into one
+  minified IIFE, `web/vendor/bpmn-js-color-picker/color-picker.min.js` (~2.7 kB), with its CSS, LICENSE and
+  VERSION, committed like bpmn-js; the release workflow's drift check (`npm run vendor` must leave
+  `web/vendor/` unchanged) covers it. The output is deterministic (no source maps or absolute paths;
+  checked: two runs, identical bytes).
+- **One bpmn-js.** The plugin imports nothing (its providers get `contextPad`, `popupMenu`, `modeling`,
+  `canvas`, `translate` and config injected), so the bundle contains only its three files and sets
+  `window.BpmnColorPickerModule`; `web/app.js` passes it as `additionalModules` to the page's one Modeler.
+  The build fails if the bundle would contain any file outside the package, so a later version that imports
+  from bpmn-js or diagram-js cannot bring a second copy of their services in unnoticed.
+- **Attributes.** bpmn-js (18) writes both formats on the DI: `bioc:stroke`, `bioc:fill` (bpmn.io) and
+  `color:background-color`, `color:border-color` (OMG BPMN in Color); edges only the stroke ones; an external
+  label selected on its own gets `color:color` on its `BPMNLabel`. Values are lower-case hex (bpmn-js
+  normalises through a canvas). Nothing to decide here; it is what Camunda Modeler writes.
+- **Writer (Q4).** Adding, changing and removing colour attributes already went through the minimal-diff
+  writer as `minimal` (in-place attribute edits; a namespace the file lacks declared on the root in the file's
+  attribute layout, or the file's own prefix reused, e.g. `bc:` for the biocolor URI). One change: **a colour
+  namespace declaration bpmn-js drops is removed from the file** (`writeMinimal`, `COLOUR_NS`). bpmn-js
+  declares `bioc:`/`color:` on the root only while something uses them, so the edit that takes off the last
+  colour (Default, an undo) has them in its base and not in its output. Before, the writer kept such
+  declarations (declarations are not facts), so colouring a task and resetting it left one changed line (the
+  root's start tag, three with one attribute per line) in `git diff` for good. Now it is removed when its URI
+  is one of the two colour namespaces, bpmn-js's base declared it, its output does not, and nothing in the
+  text written uses that namespace (else kept; a wrong removal could only fail the check → fallback).
+  Result: colour then Default (or undo) gives the file back byte for byte. Why not keep them: the smallest
+  sane `git diff` is "nothing" for a change that was undone; a stray, unused declaration is noise that no other
+  tool would write (Camunda Modeler drops it on its next save too). Why only colour namespaces: they are the
+  ones bpmn-js adds and drops by itself as a side effect of a user's edit; other declarations are the
+  file's business. Side effect: a file that declared a colour namespace without using it, and gets a colour
+  that is then taken off again in bpmn-edit, loses that unused declaration (one line). Unused declarations
+  are kept through every other edit (bpmn-js's base never has them). Also for a file that came in coloured:
+  taking off its last colour removes its colour declarations; an undo then declares them again, but at the
+  end of the root's attributes (where new declarations go), so the root line differs from the original.
+- **Deprecation warning.** bpmn-js-color-picker 0.7.2 (the latest) calls `ContextPad#getPad`, which
+  diagram-js 15 marks deprecated: every "Set color" click logs "ContextPad#getPad is deprecated" to the
+  console (a warning, not an error). Harmless now; re-check on every bpmn-js / diagram-js bump (if
+  `getPad` is removed, the popup's position code breaks) and take a newer plugin version when there is one.
+- **Label re-measure.** Changing an element's colour re-renders it, and bpmn-js may re-measure its external
+  label (a `dc:Bounds` line), as for other edits of the element; that is bpmn-js's edit. The test fixtures
+  carry Chrome's measurements so Chrome's diffs are exact; the e2e allows re-measured label bounds in Firefox
+  and WebKit (other font metrics).
+- **Concurrency.** `elements.setColor` stays an unsupported command for re-applying on a conflict (as
+  before, it is dropped with a notice if it races another window's edit; docs/how-it-works.md). Making it
+  re-applicable is easy (ids + colours) but not needed for the MVP.
+
+### Verification
+
+- Unit (`test/unit/colours.test.js`, 21 tests): bpmn-moddle (the version bpmn-js uses) produces bpmn-js's
+  base and output in Node, colours set as bpmn-js's `SetColorHandler` does; every write `minimal` and
+  lossless. Uncoloured file: task/gateway/flow in place, namespaces once, Default → original bytes, partial
+  Default keeps declarations, recolour/undo/redo texts, every element kind, external label `color:color`,
+  one-attribute-per-line root. Camunda-coloured (both formats), bioc-only, color-only and other-prefix
+  (`bc:`/`omgc:`) fixtures (`test/fixtures/colours/`): unrelated rename byte for byte, Default on one element,
+  all colours off → plain file, new colours reuse the file's prefixes and add only the missing namespace.
+- E2E (`test/e2e/v2-6-colours.spec.js`, real CLI with `BPMN_EDIT_DEBUG_WRITES=1`, git repo, UI clicks:
+  selection, context pad "Set color", popup entry): task, gateway, flow → disk attributes, namespaces once,
+  `git diff` 8 lines, second window live, reopen shows colours and writes nothing; multi-selection of pool,
+  lane, events, task, gateway, sub-process, data object and two flows; undo → file as it was, redo → same
+  bytes as before; Default on part, then on the rest → file as it was; undo/redo of Default; a collaborator
+  through the stand-in tunnel colours and sees the host's Default; IDE edit of a colour shows in the window
+  and survives the next edit; the four coloured fixtures render their colours (shape fill/stroke, flow,
+  lane, data object, label), survive a rename byte for byte, new colours with the file's prefixes. Chrome,
+  Firefox and WebKit green.

@@ -417,10 +417,9 @@ function subtreePaths(el, into) {
 const DC_NS = 'http://www.omg.org/spec/DD/20100524/DC';
 const DD_DI_NS = 'http://www.omg.org/spec/DD/20100524/DI';
 /** Namespaces bpmn-js knows (bpmn-moddle and its colour extensions); anything else is an extension. */
-const KNOWN_NS = new Set([
-  BPMN_MODEL_NS, BPMN_DI_NS, DC_NS, DD_DI_NS, XSI_NS, XML_NS,
-  'http://bpmn.io/schema/bpmn/biocolor/1.0', 'http://www.omg.org/spec/BPMN/non-normative/color/1.0',
-]);
+/** The colour namespaces bpmn-js writes (bpmn.io's `bioc:` and OMG BPMN in Color's `color:`). */
+const COLOUR_NS = new Set(['http://bpmn.io/schema/bpmn/biocolor/1.0', 'http://www.omg.org/spec/BPMN/non-normative/color/1.0']);
+const KNOWN_NS = new Set([BPMN_MODEL_NS, BPMN_DI_NS, DC_NS, DD_DI_NS, XSI_NS, XML_NS, ...COLOUR_NS]);
 const isUnknownNs = (uri) => typeof uri === 'string' && uri !== '' && !KNOWN_NS.has(uri);
 const isExtensionElements = (el) => el.uri === BPMN_MODEL_NS && el.local === 'extensionElements';
 const isLayoutAttr = (a) => a.uri === null && (a.local === 'x' || a.local === 'y');
@@ -1713,7 +1712,34 @@ function writeMinimal(D, B, U, memory = new Map()) {
   }
   if (edits.some((e) => e.str.includes('\u0000'))) throw new WriterFallback('an element moved into a new one was not placed');
 
-  return { text: applyEdits(text, edits), removed: removedNow, restored, unused, movedFrom };
+  // Colour namespaces bpmn-js stopped declaring (V2-6, docs/decisions.md): bpmn-js declares `bioc:` /
+  // `color:` on the root only while something uses them, so the edit that removes the last colour (the
+  // colour picker's "Default", an undo) drops the declaration from its output. Remove it from the file
+  // too, unless the text written still uses that namespace, so that colouring and resetting leaves no
+  // trace in `git diff`. A declaration bpmn-js did not have before the edit (unused on disk already) stays.
+  let written = applyEdits(text, edits);
+  const unusedDecls = D.root.allAttrs.filter((a) => {
+    const prefix = a.name === 'xmlns' ? '' : a.name.startsWith('xmlns:') ? a.name.slice(6) : null;
+    if (prefix === null || prefix === '' || !COLOUR_NS.has(D.root.nsDecls[prefix])) return false;
+    const uri = D.root.nsDecls[prefix];
+    const declares = (el) => Object.values(el.nsDecls).includes(uri);
+    return declares(B.root) && !declares(U.root);
+  });
+  if (unusedDecls.length) {
+    const W = load(written);
+    const used = new Set();
+    for (const el of walk(W.root)) {
+      used.add(el.uri);
+      for (const a of el.attrs) used.add(a.uri);
+    }
+    const drop = unusedDecls.filter((a) => !used.has(D.root.nsDecls[a.name.slice(6)]));
+    if (drop.length) {
+      for (const a of drop) removeAttr(D.root, a);
+      written = applyEdits(text, edits);
+    }
+  }
+
+  return { text: written, removed: removedNow, restored, unused, movedFrom };
 }
 
 /** Short description of a comment or processing instruction (for notes about what was not kept). */

@@ -120,6 +120,7 @@ describe('share routes and security model', () => {
     assert.match(page.body, /id="canvas"/);
     assert.equal((await request(port, `${shared.path}/app.js`, { headers: h() })).status, 200);
     assert.equal((await request(port, `${shared.path}/vendor/bpmn-js/bpmn-modeler.production.min.js`, { headers: h() })).status, 200);
+    assert.equal((await request(port, `${shared.path}/vendor/bpmn-js-color-picker/color-picker.min.js`, { headers: h() })).status, 200);
     const file = await request(port, `${shared.path}/api/file`, { headers: h() });
     assert.equal(file.status, 200);
     assert.equal(json(file).name, 'order.bpmn');

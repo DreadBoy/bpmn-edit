@@ -6,6 +6,7 @@ how sharing is secured, and the known gaps. You don't need any of it to use bpmn
 - [Starting and stopping](#starting-and-stopping)
 - [Creating a new file](#creating-a-new-file)
 - [Saving and changes on disk](#saving-and-changes-on-disk)
+- [Colours](#colours)
 - [Sharing](#sharing)
 - [Security notes](#security-notes)
 - [Known limitations](#known-limitations)
@@ -128,6 +129,28 @@ exclusive-create flag `wx`, so a file that appears in the meantime is opened as 
   This check runs 300 ms after the last write, so Ctrl-C takes up to 300 ms longer when it writes edits or
   comes right after a write, and up to about 1.3 s while another program is writing the file.
 - Several windows (yours or collaborators') can edit at the same time; see [Concurrent editing](#concurrent-editing).
+
+## Colours
+
+- The colour picker is [bpmn-js-color-picker](https://github.com/bpmn-io/bpmn-js-color-picker) (bpmn.io's
+  plugin, MIT), bundled into `web/vendor/bpmn-js-color-picker/` by `npm run vendor` and loaded as a module
+  of the editor's one bpmn-js. Select elements (any number, connections included), click **Set color** in
+  the context pad and pick Blue, Orange, Green, Red, Purple or **Default** (no colour). Undo and redo work as
+  for any other edit; collaborators see the colours live.
+- A colour is saved on the element's DI shape or edge in both common formats: bpmn.io's
+  `bioc:fill` / `bioc:stroke` and the OMG's BPMN in Color `color:background-color` / `color:border-color`
+  (connections get the stroke colour only; a colour on an external label is `color:color` on its
+  `BPMNLabel`). Files coloured by Camunda Modeler or bpmn.io (either format or both, with any namespace
+  prefixes) show their colours, and keep them byte for byte through unrelated edits.
+- The first colour in a file declares the namespaces it needs (`xmlns:bioc`, `xmlns:color`) once, on the
+  root element, in the file's own attribute layout; a file that already declares them (under any prefix)
+  is written with its own prefixes. **Default** removes the attributes, and when the last colour goes, the
+  colour namespace declarations go too (bpmn-js drops them then), so colouring an uncoloured file and
+  resetting it leaves no `git diff` (apart from a label bpmn-js may have re-measured; see below). An undo
+  after that declares them again at the end of the root's attributes. A declaration a file has without using it stays through other edits.
+- Changing a colour can make bpmn-js re-measure the element's external label (one `dc:Bounds` line), as it
+  does for other edits of the element.
+- A colour change racing another window's edit is not re-applied (see [Concurrent editing](#concurrent-editing)).
 
 ## Sharing
 

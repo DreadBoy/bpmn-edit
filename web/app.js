@@ -129,7 +129,12 @@ function takeHostSecret() {
   }
 }
 
-const modeler = new window.BpmnJS({ container: '#canvas' });
+// V2-6: the colour picker (context pad "Set color", web/vendor/bpmn-js-color-picker) is a module of this one
+// Modeler, not a bundle of its own bpmn-js: its bundle holds only the plugin's providers.
+const modeler = new window.BpmnJS({
+  container: '#canvas',
+  additionalModules: window.BpmnColorPickerModule ? [window.BpmnColorPickerModule] : [],
+});
 const canvas = modeler.get('canvas');
 const commandStack = modeler.get('commandStack');
 const directEditing = modeler.get('directEditing');

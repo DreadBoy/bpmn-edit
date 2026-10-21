@@ -63,6 +63,8 @@ describe('server routes', () => {
       '/app.css': /^text\/css/,
       '/vendor/bpmn-js/bpmn-modeler.production.min.js': /^text\/javascript/,
       '/vendor/bpmn-js/assets/bpmn-font/font/bpmn.woff2': /^font\/woff2/,
+      '/vendor/bpmn-js-color-picker/color-picker.min.js': /^text\/javascript/,
+      '/vendor/bpmn-js-color-picker/color-picker.css': /^text\/css/,
     };
     for (const [path, type] of Object.entries(cases)) {
       const res = await rawGet(server.port, path);

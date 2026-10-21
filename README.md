@@ -81,6 +81,15 @@ question; if it already exists, it is simply opened as it is.
 A few rules: the folder must already exist, and the name must end in `.bpmn`. bpmn-edit never creates folders
 and never overwrites a file.
 
+## Colours
+
+Select one or more elements (tasks, events, gateways, pools and lanes, data objects, sub-processes,
+connections), click **Set color** (the paint bucket in the menu next to the selection) and pick a colour.
+**Default** takes the colour off again. Colours are saved in the standard attributes that Camunda Modeler and
+bpmn.io use, so those tools show them too, and colours already in a file show up in bpmn-edit. `git diff`
+usually shows only the coloured elements' lines, plus the root element's line when a file gets its first
+colour or loses its last one; an element's label may also be re-measured (its size line changes).
+
 ## What happens to your file
 
 - **It saves itself.** There is no save button. Each change lands in the file a moment after you make it.
@@ -129,4 +138,5 @@ bpmn-edit is MIT licensed, see [LICENSE](LICENSE).
 It ships a prebuilt [bpmn-js](https://github.com/bpmn-io/bpmn-js) (in `web/vendor/bpmn-js/`, with its
 [license](web/vendor/bpmn-js/LICENSE)), whose license requires that the bpmn.io watermark in the diagram (the
 logo linking to https://bpmn.io) stays fully visible and unchanged; keep it that way in any fork or
-modification.
+modification. It also ships [bpmn-js-color-picker](https://github.com/bpmn-io/bpmn-js-color-picker) (MIT),
+bundled in `web/vendor/bpmn-js-color-picker/` with its [license](web/vendor/bpmn-js-color-picker/LICENSE).
