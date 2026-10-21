@@ -1746,3 +1746,45 @@ Requested by the product owner on 2026-10-21 ("I need ability to add signal name
   the minimal-diff writer inserts them after the last root element on disk (before `bpmndi:BPMNDiagram`,
   schema order kept) as `mode=minimal` with nothing lost, also when the file keeps its signals before the
   process. No writer change was needed (unit tests "global elements edited in the properties panel").
+- **V2-5a: select all on focus in a reference element's Name** (owner, 2026-10-21: "select all on focus").
+  "Create new ..." pre-fills a new signal's, message's, error's or escalation's name with a generated id
+  (`Signal_0abc123`, a second id, not the element's own) and the panel then focuses that field with its text
+  selected; the user's click into the already-focused field collapsed the selection, so typing appended to the
+  id. In `web/properties.js`, not in the vendored bundle: a `focusin` listener for the panel (survives
+  every re-render) selects all in inputs whose `data-entry-id` is `signalName`, `messageName`, `errorName` or
+  `escalationName` (the panel's own entry ids, checked in the bundle and the live DOM). Browsers collapse a
+  selection made on focus at the end of the focusing click (Chrome even when clicking into an existing
+  selection), so a field focused by a mouse press, or by the panel itself (focus with no key/mouse event in
+  that task), selects again on its first mouseup, with `preventDefault()`, unless the pointer moved more than
+  3 px (a drag keeps its partial selection). Later clicks, and the first click after Tab, a label click or
+  typing, place the caret as usual. The focus `restoreFieldState()` gives back after someone else's update is
+  flagged and selects nothing: selecting there would make the next key wipe the text being typed. Nor does
+  the focus the browser gives back when the user returns to the window or tab. Fields are known by key
+  (element id + field id), not by input element, because an import re-mounts them: the field focused at
+  the window's blur is skipped once on return even if an import replaced it while the tab was away
+  (verifier round 1: the replacement got selected and "Now" wiped "OrderShipped" — data loss). A pending
+  "first click selects all" also survives by key: it is dropped when the user types or moves the focus
+  elsewhere in the page, not when the window loses the focus or an import replaces the field (round 1:
+  after "Create new ..." plus an import or a tab switch, the click appended to the id). When the event
+  already refers to a named signal (message, …), "Create new ..." focuses the Name input while it still
+  shows the old name and the panel puts the new id in a render later, which collapses the selection
+  (round 3: typing at once gave `Signal_1m1g595Immediate`). So for about 300 ms after a select-all focus
+  (checked every 20 ms) a new value in the same, still focused field is selected again; any key, mouse
+  press or input event, a focus elsewhere or a given-back focus ends that. Other fields (element name, ID,
+  documentation, codes) are unchanged.
+- **V2-5a triage: the baseline of typed text.** Whether text typed in a panel field is "uncommitted" (and an
+  import's different value a concurrent edit) was judged against the field's text when it got the focus. A
+  local command can change the value under a focused field: "Create new ..." on an event that had a signal
+  focuses Name while it shows the old name, then the new signal's generated name arrives. An import while the
+  user typed the new name then looked like someone else changing it from "OrderShipped": the import's value
+  was kept and the typed keys were lost (on HEAD before V2-5a too; verifier 12/12 in Chrome). Now the
+  baseline is the field's text right before the user's first change since the last commit (`beforeinput`),
+  and a field not typed in since its last commit takes its shown text as the baseline when an import starts.
+  This holds for every panel field, whatever command changed its value. The bookkeeping is by field key (element id + field id),
+  fixed when the text is typed, never looked up later: a commit is attributed to the target of the
+  `input` event that scheduled it (not `document.activeElement`, which is the page body while
+  `restoreFieldState()` puts text back — on HEAD that commit was dropped and the next import reported a
+  false "changed" and lost the keys typed in between), and it refreshes that key's baseline even when it
+  runs after the field was removed or the panel moved to another element (verifier round 4: leaving the
+  element within the commit delay, coming back and typing during an import lost keys). Focusing a field
+  with no commit pending starts a fresh baseline.

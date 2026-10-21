@@ -300,7 +300,7 @@ provenance; adds the Q4 minimal-diff writer).
       every page and nearly doubles the package. Needs a source entry point or transform. Owner 2026-10-21: no
       need to fix.
 
-- [~] **V2-5a. Select all on focus in the signal Name field.** Owner decision 2026-10-21 ("select all on focus"),
+- [x] **V2-5a. Select all on focus in the signal Name field.** Owner decision 2026-10-21 ("select all on focus"),
   then push to main.
   - Focusing the Name field of a signal (and of the sibling reference elements with the same generated-id
     pre-fill: message, error, escalation) selects its whole text, by click or Tab, so typing replaces the generated
@@ -310,6 +310,32 @@ provenance; adds the Q4 minimal-diff writer).
     "OrderShipped" → disk has `name="OrderShipped"` exactly; same via Tab; second click positions caret and
     typing inserts; renaming an existing named signal also replaces; message/error/escalation behave the same;
     other fields (element Name, ID, documentation) unchanged. Full unit + Chrome e2e green.
+  - Done: `web/properties.js` selects all on focus (click, Tab, Shift+Tab) in the signal/message/error/escalation
+    Name fields (by the panel's `data-entry-id`); re-selects on the first mouseup after a press or panel focus and
+    for ~300 ms after "Create new ..." changes the value; never selects on focus given back (import carry-over,
+    returning to the tab/window). The pre-filled name is a separate generated id (`Signal_…`), not the element id.
+    Also fixed two pre-existing key-loss bugs in V2-5's typed-text carry-over: the baseline is taken at the first
+    change since the last commit, and commits are attributed to the field that got `input`, not `activeElement`.
+    Spec `v2-5a-select-all.spec.js` (17 tests), fixture `references.bpmn`.
+  - Verified 2026-10-21 (5 fresh verifier rounds; 3 full, then 2 targeted after triage): round 1 tab return after
+    an import selected all → next key wiped typed text (blocker); round 3 typed name after "Create new ..." wiped
+    by a concurrent edit elsewhere (blocker, pre-existing); round 4 regression from that fix (leave + return +
+    type during import); all fixed with failing-first e2e tests. Final round HAPPY: main path for all four
+    reference kinds, caret on second click, other fields unchanged, undo/redo, repeated race cases (60/60, 20/20,
+    12/12), every write `mode=minimal`, XML well-formed; unit 316/316, Chrome e2e 211 passed / 2 skipped,
+    V2-5 + V2-5a specs on Firefox + WebKit 46 passed / 8 skipped (Chrome-only tab-switch tests).
+  - Backlog (all also on V2-5's HEAD):
+    - **Major, live collaboration:** while this window's own panel commit is not yet accepted by the host, an
+      update from another window (still holding the old value) is taken for a same-field conflict: keys typed after
+      the commit are dropped with a false "someone else changed it first" notice. Not silent; file stays valid.
+      Repro: window A types into a Name field every 450–750 ms while window B drags a task every 150–450 ms
+      (~1 in 3). Fix hint: while the field's own op is unaccepted, compare against the op's old value / incoming base.
+    - Major, narrow timing: an IDE writing a stale buffer ~60 ms after "Create new ..." (before the save) reverts
+      the ref to the old signal, but Name still shows the new id selected; typing renames the old signal.
+    - Minor: right after typing in Documentation, one click on another canvas element doesn't change selection.
+    - Nits: same-field conflict notice names the signal for a remote rename but the event for a disk write; keys
+      typed within ~30 ms of choosing "Create new ..." go to the `<select>` type-ahead; `npm test` in a fresh
+      worktree fails the XSD test (no `node_modules`).
     - Nits: opening the panel doesn't pan the view (right side of the diagram goes under it); `xmlns:xsi` left
       on root after timer definition + undo; Tab during a stream of imports leaves focus on body; ID change in
       another window while typing says "someone else deleted it"; Cmd+Z in a field not seen during the tens-of-ms

@@ -1,0 +1,71 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Outcomes"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Outcomes" name="Order outcomes" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_Placed" name="Order placed">
+      <bpmn:outgoing>Flow_ToCheck</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_Check" name="Check order">
+      <bpmn:incoming>Flow_ToCheck</bpmn:incoming>
+    </bpmn:task>
+    <bpmn:endEvent id="EndEvent_Signal" name="Order shipped">
+      <bpmn:signalEventDefinition id="SignalEventDefinition_Shipped" signalRef="Signal_Shipped" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Message" name="Customer told">
+      <bpmn:messageEventDefinition id="MessageEventDefinition_Told" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Error" name="Order invalid">
+      <bpmn:errorEventDefinition id="ErrorEventDefinition_Invalid" />
+    </bpmn:endEvent>
+    <bpmn:endEvent id="EndEvent_Escalation" name="Order stuck">
+      <bpmn:escalationEventDefinition id="EscalationEventDefinition_Stuck" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ToCheck" sourceRef="StartEvent_Placed" targetRef="Task_Check" />
+  </bpmn:process>
+  <bpmn:signal id="Signal_Shipped" name="OrderShipped" />
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Outcomes">
+    <bpmndi:BPMNPlane id="BPMNPlane_Outcomes" bpmnElement="Process_Outcomes">
+      <bpmndi:BPMNShape id="StartEvent_Placed_di" bpmnElement="StartEvent_Placed">
+        <dc:Bounds x="152" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="138" y="225" width="64" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Check_di" bpmnElement="Task_Check">
+        <dc:Bounds x="240" y="160" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Signal_di" bpmnElement="EndEvent_Signal">
+        <dc:Bounds x="412" y="82" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="395" y="125" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Message_di" bpmnElement="EndEvent_Message">
+        <dc:Bounds x="412" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="395" y="225" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Error_di" bpmnElement="EndEvent_Error">
+        <dc:Bounds x="412" y="282" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="397" y="325" width="66" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Escalation_di" bpmnElement="EndEvent_Escalation">
+        <dc:Bounds x="412" y="382" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="400" y="425" width="60" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ToCheck_di" bpmnElement="Flow_ToCheck">
+        <di:waypoint x="188" y="200" />
+        <di:waypoint x="240" y="200" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
