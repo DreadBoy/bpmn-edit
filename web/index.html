@@ -9,6 +9,7 @@
   <link rel="stylesheet" href="vendor/bpmn-js/assets/diagram-js.css">
   <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-js.css">
   <link rel="stylesheet" href="vendor/bpmn-js/assets/bpmn-font/css/bpmn.css">
+  <link rel="stylesheet" href="vendor/bpmn-js-properties-panel/properties-panel.css">
   <link rel="stylesheet" href="app.css">
   <link rel="stylesheet" href="presence.css">
 </head>
@@ -29,12 +30,21 @@
         <button id="share-stop" type="button">Stop sharing</button>
       </span>
     </div>
+    <button id="properties-toggle" type="button" aria-controls="properties-panel" aria-pressed="false"
+            aria-label="Properties panel" hidden>
+      <svg aria-hidden="true" viewBox="0 0 16 16" width="16" height="16"><rect x="1.5" y="2.5" width="13" height="11" rx="1.5"
+        fill="none" stroke="currentColor"/><path d="M10 2.5v11" stroke="currentColor"/><path d="M11.5 5.5h1.5M11.5 8h1.5M11.5 10.5h1.5"
+        stroke="currentColor"/></svg><span class="label">Properties</span>
+    </button>
   </header>
   <div id="share-error" role="alert" hidden>
     <span id="share-error-text"></span>
     <button id="share-error-close" type="button" aria-label="Dismiss">×</button>
   </div>
-  <main id="canvas"></main>
+  <div id="workspace">
+    <main id="canvas"></main>
+    <aside id="properties-panel" aria-label="Properties" hidden></aside>
+  </div>
   <div id="error" role="alert" hidden></div>
   <div id="toast" role="status" aria-live="polite" hidden></div>
   <div id="reconnecting" role="status" aria-live="polite" hidden>
@@ -50,6 +60,7 @@
   </div>
 
   <script src="vendor/bpmn-js/bpmn-modeler.production.min.js"></script>
+  <script src="vendor/bpmn-js-properties-panel/bpmn-js-properties-panel.min.js"></script>
   <script type="module" src="app.js"></script>
 </body>
 </html>

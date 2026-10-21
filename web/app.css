@@ -167,7 +167,7 @@ body {
 #share-url {
   flex: 0 1 auto;
   box-sizing: border-box;
-  width: clamp(140px, 26vw, 360px);
+  width: clamp(140px, calc(26vw - 40px), 360px); /* - 40px: room for the Properties toggle */
   min-width: 80px;
   height: 26px;
   padding: 0 8px;
@@ -208,10 +208,68 @@ body {
   padding: 0 2px;
 }
 
-#canvas {
+/* The canvas and, right of it, the properties panel (web/properties.js). */
+#workspace {
   flex: 1;
   min-height: 0;
+  display: flex;
+}
+
+#canvas {
+  flex: 1;
+  min-width: 0;
   position: relative;
+}
+
+#properties-panel {
+  flex: none;
+  width: 300px;
+  max-width: 45vw;
+  border-left: 1px solid #d0d7de;
+  background: #fff;
+  overflow: hidden; /* the panel scrolls its own content */
+}
+
+/* Panel text in the editor's fonts, not the panel's defaults (sans-serif / monospace). */
+#properties-panel .bio-properties-panel-container {
+  --font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  --font-family-monospace: ui-monospace, SFMono-Regular, Menlo, monospace;
+}
+
+#properties-panel[hidden] { display: none; }
+
+/* The toolbar toggle: an icon plus "Properties"; at 1100px and less the icon only (the label stays for
+   screen readers via aria-label, the tooltip says what it does). */
+#properties-toggle {
+  flex: none;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 28px;
+  padding: 0 10px;
+  border: 1px solid #d0d7de;
+  border-radius: 6px;
+  background: #fff;
+  color: #1f2328;
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+#properties-toggle:hover { background: #f3f4f6; }
+#properties-toggle[aria-pressed="true"] {
+  border-color: #0969da;
+  background: #ddf4ff;
+  color: #0550ae;
+}
+
+#properties-toggle[hidden] { display: none; }
+#properties-toggle svg { flex: none; }
+
+@media (max-width: 1100px) {
+  #properties-toggle { padding: 0 6px; }
+  #properties-toggle .label { display: none; }
 }
 
 #error {

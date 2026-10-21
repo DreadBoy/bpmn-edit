@@ -1,0 +1,66 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL"
+                  xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+                  xmlns:dc="http://www.omg.org/spec/DD/20100524/DC"
+                  xmlns:di="http://www.omg.org/spec/DD/20100524/DI"
+                  id="Definitions_Shipping"
+                  targetNamespace="http://bpmn.io/schema/bpmn">
+  <bpmn:process id="Process_Shipping" name="Shipping process" isExecutable="false">
+    <bpmn:startEvent id="StartEvent_Paid" name="Order paid">
+      <bpmn:outgoing>Flow_ToShip</bpmn:outgoing>
+    </bpmn:startEvent>
+    <bpmn:task id="Task_Ship" name="Ship order">
+      <bpmn:incoming>Flow_ToShip</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToNotify</bpmn:outgoing>
+    </bpmn:task>
+    <bpmn:intermediateThrowEvent id="Event_Notify" name="Notify warehouse">
+      <bpmn:incoming>Flow_ToNotify</bpmn:incoming>
+      <bpmn:outgoing>Flow_ToShipped</bpmn:outgoing>
+      <bpmn:signalEventDefinition id="SignalEventDefinition_Notify" />
+    </bpmn:intermediateThrowEvent>
+    <bpmn:endEvent id="EndEvent_Shipped" name="Order shipped">
+      <bpmn:incoming>Flow_ToShipped</bpmn:incoming>
+      <bpmn:signalEventDefinition id="SignalEventDefinition_Shipped" />
+    </bpmn:endEvent>
+    <bpmn:sequenceFlow id="Flow_ToShip" sourceRef="StartEvent_Paid" targetRef="Task_Ship" />
+    <bpmn:sequenceFlow id="Flow_ToNotify" sourceRef="Task_Ship" targetRef="Event_Notify" />
+    <bpmn:sequenceFlow id="Flow_ToShipped" sourceRef="Event_Notify" targetRef="EndEvent_Shipped" />
+  </bpmn:process>
+  <bpmndi:BPMNDiagram id="BPMNDiagram_Shipping">
+    <bpmndi:BPMNPlane id="BPMNPlane_Shipping" bpmnElement="Process_Shipping">
+      <bpmndi:BPMNShape id="StartEvent_Paid_di" bpmnElement="StartEvent_Paid">
+        <dc:Bounds x="152" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="144" y="225" width="52" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Task_Ship_di" bpmnElement="Task_Ship">
+        <dc:Bounds x="240" y="160" width="100" height="80" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Event_Notify_di" bpmnElement="Event_Notify">
+        <dc:Bounds x="392" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="368" y="225" width="85" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="EndEvent_Shipped_di" bpmnElement="EndEvent_Shipped">
+        <dc:Bounds x="492" y="182" width="36" height="36" />
+        <bpmndi:BPMNLabel>
+          <dc:Bounds x="475" y="225" width="70" height="14" />
+        </bpmndi:BPMNLabel>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="Flow_ToShip_di" bpmnElement="Flow_ToShip">
+        <di:waypoint x="188" y="200" />
+        <di:waypoint x="240" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToNotify_di" bpmnElement="Flow_ToNotify">
+        <di:waypoint x="340" y="200" />
+        <di:waypoint x="392" y="200" />
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="Flow_ToShipped_di" bpmnElement="Flow_ToShipped">
+        <di:waypoint x="428" y="200" />
+        <di:waypoint x="492" y="200" />
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>

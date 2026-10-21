@@ -5,6 +5,7 @@ import { mkdtemp, readdir, readFile, rm, writeFile } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, beforeEach, describe, it } from 'node:test';
+import { BpmnModdle } from 'bpmn-moddle'; // installed with bpmn-js (dev dependency)
 import WebSocket from 'ws';
 import { createFileStore } from '../../src/file.js';
 import {
@@ -1211,6 +1212,134 @@ describe('minimal-diff writer: the schema order of children', () => {
     assert.equal(W.mode, 'minimal', W.reason);
     assert.equal(W.text, disk(model({ tasks: [tasks[0], flow, tasks[1]], flows: [note] })));
     assert.deepEqual(schemaOrderProblems(W.text), []);
+  });
+});
+
+describe('minimal-diff writer: global elements edited in the properties panel (V2-5)', () => {
+  // The properties panel adds bpmn:signal / message / error / escalation to the definitions' root
+  // elements (bpmn-js appends them after the processes) and sets signalRef & co. on the event
+  // definition. bpmn-js' output is made here the way bpmn-js makes it: bpmn-moddle's toXML.
+  const moddle = new BpmnModdle();
+  const serialise = async (definitions) => (await moddle.toXML(definitions, { format: true })).xml;
+  const read = async (xml) => (await moddle.fromXML(xml)).rootElement;
+  const BODY = (roots) => `<?xml version="1.0" encoding="UTF-8"?>
+<bpmn:definitions xmlns:bpmn="${MODEL}" xmlns:bpmndi="${DI}" xmlns:dc="${DC}" id="Defs" targetNamespace="http://bpmn.io/schema/bpmn">
+${roots}
+  <bpmndi:BPMNDiagram id="D1">
+    <bpmndi:BPMNPlane id="PL" bpmnElement="P">
+      <bpmndi:BPMNShape id="End_di" bpmnElement="End">
+        <dc:Bounds x="100" y="100" width="36" height="36" />
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="Throw_di" bpmnElement="Throw">
+        <dc:Bounds x="200" y="100" width="36" height="36" />
+      </bpmndi:BPMNShape>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</bpmn:definitions>
+`;
+  const PROCESS = (endDef = '<bpmn:signalEventDefinition id="SED_End" />', throwDef = '<bpmn:signalEventDefinition id="SED_Throw" />') => `  <bpmn:process id="P" isExecutable="false">
+    <bpmn:intermediateThrowEvent id="Throw" name="Notify">
+      ${throwDef}
+    </bpmn:intermediateThrowEvent>
+    <bpmn:endEvent id="End" name="Shipped">
+      ${endDef}
+    </bpmn:endEvent>
+  </bpmn:process>`;
+
+  /** Writes bpmn-js' output after `edit(definitions, byId)` for `onDisk`; checks it is minimal, lossless and in schema order. */
+  async function write(onDisk, edit) {
+    const base = await serialise(await read(onDisk));
+    const definitions = await read(onDisk);
+    const byId = (id) => {
+      const stack = [definitions];
+      while (stack.length) {
+        const el = stack.pop();
+        if (el.id === id) return el;
+        for (const value of Object.values(el)) {
+          if (Array.isArray(value)) stack.push(...value.filter((v) => v?.$type));
+          else if (value?.$type && value !== el.$parent) stack.push(value);
+        }
+      }
+      throw new Error(`no ${id}`);
+    };
+    edit(definitions, byId);
+    const out = await serialise(definitions);
+    const W = renderForDisk({ disk: onDisk, base, out });
+    assert.equal(W.mode, 'minimal', W.reason);
+    assert.equal(W.lost, undefined);
+    assert.deepEqual(schemaOrderProblems(W.text), []);
+    assert.deepEqual(await newXsdErrors(W.text, onDisk), []);
+    return W.text;
+  }
+
+  const addRoot = (definitions, type, attrs) => {
+    const root = moddle.create(type, attrs);
+    root.$parent = definitions;
+    definitions.rootElements.push(root);
+    return root;
+  };
+
+  it('a new signal: one line after the process, signalRef on the event definition', async () => {
+    const onDisk = BODY(PROCESS());
+    const text = await write(onDisk, (definitions, byId) => {
+      byId('SED_End').signalRef = addRoot(definitions, 'bpmn:Signal', { id: 'Signal_1', name: 'OrderShipped' });
+    });
+    assert.equal(text, onDisk
+      .replace('<bpmn:signalEventDefinition id="SED_End" />', '<bpmn:signalEventDefinition id="SED_End" signalRef="Signal_1" />')
+      .replace('  </bpmn:process>\n', '  </bpmn:process>\n  <bpmn:signal id="Signal_1" name="OrderShipped" />\n'));
+    assert.equal(changedLines(onDisk, text), 3);
+  });
+
+  it('signals placed before the process on disk (as some tools write them): a new one, a rename and a second reference', async () => {
+    const onDisk = BODY(`  <bpmn:signal id="Signal_A" name="Alpha" />\n${PROCESS('<bpmn:signalEventDefinition id="SED_End" signalRef="Signal_A" />')}`);
+    let text = await write(onDisk, (definitions, byId) => {
+      byId('SED_Throw').signalRef = addRoot(definitions, 'bpmn:Signal', { id: 'Signal_B', name: 'Beta' });
+    });
+    assert.match(text, /signalRef="Signal_B"/);
+    assert.equal(changedLines(onDisk, text), 3);
+    assert.ok(text.indexOf('<bpmn:signal id="Signal_B"') < text.indexOf('<bpmndi:BPMNDiagram'));
+
+    text = await write(onDisk, (definitions, byId) => { byId('Signal_A').name = 'Alpha renamed'; });
+    assert.equal(text, onDisk.replace('name="Alpha"', 'name="Alpha renamed"'));
+
+    text = await write(onDisk, (definitions, byId) => { byId('SED_Throw').signalRef = byId('Signal_A'); });
+    assert.equal(text, onDisk.replace('<bpmn:signalEventDefinition id="SED_Throw" />', '<bpmn:signalEventDefinition id="SED_Throw" signalRef="Signal_A" />'));
+
+    // Removing the reference ("<none>") leaves the signal.
+    text = await write(onDisk, (definitions, byId) => { byId('SED_End').signalRef = undefined; });
+    assert.equal(text, onDisk.replace(' signalRef="Signal_A"', ''));
+  });
+
+  it('message, error and escalation definitions with their global elements', async () => {
+    const onDisk = BODY(PROCESS('<bpmn:messageEventDefinition id="MED_End" />', '<bpmn:escalationEventDefinition id="EED_Throw" />'));
+    const text = await write(onDisk, (definitions, byId) => {
+      byId('MED_End').messageRef = addRoot(definitions, 'bpmn:Message', { id: 'Message_1', name: 'Shipped' });
+      byId('EED_Throw').escalationRef = addRoot(definitions, 'bpmn:Escalation', { id: 'Escalation_1', name: 'Late', escalationCode: 'E1' });
+      addRoot(definitions, 'bpmn:Error', { id: 'Error_1', name: 'Boom', errorCode: '500' });
+    });
+    assert.match(text, /<bpmn:messageEventDefinition id="MED_End" messageRef="Message_1" \/>/);
+    assert.match(text, /<bpmn:escalationEventDefinition id="EED_Throw" escalationRef="Escalation_1" \/>/);
+    assert.match(text, /<\/bpmn:process>\n {2}<bpmn:message id="Message_1" name="Shipped" \/>\n {2}<bpmn:escalation id="Escalation_1" name="Late" escalationCode="E1" \/>\n {2}<bpmn:error id="Error_1" name="Boom" errorCode="500" \/>\n {2}<bpmndi:BPMNDiagram/);
+    assert.equal(changedLines(onDisk, text), 7);
+  });
+
+  it('a collaboration first: the new signal still goes after the process, before the diagram', async () => {
+    const onDisk = BODY(`  <bpmn:collaboration id="C">\n    <bpmn:participant id="Pa" processRef="P" />\n  </bpmn:collaboration>\n${PROCESS()}`);
+    const text = await write(onDisk, (definitions, byId) => {
+      byId('SED_End').signalRef = addRoot(definitions, 'bpmn:Signal', { id: 'Signal_1', name: 'OrderShipped' });
+    });
+    assert.ok(text.indexOf('</bpmn:process>') < text.indexOf('<bpmn:signal id="Signal_1"'));
+    assert.ok(text.indexOf('<bpmn:signal id="Signal_1"') < text.indexOf('<bpmndi:BPMNDiagram'));
+    assert.equal(changedLines(onDisk, text), 3);
+  });
+
+  it('documentation added to an event', async () => {
+    const onDisk = BODY(PROCESS());
+    const text = await write(onDisk, (definitions, byId) => {
+      byId('End').documentation = [moddle.create('bpmn:Documentation', { text: 'Tell the customer.' })];
+    });
+    assert.match(text, /<bpmn:endEvent id="End" name="Shipped">\n {6}<bpmn:documentation>Tell the customer\.<\/bpmn:documentation>\n {6}<bpmn:signalEventDefinition/);
+    assert.equal(changedLines(onDisk, text), 1);
   });
 });
 

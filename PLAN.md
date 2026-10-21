@@ -261,7 +261,7 @@ provenance; adds the Q4 minimal-diff writer).
     Chrome/Firefox/WebKit 1280/375 light+dark clean, item order exact, Lighthouse a11y 100, links 200,
     actionlint clean. Nits to v3.
 
-- [~] **V2-5. Properties panel (signal name on a signal end event first).** Requested by product owner
+- [x] **V2-5. Properties panel (signal name on a signal end event first).** Requested by product owner
   2026-10-21: "we need to add attribute panel. I need ability to add signal name to signal end event".
   - Use the official `bpmn-js-properties-panel` (BpmnPropertiesPanelModule + BpmnPropertiesProviderModule, no
     Camunda/Zeebe extensions). Why: it already covers signal/message/error/escalation/timer/condition definitions,
@@ -279,6 +279,30 @@ provenance; adds the Q4 minimal-diff writer).
     name="OrderShipped"` and `signalRef` point at each other, `git diff` small; a second window sees the panel
     value; rename the signal → disk + other window; pick an existing signal on a second event; undo/redo;
     external IDE edit of the signal name shows in the open panel. Chrome green, Firefox/WebKit run by the matrix.
+  - Done: bpmn-js-properties-panel 5.65.2 (plain BPMN modules) bundled by esbuild 0.28.2 in `scripts/vendor.js`
+    into `web/vendor/bpmn-js-properties-panel/` (deterministic; 1.15 MB min, ~293 kB gzip), `web/properties.js`,
+    300 px right panel with a "Properties" toolbar toggle, **closed by default** (open by default broke 10 layout
+    specs and would change collaborators' layout). Selection restored by id after every import; text typed in a
+    panel field survives remote imports (no lost keys, focus/caret kept); typing into an element deleted elsewhere
+    is dropped with a notice; plain-value panel edits survive races like label edits, structural ones (create/pick
+    signal, ID, documentation) are dropped with a notice only when racing. Minimal-diff writer unchanged: all
+    writes `mode=minimal`, no `lost=`. npm package 436.5 kB → 745.9 kB packed.
+  - Verified 2026-10-21 (round 1 not happy: typed text written into the Process name after the element was
+    deleted elsewhere — blocker, lost keystrokes during import — major, disk edit overwritten by typed text —
+    minor; all fixed with e2e tests. Round 2 fresh verifier HAPPY): signal create/rename/reuse, undo/redo, second
+    window + collaborator (fake share), IDE edit shows in open panel, palette + wrench path, XSD-valid at every
+    step, 12 q4 fixtures minimal (5–9-line diffs), no page errors; unit 316/316, Chrome e2e 194 passed / 2
+    skipped; new spec 20/20 on Firefox + WebKit.
+  - Backlog (v3 unless the owner pulls it forward):
+    - Minor, on the requested path: a new signal's Name is pre-filled with its generated id; clicking and typing
+      appends ("Signal_3imqgu0OrderShipped"). Likely upstream behaviour.
+    - Minor: bundle carries unused Zeebe/FEEL/CodeMirror code from the package's single-file dist; loaded on
+      every page and nearly doubles the package. Needs a source entry point or transform.
+    - Nits: opening the panel doesn't pan the view (right side of the diagram goes under it); `xmlns:xsi` left
+      on root after timer definition + undo; Tab during a stream of imports leaves focus on body; ID change in
+      another window while typing says "someone else deleted it"; Cmd+Z in a field not seen during the tens-of-ms
+      import carry-over; unit tests import `bpmn-moddle` (transitive, not a direct devDependency); remote import
+      clears local undo history (pre-existing).
 
 ## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
 - V2-2/V2-3/V2-4 residuals (nits): `share.png`/`share.webp` context pad clips the "Order rejected" label and the

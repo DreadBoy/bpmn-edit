@@ -8,7 +8,8 @@
 // ops (see OP_CAPTURE). When another window's document arrives first, it is shown and those ops are
 // re-applied on top of it ("rebase"), then the result is sent again right away. Updates can no longer
 // overwrite each other at the host. For the edits that have ops (label, move, create, append,
-// connect, delete) concurrent edits of different elements are kept; an op that cannot be re-applied
+// connect, delete, and plain attribute changes made in the properties panel, such as a name or a
+// signal's name) concurrent edits of different elements are kept; an op that cannot be re-applied
 // (its element was deleted, someone else changed the same label or position first, or re-applying it
 // would change other elements than the original edit did) is dropped on its own, with a visible
 // notice. Other edits are dropped, with a notice, only if they race someone else's edit. A delete
@@ -16,6 +17,8 @@
 //
 // Only one update is in flight at a time. A document from someone else that arrives while the user
 // is in the middle of an edit (label editor open, drag, popup menu) is held back until it is done.
+// Text being typed in the properties panel does not hold it back: it is carried over into the new
+// document instead (see web/properties.js).
 //
 // The same page serves the host (`/?host=<secret>`, printed by the CLI) and collaborators
 // (`/s/<token>/`); every URL it uses is relative to the page, so it works under both. The host secret
@@ -40,6 +43,7 @@ import {
   CLOSE_SESSION_ENDED, CLOSE_SHARE_STOPPED, HEARTBEAT_MS, RECONNECT, probeVerdict, reconnectDelay, shouldGiveUp,
 } from './connection-shared.js';
 import { createPresence } from './presence.js';
+import { createPropertiesPanel, propertiesPanelOptions } from './properties.js';
 
 /** Edits are sent this long after the last change (coalesces bursts such as keyboard nudges). */
 const SEND_DELAY_MS = 300;
@@ -129,7 +133,8 @@ function takeHostSecret() {
   }
 }
 
-const modeler = new window.BpmnJS({ container: '#canvas' });
+const propertiesEl = document.getElementById('properties-panel');
+const modeler = new window.BpmnJS({ container: '#canvas', ...propertiesPanelOptions(propertiesEl) });
 const canvas = modeler.get('canvas');
 const commandStack = modeler.get('commandStack');
 const directEditing = modeler.get('directEditing');
@@ -138,6 +143,9 @@ const elementRegistry = modeler.get('elementRegistry');
 const popupMenu = modeler.get('popupMenu', false);
 const selection = modeler.get('selection');
 const presence = createPresence({ modeler, send: sendMessage, toolbar: document.getElementById('toolbar'), key: pageKey });
+const propertiesPanel = createPropertiesPanel({
+  modeler, container: propertiesEl, toggle: document.getElementById('properties-toggle'),
+});
 
 let clientId = null;      // assigned by the host in 'init'
 
@@ -192,6 +200,7 @@ let syncedXml = null;     // the host's document at `version`, as far as this wi
 let syncedBaseline = null; // bpmn-js' serialisation of syncedXml right after importing it (see importDiagram)
 let version = null;       // version of the document this window's edits are based on
 let importing = false;
+let carriedView = null;   // during an import: selection and properties panel field to restore (see importDiagram)
 let rendered = false;
 let dirty = false;        // edits made since the last send (or import)
 let sendTimer = null;     // pending debounced send
@@ -452,7 +461,15 @@ function checkFlushed() {
  * host as the 'baseline' of that version, the base of its minimal-diff writer (Q4). It is taken
  * before anything else can change the diagram (saveXML serialises synchronously when called).
  */
-async function importDiagram(xml, { baselineFor = null } = {}) {
+async function importDiagram(xml, { baselineFor = null, origin = null } = {}) {
+  // What the user is looking at: kept across a failed import (the previous document is then
+  // imported again), restored once one succeeds (see the 'import.done' listener and below).
+  carriedView ??= {
+    selectedIds: selection.get().map((element) => element.id),
+    // What the panel shows: the selected element, else the process (or collaboration).
+    panelName: selection.get()[0] ? nameOf(selection.get()[0]) : (canvas.getRootElement() && nameOf(canvas.getRootElement())),
+    field: propertiesPanel.takeFieldState(),
+  };
   importing = true;
   let serialised;
   try {
@@ -462,6 +479,13 @@ async function importDiagram(xml, { baselineFor = null } = {}) {
   } finally {
     importing = false;
   }
+  const { field, panelName } = carriedView;
+  carriedView = null;
+  // Text the user was typing in the properties panel goes back into its field (and is committed to
+  // this document), unless its element is gone or someone else changed that value meanwhile.
+  propertiesPanel.restoreFieldState(field).then((problem) => {
+    if (problem) reportProblems([{ reason: problem, name: panelName || 'the element' }], origin === 'disk');
+  });
   resetLocalEdits(); // importing cleared the command stack
   hideError(); // a diagram is showing (again): earlier render errors are over
   syncedXml = xml;
@@ -534,11 +558,10 @@ async function applyRemoteUpdate(message) {
  */
 async function showRemoteDocument(message) {
   const { x, y, width, height } = canvas.viewbox();
-  const selectedIds = selection.get().map((element) => element.id);
   const { xml: previousXml } = await modeler.saveXML({ format: true });
 
   try {
-    await importDiagram(message.xml, { baselineFor: fromHost(message) ? message.version : null });
+    await importDiagram(message.xml, { baselineFor: fromHost(message) ? message.version : null, origin: message.origin });
   } catch (err) {
     // Never leave the editor blank or broken: go back to what was shown before.
     console.warn('bpmn-edit: could not show the changed document', err);
@@ -556,9 +579,7 @@ async function showRemoteDocument(message) {
     else showError(`Could not show the changed document: ${err.message}`);
     return false;
   }
-  canvas.viewbox({ x, y, width, height });
-  const stillThere = selectedIds.map((id) => elementRegistry.get(id)).filter(Boolean);
-  if (stillThere.length) selection.select(stillThere);
+  canvas.viewbox({ x, y, width, height }); // the selection is restored by importDiagram
   advanceVersion(message.version);
   if (message.origin === 'disk') showReloadedNotice();
   return true;
@@ -726,7 +747,74 @@ const OP_CAPTURE = {
   'elements.delete': ({ elements }) => [deleteOp(elements)],
   'shape.delete': ({ shape }) => [deleteOp([shape])],
   'connection.delete': ({ connection }) => [deleteOp([connection])],
+  // Properties panel (and a few context menu toggles): plain values (a name, a code, a flag) of the
+  // element, of one of its event definitions or of a global element such as a bpmn:Signal.
+  'element.updateProperties': ({ element, properties, oldProperties }) => [
+    attrsOp(element, { kind: 'element' }, properties, oldProperties),
+  ],
+  'element.updateModdleProperties': ({ element, moddleElement, properties, oldProperties }) => [
+    attrsOp(element, moddleTarget(element, moddleElement), properties, oldProperties),
+  ],
 };
+
+/** A value an 'attrs' op can set and compare: a string, number, boolean or nothing. */
+function isPlainValue(value) {
+  return value === undefined || value === null || ['string', 'number', 'boolean'].includes(typeof value);
+}
+
+/** Same attribute value (unset and null are the same). */
+function sameValue(a, b) {
+  return (a ?? null) === (b ?? null);
+}
+
+/**
+ * Op for setting plain attributes on `target` (see moddleTarget), with their values before, so a
+ * concurrent change of the same attribute is detected. IDs and references are not supported.
+ */
+function attrsOp(element, target, properties, oldProperties = {}) {
+  const keys = Object.keys(properties);
+  if (!keys.length || keys.some((key) => key === 'id' || key === 'di' || key === 'default'
+    || !isPlainValue(properties[key]) || !isPlainValue(oldProperties[key]))) {
+    throw new CaptureError('only plain attributes can be re-applied');
+  }
+  return {
+    kind: 'attrs',
+    id: element.id,
+    target,
+    props: { ...properties },
+    old: Object.fromEntries(keys.map((key) => [key, oldProperties[key]])),
+    // How the user knew it before the edit (a rename names the old name, like a label edit).
+    name: oldProperties.name || (target.kind === 'root' ? target.name || target.id : nameOf(element)),
+  };
+}
+
+/** Where a moddle element is, relative to `element`: its business object, an event definition or a root element. */
+function moddleTarget(element, moddleElement) {
+  const bo = element.businessObject;
+  if (moddleElement === bo) return { kind: 'element' };
+  const index = (bo.eventDefinitions ?? []).indexOf(moddleElement);
+  if (index >= 0) return { kind: 'eventDefinition', index, type: moddleElement.$type };
+  if (moddleElement.id && moddleElement.$parent?.$instanceOf?.('bpmn:Definitions')) {
+    return { kind: 'root', id: moddleElement.id, type: moddleElement.$type, name: moddleElement.name };
+  }
+  throw new CaptureError(`changing a ${moddleElement.$type} is not supported`);
+}
+
+/** The moddle element an 'attrs' op changes in the document now showing, or null if it is gone. */
+function attrsTargetOf(element, target) {
+  switch (target.kind) {
+    case 'element':
+      return element?.businessObject ?? null;
+    case 'eventDefinition': {
+      const definition = element?.businessObject.eventDefinitions?.[target.index];
+      return definition?.$type === target.type ? definition : null;
+    }
+    case 'root':
+      return modeler.getDefinitions()?.rootElements?.find((root) => root.id === target.id && root.$type === target.type) ?? null;
+    default:
+      return null;
+  }
+}
 
 /**
  * Op for deleting `elements`, with what each looked like when it was deleted: if someone else
@@ -817,8 +905,16 @@ function recordCommand({ command, context }) {
   }
 }
 
+/** Wording of commands that describeCommand() cannot derive from the name. */
+const COMMAND_WORDS = {
+  'element.updateProperties': 'properties panel change',
+  'element.updateModdleProperties': 'properties panel change',
+  'properties-panel.multi-command-executor': 'properties panel change',
+};
+
 /** Human wording of a command for notices ('shape.resize' -> 'resize'). */
 function describeCommand(command) {
+  if (COMMAND_WORDS[command]) return COMMAND_WORDS[command];
   return command.replace(/^(elements?|shape|connection|canvas)\./, '').replace(/([a-z])([A-Z])/g, '$1 $2').toLowerCase();
 }
 
@@ -933,6 +1029,20 @@ function applyOp(op) {
       if (!source || !target) return none([{ reason: 'deleted', name: source ? op.targetName : op.sourceName }]);
       const businessObject = bpmnFactory.create(op.type, { id: op.id });
       if (!modeling.connect(source, target, { type: op.type, businessObject })) return none([{ reason: 'failed', name: op.name }]);
+      return { problems: [], kept: op };
+    }
+    case 'attrs': {
+      const element = get(op.id);
+      const target = attrsTargetOf(element, op.target);
+      if (!target) return none([{ reason: 'deleted', name: op.name }]);
+      const keys = Object.keys(op.props);
+      if (keys.every((key) => sameValue(target.get(key), op.props[key]))) return none(); // already there
+      if (keys.some((key) => !sameValue(target.get(key), op.old[key]) && !sameValue(target.get(key), op.props[key]))) {
+        return none([{ reason: 'changed', name: op.name }]);
+      }
+      if (op.target.kind === 'element') modeling.updateProperties(element, op.props);
+      // A global element (e.g. a signal) is kept even if the event it was edited from is gone.
+      else modeling.updateModdleProperties(element ?? canvas.getRootElement(), target, op.props);
       return { problems: [], kept: op };
     }
     case 'delete': {
@@ -1744,6 +1854,15 @@ modeler.on(['commandStack.elements.move.postExecuted', 'commandStack.shape.creat
   if (!replaying) droppedOnFlow = context.targetFlow.id;
   else if (replaying.flowId === context.targetFlow.id) replaying.spliced = true;
   else delete context.targetFlow;
+});
+
+// After an import, select again what was selected before (by id, if still there), in the same
+// 'import.done' as the properties panel's switch to the root element (priority 1000), so the panel
+// keeps showing the element the user was looking at.
+modeler.on('import.done', 500, ({ error }) => {
+  if (error || !carriedView) return;
+  const stillThere = carriedView.selectedIds.map((id) => elementRegistry.get(id)).filter(Boolean);
+  if (stillThere.length) selection.select(stillThere);
 });
 
 // Closing the label editor, ending a drag (committed or cancelled) or closing a popup menu may
