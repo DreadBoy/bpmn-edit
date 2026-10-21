@@ -280,6 +280,25 @@ provenance; adds the Q4 minimal-diff writer).
     value; rename the signal → disk + other window; pick an existing signal on a second event; undo/redo;
     external IDE edit of the signal name shows in the open panel. Chrome green, Firefox/WebKit run by the matrix.
 
+- [~] **V2-6. Colours (colour palette for diagram elements).** Requested by product owner 2026-10-21: "add colour
+  palette (probably using bpmn-js-color-picker). I need ability to add colour to parts of diagram".
+  - Use the official `bpmn-js-color-picker` (context pad "Set color" entry → popup with the bpmn.io colour set and
+    "Default" to clear). Why: it is the bpmn.io standard, small, and goes through `modeling.setColor`, which writes
+    both `bioc:fill/stroke` and `color:background-color/border-color` (OMG BPMN-in-Color), so Camunda Modeler and
+    other tools show the same colours. Vendored like V2-5: built once by `scripts/vendor.js` (esbuild) into
+    `web/vendor/bpmn-js-color-picker/`, committed; V2-5 adds the same esbuild path in parallel, coordinator merges.
+  - Works on single and multi-selection (tasks, events, gateways, pools/lanes, data objects, sub-processes) and on
+    connections (stroke only); "Default" removes the attributes again; undo/redo; host and collaborators.
+  - Disk: the Q4 minimal-diff writer must save colours as `mode=minimal` with no unreported loss, including adding
+    `xmlns:bioc` / `xmlns:color` to the root when the file had none, and removing colour leaves no stray
+    attributes. Files already coloured by Camunda Modeler / bpmn.io (bioc only, color only, both) open with their
+    colours and survive unrelated edits byte-for-byte.
+  - **E2E (real CLI, real Chrome, real disk):** open an uncoloured file, colour a task, a gateway and a sequence
+    flow → on disk the DI shapes/edges carry the colour attributes and the namespaces are declared once, `git diff`
+    small; a second window sees the colours live; multi-select colour; reset to Default → attributes gone; undo/redo;
+    reopen shows the colours; external IDE edit of a colour shows in the open window; a Camunda-Modeler-coloured
+    fixture round-trips. Chrome green, Firefox/WebKit run by the matrix.
+
 ## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
 - V2-2/V2-3/V2-4 residuals (nits): `share.png`/`share.webp` context pad clips the "Order rejected" label and the
   link shows the stand-in hostname `test-….trycloudflare.com/s/…` (token cut off; unlike the hero's masking);
