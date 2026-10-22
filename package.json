@@ -1,6 +1,6 @@
 {
   "name": "bpmn-edit",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "description": "Open a BPMN file from disk in a browser-based editor, save changes back to disk, and share a live editing session.",
   "type": "module",
   "bin": {
