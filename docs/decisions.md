@@ -1681,6 +1681,114 @@ timing-sensitive sync checks were only measured serially.
 | q1-concurrency: rapid back-and-forth edits … | Firefox (once) | Harness race: a remote update re-renders the diagram between finding a shape and measuring it, so `boundingBox()` was `null`. | `center()` (and `dragBy`) measure again until the shape is on screen. |
 | q2-ide-race (merged after S10): the five tests whose window goes through the test's WebSocket proxy and that check its page errors (reconnect, lost ack, …) | WebKit | Harness: the same `page.routeWebSocket` artefact as in s8-session above ("WebSocket connection … failed: The network connection was lost." for the proxied page once its cut connection is terminated); 3 of the 5 failed in the first run. | The same filter, for the proxied page only and in WebKit only: `proxiedPageErrors` moved to `test/e2e/helpers/cli.js`, used by both specs. |
 
+## V2-5: properties panel
+
+Requested by the product owner on 2026-10-21 ("I need ability to add signal name to signal end event").
+
+- **Library and versions.** The official `bpmn-js-properties-panel` 5.65.2 with `@bpmn-io/properties-panel`
+  3.57.1 (both pinned exactly, dev dependencies), only `BpmnPropertiesPanelModule` and
+  `BpmnPropertiesProviderModule` (no Camunda/Zeebe modules). 5.65.2 is the package's `latest` tag; 6.0.x is
+  older (February 2026) and only tagged `next`. Its peer range (`bpmn-js >= 11.5`, `diagram-js >= 11.9`) takes
+  the vendored bpmn-js 18.31.0. (npm also installs its peer `camunda-bpmn-js-behaviors` into node_modules;
+  nothing of it is bundled.)
+- **Browser bundle.** The package ships only ES/CJS modules and an unminified 2.5 MB UMD of everything
+  (Camunda and Zeebe included). `scripts/vendor.js` builds one minified IIFE with esbuild 0.28.2 (pinned dev
+  dependency, called through its JS API; the only place esbuild runs) from a two-line entry that re-exports
+  the two modules, exposing `window.BpmnJSPropertiesPanel`. It goes to `web/vendor/bpmn-js-properties-panel/`
+  with the panel's CSS, a `VERSION` file (panel, panel framework and esbuild versions) and one `LICENSE`
+  holding the license of each of the 44 packages esbuild put into the bundle (taken from its metafile; all
+  MIT, bpmn-js' own license included; one package without a license file is listed with its license field).
+  Committed like bpmn-js; no bundler at runtime. The build is deterministic (no source maps, paths or
+  timestamps in the output; two runs give identical files), so the release workflow's drift check
+  (`npm run vendor`, then `git status --porcelain -- web/vendor`) now covers both libraries.
+- **Size.** `bpmn-js-properties-panel.min.js` 1,145,508 bytes (~293 kB gzipped), CSS 53.8 kB. esbuild cannot
+  drop the unused Camunda/Zeebe providers from the package's single-file dist (their `X.$inject = …`
+  statements count as side effects), nor the FEEL editor (CodeMirror) the panel framework imports; trimming
+  them would need a source transform or another bundler (backlog, not needed now). `npm pack --dry-run`:
+  37 files, 436.5 kB packed / 1.4 MB unpacked before; 42 files, 744.4 kB / 2.7 MB after.
+- **The bundle against the prebuilt modeler.** The bundle carries its own copies of a few small bpmn-js and
+  diagram-js helpers (ModelUtil, DiUtil, LabelUtil, KeyboardUtil, Collections: pure functions); everything
+  stateful (modeling, `element.updateModdleProperties`, `bpmnFactory`, the command stack, selection) comes
+  from the modeler's injector. Checked end to end in Chrome, Firefox and WebKit (V2-5 spec).
+- **UI.** A 300 px panel right of the canvas (`<aside id="properties-panel">`), toggled by **Properties** at
+  the right end of the toolbar (icon only at 1100 px and less; the share link box gives up 40 px for it, so
+  the S5 toolbar layout still holds at 640/800/1024 px), remembered in `localStorage`
+  (`bpmn-edit.properties-panel`), every access in try/catch. `canvas.resized()` on every toggle. Without a
+  remembered choice it starts **closed**: open by default on windows ≥ 1200 px was tried first and changed
+  the canvas everyone is used to (S1's full-width canvas; the Q4 gesture specs click at the window's right
+  edge to deselect, which then landed in the panel), also for collaborators who never asked for it.
+- **Sync.** Panel edits are commands on the command stack and are sent like any edit. Plain-valued changes
+  (`element.updateProperties` / `element.updateModdleProperties` on the element, one of its event
+  definitions, or a root element such as `bpmn:Signal`; not IDs or references) are captured as `attrs` ops
+  and re-applied on rebase with the same conflict rule as labels (a value someone else changed first is
+  reported, not overwritten). Creating or picking a signal (the panel's multi-command), IDs, documentation
+  and other changes stay unsupported: dropped with "Your edit (properties panel change) could not be merged
+  with someone else's and was not applied" only if they race someone else's edit.
+- **Typing while an update arrives.** The panel commits typed text after a pause (500 ms here: its
+  `debounceInput` service is replaced by one that knows which commits are pending and what each field last
+  committed). Importing another document re-creates every element, and the panel's fields are keyed by
+  element, so they are re-mounted; a pending commit or the blur of the removed field would write to the old,
+  detached objects. So `importDiagram` first notes which element the panel shows (by id), the focused field
+  and the fields with a pending commit (the input elements), and cancels those commits. Until the restore,
+  the panel no longer hears those inputs (input/change/blur/key events stopped in the capture phase), but
+  the browser keeps updating their text, so keys typed during the import still land there; keys typed after
+  the old field was removed (focus on the body) are kept aside and typed in at the caret on restore. After
+  the import the selection is restored by id in the same `import.done` as the panel's switch to the root
+  element. Then, only if the panel shows **the same element** again, the text goes into the new field of
+  the same id with an `input` event (committed on the new document as usual), and focus and caret return.
+  If the panel shows another element (it was deleted), the typed text is dropped with "…was not applied:
+  someone else deleted it" (verifier round 1 found it going into the process's Name field when the field
+  was found by DOM id only). If the import changed that field's value while the user had uncommitted text
+  in it (another window, or an IDE editing the file), the import's value is kept with the usual "changed
+  first" / "changed on disk at the same time" notice, like the `attrs` op rebase. Incoming updates are never
+  held back for a focused field.
+- **Disk.** Signals, messages, errors and escalations the panel creates are appended to the root elements;
+  the minimal-diff writer inserts them after the last root element on disk (before `bpmndi:BPMNDiagram`,
+  schema order kept) as `mode=minimal` with nothing lost, also when the file keeps its signals before the
+  process. No writer change was needed (unit tests "global elements edited in the properties panel").
+- **V2-5a: select all on focus in a reference element's Name** (owner, 2026-10-21: "select all on focus").
+  "Create new ..." pre-fills a new signal's, message's, error's or escalation's name with a generated id
+  (`Signal_0abc123`, a second id, not the element's own) and the panel then focuses that field with its text
+  selected; the user's click into the already-focused field collapsed the selection, so typing appended to the
+  id. In `web/properties.js`, not in the vendored bundle: a `focusin` listener for the panel (survives
+  every re-render) selects all in inputs whose `data-entry-id` is `signalName`, `messageName`, `errorName` or
+  `escalationName` (the panel's own entry ids, checked in the bundle and the live DOM). Browsers collapse a
+  selection made on focus at the end of the focusing click (Chrome even when clicking into an existing
+  selection), so a field focused by a mouse press, or by the panel itself (focus with no key/mouse event in
+  that task), selects again on its first mouseup, with `preventDefault()`, unless the pointer moved more than
+  3 px (a drag keeps its partial selection). Later clicks, and the first click after Tab, a label click or
+  typing, place the caret as usual. The focus `restoreFieldState()` gives back after someone else's update is
+  flagged and selects nothing: selecting there would make the next key wipe the text being typed. Nor does
+  the focus the browser gives back when the user returns to the window or tab. Fields are known by key
+  (element id + field id), not by input element, because an import re-mounts them: the field focused at
+  the window's blur is skipped once on return even if an import replaced it while the tab was away
+  (verifier round 1: the replacement got selected and "Now" wiped "OrderShipped" — data loss). A pending
+  "first click selects all" also survives by key: it is dropped when the user types or moves the focus
+  elsewhere in the page, not when the window loses the focus or an import replaces the field (round 1:
+  after "Create new ..." plus an import or a tab switch, the click appended to the id). When the event
+  already refers to a named signal (message, …), "Create new ..." focuses the Name input while it still
+  shows the old name and the panel puts the new id in a render later, which collapses the selection
+  (round 3: typing at once gave `Signal_1m1g595Immediate`). So for about 300 ms after a select-all focus
+  (checked every 20 ms) a new value in the same, still focused field is selected again; any key, mouse
+  press or input event, a focus elsewhere or a given-back focus ends that. Other fields (element name, ID,
+  documentation, codes) are unchanged.
+- **V2-5a triage: the baseline of typed text.** Whether text typed in a panel field is "uncommitted" (and an
+  import's different value a concurrent edit) was judged against the field's text when it got the focus. A
+  local command can change the value under a focused field: "Create new ..." on an event that had a signal
+  focuses Name while it shows the old name, then the new signal's generated name arrives. An import while the
+  user typed the new name then looked like someone else changing it from "OrderShipped": the import's value
+  was kept and the typed keys were lost (on HEAD before V2-5a too; verifier 12/12 in Chrome). Now the
+  baseline is the field's text right before the user's first change since the last commit (`beforeinput`),
+  and a field not typed in since its last commit takes its shown text as the baseline when an import starts.
+  This holds for every panel field, whatever command changed its value. The bookkeeping is by field key (element id + field id),
+  fixed when the text is typed, never looked up later: a commit is attributed to the target of the
+  `input` event that scheduled it (not `document.activeElement`, which is the page body while
+  `restoreFieldState()` puts text back — on HEAD that commit was dropped and the next import reported a
+  false "changed" and lost the keys typed in between), and it refreshes that key's baseline even when it
+  runs after the field was removed or the panel moved to another element (verifier round 4: leaving the
+  element within the commit delay, coming back and typing during an import lost keys). Focusing a field
+  with no commit pending starts a fresh baseline.
+
 ## V2-6: colours
 
 ### Question
@@ -1697,8 +1805,8 @@ the file on disk.
   `modeling.setColor`, so a colour is an ordinary command: undo/redo, sync to other windows and collaborators
   and saving work as for any edit. Its own colour set and labels are used unchanged (no `colorPicker.colors`
   config): the same palette as Camunda Modeler, so files look alike in both.
-- **Bundling.** The package ships ES module sources only. `scripts/vendor.js` (`buildColorPicker()`, a block
-  of its own) bundles it with esbuild (devDependency, pinned 0.28.2; the plugin pinned 0.7.2) into one
+- **Bundling.** The package ships ES module sources only. `scripts/vendor.js` (`vendorColorPicker()`, next to
+  the V2-5 build) bundles it with esbuild (devDependency, pinned 0.28.2; the plugin pinned 0.7.2) into one
   minified IIFE, `web/vendor/bpmn-js-color-picker/color-picker.min.js` (~2.7 kB), with its CSS, LICENSE and
   VERSION, committed like bpmn-js; the release workflow's drift check (`npm run vendor` must leave
   `web/vendor/` unchanged) covers it. The output is deterministic (no source maps or absolute paths;

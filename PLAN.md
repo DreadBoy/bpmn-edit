@@ -261,7 +261,7 @@ provenance; adds the Q4 minimal-diff writer).
     Chrome/Firefox/WebKit 1280/375 light+dark clean, item order exact, Lighthouse a11y 100, links 200,
     actionlint clean. Nits to v3.
 
-- [~] **V2-5. Properties panel (signal name on a signal end event first).** Requested by product owner
+- [x] **V2-5. Properties panel (signal name on a signal end event first).** Requested by product owner
   2026-10-21: "we need to add attribute panel. I need ability to add signal name to signal end event".
   - Use the official `bpmn-js-properties-panel` (BpmnPropertiesPanelModule + BpmnPropertiesProviderModule, no
     Camunda/Zeebe extensions). Why: it already covers signal/message/error/escalation/timer/condition definitions,
@@ -279,6 +279,68 @@ provenance; adds the Q4 minimal-diff writer).
     name="OrderShipped"` and `signalRef` point at each other, `git diff` small; a second window sees the panel
     value; rename the signal → disk + other window; pick an existing signal on a second event; undo/redo;
     external IDE edit of the signal name shows in the open panel. Chrome green, Firefox/WebKit run by the matrix.
+  - Done: bpmn-js-properties-panel 5.65.2 (plain BPMN modules) bundled by esbuild 0.28.2 in `scripts/vendor.js`
+    into `web/vendor/bpmn-js-properties-panel/` (deterministic; 1.15 MB min, ~293 kB gzip), `web/properties.js`,
+    300 px right panel with a "Properties" toolbar toggle, **closed by default** (open by default broke 10 layout
+    specs and would change collaborators' layout). Selection restored by id after every import; text typed in a
+    panel field survives remote imports (no lost keys, focus/caret kept); typing into an element deleted elsewhere
+    is dropped with a notice; plain-value panel edits survive races like label edits, structural ones (create/pick
+    signal, ID, documentation) are dropped with a notice only when racing. Minimal-diff writer unchanged: all
+    writes `mode=minimal`, no `lost=`. npm package 436.5 kB → 745.9 kB packed.
+  - Verified 2026-10-21 (round 1 not happy: typed text written into the Process name after the element was
+    deleted elsewhere — blocker, lost keystrokes during import — major, disk edit overwritten by typed text —
+    minor; all fixed with e2e tests. Round 2 fresh verifier HAPPY): signal create/rename/reuse, undo/redo, second
+    window + collaborator (fake share), IDE edit shows in open panel, palette + wrench path, XSD-valid at every
+    step, 12 q4 fixtures minimal (5–9-line diffs), no page errors; unit 316/316, Chrome e2e 194 passed / 2
+    skipped; new spec 20/20 on Firefox + WebKit.
+  - Backlog (v3 unless the owner pulls it forward):
+    - Minor, on the requested path: a new signal's Name is pre-filled with its generated id; clicking and typing
+      appends ("Signal_3imqgu0OrderShipped"). Likely upstream behaviour. → fixed in V2-5a.
+    - Minor: bundle carries unused Zeebe/FEEL/CodeMirror code from the package's single-file dist; loaded on
+      every page and nearly doubles the package. Needs a source entry point or transform. Owner 2026-10-21: no
+      need to fix.
+
+- [x] **V2-5a. Select all on focus in the signal Name field.** Owner decision 2026-10-21 ("select all on focus"),
+  then push to main.
+  - Focusing the Name field of a signal (and of the sibling reference elements with the same generated-id
+    pre-fill: message, error, escalation) selects its whole text, by click or Tab, so typing replaces the generated
+    id. A second click inside the already-focused field places the caret normally. Done in our code
+    (`web/properties.js`), not by patching the vendored bundle; must survive panel re-renders and remote imports.
+  - **E2E (real CLI, real Chrome, real disk):** create a signal on a signal end event, click Name, type
+    "OrderShipped" → disk has `name="OrderShipped"` exactly; same via Tab; second click positions caret and
+    typing inserts; renaming an existing named signal also replaces; message/error/escalation behave the same;
+    other fields (element Name, ID, documentation) unchanged. Full unit + Chrome e2e green.
+  - Done: `web/properties.js` selects all on focus (click, Tab, Shift+Tab) in the signal/message/error/escalation
+    Name fields (by the panel's `data-entry-id`); re-selects on the first mouseup after a press or panel focus and
+    for ~300 ms after "Create new ..." changes the value; never selects on focus given back (import carry-over,
+    returning to the tab/window). The pre-filled name is a separate generated id (`Signal_…`), not the element id.
+    Also fixed two pre-existing key-loss bugs in V2-5's typed-text carry-over: the baseline is taken at the first
+    change since the last commit, and commits are attributed to the field that got `input`, not `activeElement`.
+    Spec `v2-5a-select-all.spec.js` (17 tests), fixture `references.bpmn`.
+  - Verified 2026-10-21 (5 fresh verifier rounds; 3 full, then 2 targeted after triage): round 1 tab return after
+    an import selected all → next key wiped typed text (blocker); round 3 typed name after "Create new ..." wiped
+    by a concurrent edit elsewhere (blocker, pre-existing); round 4 regression from that fix (leave + return +
+    type during import); all fixed with failing-first e2e tests. Final round HAPPY: main path for all four
+    reference kinds, caret on second click, other fields unchanged, undo/redo, repeated race cases (60/60, 20/20,
+    12/12), every write `mode=minimal`, XML well-formed; unit 316/316, Chrome e2e 211 passed / 2 skipped,
+    V2-5 + V2-5a specs on Firefox + WebKit 46 passed / 8 skipped (Chrome-only tab-switch tests).
+  - Backlog (all also on V2-5's HEAD):
+    - **Major, live collaboration:** while this window's own panel commit is not yet accepted by the host, an
+      update from another window (still holding the old value) is taken for a same-field conflict: keys typed after
+      the commit are dropped with a false "someone else changed it first" notice. Not silent; file stays valid.
+      Repro: window A types into a Name field every 450–750 ms while window B drags a task every 150–450 ms
+      (~1 in 3). Fix hint: while the field's own op is unaccepted, compare against the op's old value / incoming base.
+    - Major, narrow timing: an IDE writing a stale buffer ~60 ms after "Create new ..." (before the save) reverts
+      the ref to the old signal, but Name still shows the new id selected; typing renames the old signal.
+    - Minor: right after typing in Documentation, one click on another canvas element doesn't change selection.
+    - Nits: same-field conflict notice names the signal for a remote rename but the event for a disk write; keys
+      typed within ~30 ms of choosing "Create new ..." go to the `<select>` type-ahead; `npm test` in a fresh
+      worktree fails the XSD test (no `node_modules`).
+    - Nits: opening the panel doesn't pan the view (right side of the diagram goes under it); `xmlns:xsi` left
+      on root after timer definition + undo; Tab during a stream of imports leaves focus on body; ID change in
+      another window while typing says "someone else deleted it"; Cmd+Z in a field not seen during the tens-of-ms
+      import carry-over; unit tests import `bpmn-moddle` (transitive, not a direct devDependency); remote import
+      clears local undo history (pre-existing).
 
 - [x] **V2-6. Colours (colour palette for diagram elements).** Requested by product owner 2026-10-21: "add colour
   palette (probably using bpmn-js-color-picker). I need ability to add colour to parts of diagram".
@@ -286,7 +348,7 @@ provenance; adds the Q4 minimal-diff writer).
     "Default" to clear). Why: it is the bpmn.io standard, small, and goes through `modeling.setColor`, which writes
     both `bioc:fill/stroke` and `color:background-color/border-color` (OMG BPMN-in-Color), so Camunda Modeler and
     other tools show the same colours. Vendored like V2-5: built once by `scripts/vendor.js` (esbuild) into
-    `web/vendor/bpmn-js-color-picker/`, committed; V2-5 adds the same esbuild path in parallel, coordinator merges.
+    `web/vendor/bpmn-js-color-picker/`, committed; built next to V2-5's esbuild step (merged 2026-10-22).
   - Works on single and multi-selection (tasks, events, gateways, pools/lanes, data objects, sub-processes) and on
     connections (stroke only); "Default" removes the attributes again; undo/redo; host and collaborators.
   - Disk: the Q4 minimal-diff writer must save colours as `mode=minimal` with no unreported loss, including adding
@@ -299,7 +361,7 @@ provenance; adds the Q4 minimal-diff writer).
     reopen shows the colours; external IDE edit of a colour shows in the open window; a Camunda-Modeler-coloured
     fixture round-trips. Chrome green, Firefox/WebKit run by the matrix.
   - Done: `bpmn-js-color-picker` 0.7.2 + `esbuild` 0.28.2 pinned
-    devDependencies; `scripts/vendor.js` `buildColorPicker()` bundles it (IIFE, ~2.7 kB, only the plugin's 3
+    devDependencies; `scripts/vendor.js` `vendorColorPicker()` bundles it (IIFE, ~2.7 kB, only the plugin's 3
     files, build fails on any file outside the package; deterministic) into `web/vendor/bpmn-js-color-picker/`
     (bundle, CSS, LICENSE, VERSION); `web/app.js` passes `window.BpmnColorPickerModule` as `additionalModules`
     to the one Modeler. Writer: colour edits were already `minimal`; new: a colour namespace declaration
@@ -314,6 +376,8 @@ provenance; adds the Q4 minimal-diff writer).
     data object/sub-process/annotation, multi-select, Default, undo/redo chains, second window, collaborator via
     stand-in tunnel, IDE edits while open, restart/reopen; every write `minimal lost=0`, well-formed, no new XSD
     error, no stray attribute; `npm run vendor` no-op; unit 333/333, Chrome e2e 192 passed / 2 skipped (tunnel).
+  - Merged with V2-5/V2-5a 2026-10-22 (one Modeler, both plugins in `additionalModules`; `vendorColorPicker()` next
+    to V2-5's build): `npm run vendor` no-op, unit 338/338, Chrome e2e 219 passed / 2 skipped (tunnel).
 
 ## v3 (deferred 2026-10-15 by product owner: all known issues and residuals below)
 - V2-6 residuals (minor, no data loss):

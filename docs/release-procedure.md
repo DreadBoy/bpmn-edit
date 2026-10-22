@@ -47,7 +47,7 @@ Researched 2026-10-13. Sources:
   - Trigger: push to main, plus `workflow_dispatch`.
   - `check` job, on **`macos-latest`**:
     - `npm ci`, then `npm test` (unit tests);
-    - `npm run vendor` must leave `web/vendor/` unchanged. This catches a bpmn-js (or bpmn-js-color-picker / esbuild) bump in the lockfile that was not re-vendored.
+    - `npm run vendor` must leave `web/vendor/` unchanged. This catches a bpmn-js (or bpmn-js-properties-panel, @bpmn-io/properties-panel, bpmn-js-color-picker, esbuild) bump in the lockfile that was not re-vendored.
     - Why macOS: v1 supports macOS only, and the server can't start on Linux yet (see "Linux" below). On ubuntu every server test fails, and the share/ws test files hang rather than fail, so the job has `timeout-minutes: 15`.
   - `publish` job, needs `check`:
     - `ubuntu-latest`, which is GitHub-hosted (Trusted Publishing rejects self-hosted runners);

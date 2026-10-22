@@ -275,4 +275,14 @@ element and sends again. In practice:
 - Delete versus an edit of the same element: the delete wins, with a notice to the other person.
 - Some commands (resize, bendpoints, changing an element's type, colours, lanes/participants, undo/redo of
   already saved edits) are not re-applied: if they race someone else's edit they are dropped, with a notice.
+- Properties panel: changes of plain values (a name, a signal's or message's name, an error code, a flag)
+  are re-applied like labels; the same value changed by two people gives the "someone else changed it
+  first" notice. Other panel changes (creating or picking a signal, message, error or escalation, changing
+  an ID, documentation) are not re-applied: racing someone else's edit, they are dropped with the notice
+  "Your edit (properties panel change) could not be merged…".
+- Text you are typing in a panel field is not committed until you pause (about half a second) or leave the
+  field. Someone else's change arriving meanwhile does not wait for you: it is shown, and your text (every
+  key), the focus and the cursor stay in the field (the panel keeps showing the element you selected) and
+  are then committed on top of it. If that change deleted the element, or changed the very value you are
+  typing (also from disk), your text is dropped and you get the usual notice.
 - An incoming change is held back while you drag, edit a label or have a popup menu open, and shown after.

@@ -29,6 +29,9 @@ are saved first, then bpmn-edit stops.
 
 ![The bpmn-edit editor showing an order-handling process with three lanes](docs/images/editor.png)
 
+Select an element to see and edit its properties in the panel on the right (**Properties** in the toolbar
+shows or hides it): name, ID, documentation and event details, such as the signal of a signal end event.
+
 ## Sharing
 
 1. Click **Share** in the editor's toolbar.
@@ -136,7 +139,10 @@ Curious about the details: exact timings, edge cases, how sharing is secured? Se
 bpmn-edit is MIT licensed, see [LICENSE](LICENSE).
 
 It ships a prebuilt [bpmn-js](https://github.com/bpmn-io/bpmn-js) (in `web/vendor/bpmn-js/`, with its
-[license](web/vendor/bpmn-js/LICENSE)), whose license requires that the bpmn.io watermark in the diagram (the
+[license](web/vendor/bpmn-js/LICENSE)) and a browser build of
+[bpmn-js-properties-panel](https://github.com/bpmn-io/bpmn-js-properties-panel) (in
+`web/vendor/bpmn-js-properties-panel/`, with the [licenses](web/vendor/bpmn-js-properties-panel/LICENSE) of
+everything in it). The bpmn-js license requires that the bpmn.io watermark in the diagram (the
 logo linking to https://bpmn.io) stays fully visible and unchanged; keep it that way in any fork or
 modification. It also ships [bpmn-js-color-picker](https://github.com/bpmn-io/bpmn-js-color-picker) (MIT),
 bundled in `web/vendor/bpmn-js-color-picker/` with its [license](web/vendor/bpmn-js-color-picker/LICENSE).

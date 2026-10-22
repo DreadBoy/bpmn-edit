@@ -2,8 +2,10 @@ name: Release
 
 # On every push to main, two jobs run:
 #
-#  - check: unit tests (`npm test`) plus a check that the committed bundles in
-#    web/vendor/ (bpmn-js, bpmn-js-color-picker) match the lockfile. It runs
+#  - check: unit tests (`npm test`) plus a check that the committed browser
+#    bundles in web/vendor/ (bpmn-js and the esbuild-built
+#    bpmn-js-properties-panel and bpmn-js-color-picker) match the versions in
+#    the lockfile. It runs
 #    on macOS: v1 supports macOS only, and the server cannot start on Linux yet
 #    (its wildcard-listener probe in src/server.js always hits EADDRINUSE there,
 #    so every server test fails with "No free port found").
@@ -71,11 +73,13 @@ jobs:
       - name: Unit tests
         run: npm test
 
-      # web/vendor/ (bpmn-js, and bpmn-js-color-picker bundled by esbuild) is
+      # web/vendor/ (bpmn-js, bpmn-js-properties-panel, bpmn-js-color-picker) is
       # committed so the package needs no build step. Re-vendoring from
-      # node_modules must change nothing; otherwise a bump of bpmn-js, the
-      # plugin or esbuild in the lockfile was not followed by `npm run vendor`.
-      - name: Check that the vendored bundles are up to date
+      # node_modules must change nothing; otherwise a bump of bpmn-js,
+      # bpmn-js-properties-panel, @bpmn-io/properties-panel,
+      # bpmn-js-color-picker or esbuild in the lockfile was not followed by
+      # `npm run vendor` (the build is deterministic, so a clean re-run is a no-op).
+      - name: Check that web/vendor is up to date
         run: |
           set -euo pipefail
           npm run vendor
@@ -83,7 +87,7 @@ jobs:
           changes=$(git status --porcelain -- web/vendor)
           if [ -n "$changes" ]; then
             echo "$changes"
-            echo "::error::web/vendor/ is out of date; run \`npm run vendor\` and commit the result"
+            echo "::error::web/vendor is out of date; run \`npm run vendor\` and commit the result"
             exit 1
           fi
 
